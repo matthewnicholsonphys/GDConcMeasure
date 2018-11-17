@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-//#include "TTree.h"
+#include "TTree.h"
 
 #include "Store.h"
 #include "BoostStore.h"
@@ -20,9 +20,9 @@ class DataModel {
   
   DataModel();
 
-  //TTree* GetTTree(std::string name);
-  //void AddTTree(std::string name,TTree *tree);
-  //void DeleteTTree(std::string name);
+  TTree* GetTTree(std::string name);
+  void AddTTree(std::string name,TTree *tree);
+  void DeleteTTree(std::string name);
 
   Store vars;
   BoostStore CStore;
@@ -32,12 +32,14 @@ class DataModel {
 
   zmq::context_t* context;
 
-
+  int mode; //ENUM
+  
+  // pointer to spectromiter
+  
  private:
 
-
   
-  //std::map<std::string,TTree*> m_trees; 
+  std::map<std::string,TTree*> m_trees; 
   
   
   
