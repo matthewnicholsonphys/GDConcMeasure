@@ -7,6 +7,8 @@
 
 #include "Tool.h"
 
+#include "wiringPiI2C.h"
+
 enum LED
 {
 	led_260 = 1,
@@ -27,9 +29,42 @@ class LEDmanager: public Tool
 		bool Initialise(std::string configfile,DataModel &data);
 		bool Execute();
 		bool Finalise();
+
+		void Configure();
+		bool EstablishI2C();
+		void MapLED();
+		bool SetPWMfreq(double freq);
+
+		bool TurnOn();
+		bool TurnOff();
+		bool WakeUpDriver();
+		bool SleepDriver();
+
+		bool TurnLEDArray(unsigned int ledON);
+		bool TurnLEDon(std::string ledName);
+		bool TurnLEDoff(std::string ledName);
+
+		bool Read(int reg, int &data);
+		bool Write(int reg, int data);
+		bool ReadAI(int reg, int num_reg, std::vector<int> &block);
+		bool WriteAI(int reg, const std::vector<int> &block);
 	
 	
 	private:
+		//verbosity
+		int verbose;
+		//set up by configure
+		std::string wiringLED, configLED;
+		unsigned int iResolution;
+		double fVin, fDelay, frequencyPWM;
+		unsigned long lastTime;
+
+		//counting and flags
+		int measureCount;
+		bool awake;
+		int file_descript;
+		int ledONstatus;
+
 		//map between led name and its "binary" value
 		std::map<std::string, unsigned int> mLED_name;
 		std::map<std::string, unsigned int>::iterator iLname;
@@ -42,10 +77,6 @@ class LEDmanager: public Tool
 		std::map<std::string, double> mLED_duty;
 		std::map<std::string, double>::iterator iLduty;
 		
-		int file_descript;
-		bool changeLEDregisters;
-		int ledONstatus;
-		double frequencyPWM;
 };
 
 #endif

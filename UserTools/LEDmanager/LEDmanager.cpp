@@ -12,24 +12,46 @@ bool LEDmanager::Initialise(std::string configfile, DataModel &data)
 	m_data= &data;
 	
 	Configure();
-	EstablishI2C();
-	return true;
+	return EstablishI2C();	//it is true if connections is ok!
 }
 
 bool LEDmanager::Execute()
 {
+	int mode1;
+	bool test = Read(0x00, mode1);
+	std::cout << "register 1 is " << mode1 << std::endl;
 
-	switch (mode)
+	test = Read(0xfe, mode1);
+	std::cout << "frequencyscaler is " << mode1 << std::endl;
+
+	WakeUpDriver();
+	test = Read(0x00, mode1);
+	std::cout << "awake and " << mode1 << std::endl;
+
+	SleepDriver();
+	test = Read(0x00, mode1);
+	std::cout << "sleeping and " << mode1 << std::endl;
+
+	/*
+	switch (m_data->mode)
 	{
-		case ON:
-			TurnOn();
+		case status::init_spectr:	//about to make measurement, check LED mapping
+			ledONstatus = 0;
+			measureCount = 0;
+			MapLED();
 			break;
-		case OFF:
+		case status::turnon:		//turn on led set
+			if (!TurnOn())		//if TurnOn is false, measurement is finished or there is a uncaught problem
+				m_data->endMeasure = true;
+			break;
+		case status::measure:	//wait for measurement
+			break;
+		default:		//turn off in any other state
 			TurnOff();
 			break;
-		default:
-			break;
 	}
+	*/
+
 
 	return true;
 }
@@ -40,14 +62,84 @@ bool LEDmanager::Finalise()
 	return true;
 }
 
+//configure the class reading from configfile
+void LEDmanager::Configure()
+{
+	lastTime = 0;
+	awake = false;
+	ledONstatus = 0;
+
+	m_variables.Get("verbose", verbose);
+
+	m_variables.Get("frequency", frequencyPWM);
+	m_variables.Get("resolution", iResolution);
+	iResolution = static_cast<unsigned int>(pow(2, iResolution)) - 1;
+
+	m_variables.Get("voltage_supply", fVin);
+	m_variables.Get("delay", fDelay);
+	m_variables.Get("map_wiring", wiringLED);
+	m_variables.Get("measurement", configLED);
+
+	Log("LEDManager: LED wiring and setup will be read from " + wiringLED, 1, verbose);
+	Log("LEDManager: LED measurement will be read from " + configLED, 1, verbose);
+
+	MapLED();
+}
+
+void LEDmanager::MapLED()
+{
+	//check when mapping file was changed
+	std::string cmd = "stat -c %Y " + wiringLED + " > .tmp_timestamp";
+	int s = system(cmd.c_str());
+	std::ifstream inTimestamp(".tmp_timestamp");
+	unsigned long newTime = lastTime;
+	if (std::getline(inTimestamp, cmd))
+		newTime = std::strtol(cmd.c_str(), NULL, 10);
+
+	//if it hasn't been changed since last time, don't do anyhting
+	if (newTime == lastTime)
+		return;
+
+	//else update wire mapping
+	lastTime = newTime;
+
+	std::ifstream inConfig(wiringLED.c_str());
+	std::string line;
+	//this, in binary, will be a string of 1 and 0 where 1 is LED on and 0 is LED off 
+	while (std::getline(inConfig, line))	//reading configfile
+	{
+		//removes all comments (anything after '#')
+		if (line.find_first_of('#') != std::string::npos)
+			line.erase(line.find_first_of('#'));
+
+		std::stringstream ssl(line);
+
+		std::string key;
+		int pin;
+		double volt;
+		if (ssl >> key >> pin >> volt)
+		{
+			//name of LED is mapped to an incremental bit value
+			mLED_name[key] = pow(2, mLED_name.size());
+			//name of LED is mapped to the pin it is connected to
+			mLED_chan[key] = pin;
+			//name of LED is mapped to its operative voltage
+			//this must be later divided by input voltage to find duty cycle
+			if (volt > fVin)
+				Log("LEDmanager: WARNING\tvoltage of " + key + " set higher than Vin", 1, verbose);
+			else
+				mLED_duty[key] = volt / fVin;
+		}
+	}
+}
 
 //this routine will setup I2C connection with first address found
 //in I2C mapping by i2cdetect program
 //
-void LEDmanager::EstablishI2C()
+bool LEDmanager::EstablishI2C()
 {
-	system("i2cdetect -y1 > .tmp_wiring");
-	std::ifstream inWiring (".tmp_wiring");
+	system("i2cdetect -y 1 > .tmp_wiring");
+	std::ifstream inWiring(".tmp_wiring");
 	std::string line;
 	int addr;
 	while (std::getline(inWiring, line))
@@ -58,120 +150,92 @@ void LEDmanager::EstablishI2C()
 			line.erase(0, pos+1);
 			std::stringstream ssl(line);
 			while (ssl >> line)
+			{
+				std::cout << line << std::endl;
 				if (line != "--")
 				{
-					addr = std::strtol(line, NULL, 16);
+					addr = std::strtol(line.c_str(), NULL, 16);
 					goto address_found;
 				}
+			}
 		}
-
 	}
 
 	address_found:
-		std::cout << "LEDmanager::EstablishI2C making connection to address " << std::hex << addr << std::endl;
+	std::cout << "wentto " << addr << std::endl;
+	Log("LEDmanager: making I2C connection to address " + addr, 1, verbose);
 
+	std::cout << "setting up" << std::endl;
 	file_descript = wiringPiI2CSetup(addr);
-	SetPWDfreq(frequencyPWM);
+	std::cout << "done" << std::endl;
+	return SetPWMfreq(frequencyPWM);
 }
 
-void LEDmanager::Configure(std::string configfile)
+bool LEDmanager::SetPWMfreq(double freq)
 {
-	std::ifstream inConfig(configfile.c_str());
-	std::string line, key;
-	double value;
-	int pin;
-	while (std::getline(inConfig, line))	//reading configfile
-	{
-		//removes all comments (anything after '#')
-		if (line.find_first_of('#') != std::string::npos)
-			line.erase(line.find_first_of('#'));
+	int prescale = int(25e6 / iResolution / freq) - 1;
 
-		std::stringstream ssl(line);
-		
-		if (ssl >> key >> value >> pin)
-		{
-			if (mLED_name.count(key))	//LED name already present!
-				std::cerr << "LEDmanager::Configure WARNING: "
-					  << ledName << " already exists in your config!" << std::endl;
-			else
-			{
-				//name of LED is mapped to an incremental bit value
-				mLED_name[key] = pow(2, mLEDs.size());
-				//name of LED is mapped to its operative voltage
-				//this must be later divided by input voltage to find duty cycle
-				mLED_duty[key] = value;
-				//name of LED is mapped to the pin it is connected to
-				mLED_chan[key] = pin;
-			}
-		}
-		else if (ssl >> key >> value)
-		{
-			//input voltage of external power supply
-			if (key == "Voltage_supply")
-				fVin = value;
-			//delay (in duty cycle) before turning on
-			else if (key == "Delay")
-				fDelay = value;
-			//counter resolution (in bit) usually 12 bit
-			else if (key == "Resolution")
-				iCounts = static_cast<unsigned int>(pow(2, value)) - 1;
-			//PWM frequency
-			else if (key == "Frequency")
-				//uset wiringPI routines to set appropriate frequency
-				frequencyPWM = value;
-			else
-				std::cerr << "LEDmanager::Configure WARNING: "
-					  << key << " not recognised!" << std::endl;
-		}
-		else if (ssl >> key >> line)
-		{
-			if (key == "LEDon_config")
-				configLEDon = line;
-			std::cout << "LEDmanager::Configure " <<
-				  << " LED to be used will be read from " << configLEDon << "\n"
-				  << " Make sure the file is set in-between measurement" << std::endl;
-		}
-	}
-
-	//divide voltages by Vin to find duty cycle %
-	for (iLduty = mLED_duty.begin(); iLduty != mLED_duty.end(); ++iLduty)
-	{
-		if (iLduty->second > fVin)
-		{
-			std::cerr << "LEDmanager::Configure WARNING: "
-				  << iLduty->first << " is set for a voltage bigger than " << fVin << " V\n"
-				  << "                               it won't be used." << std::endl;
-			iLduty->second = 0.0;
-		}
-		else
-			iLduty->second /= fVin;
-	}
+	//this address is is where the prescaler of the PWM frequency
+	//is stored
+	return Write(0xfe, prescale);
 }
 
-void LEDmanager::TurnOn();
+bool LEDmanager::TurnOn()
 {
-	WakeUpDriver();
+	if (!awake)
+	{
+		WakeUpDriver();
+		awake = true;
+	}
 
-	unsigned int ledON = WhichLEDon();
+	std::ifstream inLED(configLED.c_str());
+	std::string line;
+	int i = 0;
+	while (i < measureCount+1 && std::getline(inLED, line))	//skip to line measureCount+1
+		++i;
+
+	int ledON = 0;
+	if (i == measureCount+1)
+	{
+		std::stringstream ssl(line);		//setup binary value
+		while(ssl)
+		{
+			ssl >> line;
+			ledON += mLED_name[line];
+		}
+
+		++measureCount;
+	}
+	else
+		return false;		//stop measuring
+
 	if (ledON != ledONstatus)
 	{
-		TurnLEDArray(ledON);
 		ledONstatus = ledON;
+		return TurnLEDArray(ledONstatus);	//if everything is ok, this returns true
 	}
+	else
+		return true;		//continue measuring
 }
 
-void LEDmanager::TurnOff();
+bool LEDmanager::TurnOff()
 {
-	if (0 != ledONstatus)
+	if (awake)
 	{
-		TurnLEDArray(0);
-		ledONstatus = 0;
-	}
+		if (0 != ledONstatus)
+		{
+			TurnLEDArray(0);
+			ledONstatus = 0;
+		}
 
-	SleepDriver();
+		awake = false;
+		return SleepDriver();
+	}
+	else
+		return true;
 }
 
-void LEDmanager::WakeUp()
+bool LEDmanager::WakeUpDriver()
 {
 	//write MODE1 register to wake up device from sleep
 	//read frist MODE1 register
@@ -183,59 +247,35 @@ void LEDmanager::WakeUp()
 	//
 	//read RESTART bit (x000 0000) of MODE1 register
 	//it must be one
-	int mode1 = Read(0x00);
-	if (mode1 & 0x80)
+	int mode1;
+	bool ret = Read(0x00, mode1);
+	if (ret && (mode1 & 0x80))
 	{
 		//clear SLEEP bit
-		Write(mode1 | ~0x10);
+		ret = Write(0x00, mode1 | ~0x10);
+		if (!ret)
+			return false;
+
 		usleep(500);		//wait at lest 500 us to use driver
 
 		//write 1 to RESTART bit to restart PWM
 		//write 1 to AI bit to enable auto-increment
-		Write(0xA0);	//turn sleep to 0
+		ret = Write(0x00, 0xA0);	//turn sleep to 0
 	}
+
+	return ret;
 }
 
 //put driver in sleep mode by writing 1 to SLEEP bit
 //in register MODE1
-void LEDmanager::SleepDriver()
+bool LEDmanager::SleepDriver()
 {
-	int mode1 = Read(0x00);
-	Write(mode1 | 0x10);
-}
-
-unsigned int LEDmanager::WhichLEDon()
-{
-	std::ifstream inLEDconfig(configLEDon.c_str());
-	std::string line, key;
-
-	unsigned int ledON = 0;
-	//this, in binary, will be a string of 1 and 0 where 1 is LED on and 0 is LED off 
-	while (std::getline(inLEDconfig, line))	//reading configfile
-	{
-		//removes all comments (anything after '#')
-		if (line.find_first_of('#') != std::string::npos)
-			line.erase(line.find_first_of('#'));
-
-		std::stringstream ssl(line);
-
-		while (ssl)
-		{
-			if (ssl >> key)
-			{
-				/* if there is key check if we know the key
-				 * then apply OR operation with current ledON state
-				 * at the end we are left with something like 011001
-				 * which means turn on led 0 (LSB), 3, and 4 (MSB)
-				 */
-				iLname = mLED_name.find(key);
-				if (iLname != mLED_name.end())
-					ledON = ledON | iLname->second;
-			}
-		}
-	}
-
-	return ledON;
+	int mode1;
+	bool ret = Read(0x00, mode1);
+	if (ret)
+		return Write(0x00, mode1 | 0x10);
+	else
+		return false;
 }
 
 /* utility to turn on LEDs
@@ -257,78 +297,64 @@ bool LEDmanager::TurnLEDArray(unsigned int ledON)
 	}
 }
 
-void LEDmanager::SetPWMfreq(double freq)
-{
-	int prescale = int(25e6 / iCounts / freq) - 1;
-
-	//this address is is where the prescaler of the PWM frequency
-	//is stored
-	Write(0xfe, prescale);
-}
-
 //set registers on PCA9685
-void LEDmanager::TurnLEDon(std::string ledName)
+bool LEDmanager::TurnLEDon(std::string ledName)
 {
-	if (changeLEDregisters)
-	{
-		//there are 4 registers to control LEDs
-		//and they are [6+4*channel : 9+4*channel]
-		//
-		int reg_LED = 4 * mLED_chan[name] + 6;
-		//int reg_ON_H  = reg_off + 1;
-		//int reg_OFF_L = reg_off + 2;
-		//int reg_OFF_H = reg_off + 3;
+	//there are 4 registers to control LEDs
+	//and they are [6+4*channel : 9+4*channel]
+	//
+	int reg_LED = 4 * mLED_chan[ledName] + 6;
+	//int reg_ON_H  = reg_off + 1;
+	//int reg_OFF_L = reg_off + 2;
+	//int reg_OFF_H = reg_off + 3;
 
-		//use wiringPI to write to set LEDn_OFF_H[4] = 0
-		//which is the "always OFF" bit
-		//can be achieved by writing 0x00 to register ??
-		//
-		//Write(reg_OFF_H, 0x00);
+	//use wiringPI to write to set LEDn_OFF_H[4] = 0
+	//which is the "always OFF" bit
+	//can be achieved by writing 0x00 to register ??
+	//
+	//Write(reg_OFF_H, 0x00);
 
-		
-		// the AND op with 0xFFF makes sure only 12-bit values are created
-		int iduty = 0xfff & static_cast<int>(iCounts * mLED_duty[ledName]);
+	
+	// the AND op with 0xFFF makes sure only 12-bit values are created
+	int iduty = 0xfff & static_cast<int>(iResolution * mLED_duty[ledName]);
 
-		//the LED_ON register stores the time from clock to ON state
-		//	which is delay
-		int time2on  = 0xfff & static_cast<int>(iCounts * fDelay);
-		//whereas the LED_OFF stores the time from clock to OFF state
-		//	which is delay+iduty
-		int time2off = 0xfff & (time2on + iduty);
+	//the LED_ON register stores the time from clock to ON state
+	//	which is delay
+	int time2on  = 0xfff & static_cast<int>(iResolution * fDelay);
+	//whereas the LED_OFF stores the time from clock to OFF state
+	//	which is delay+iduty
+	int time2off = 0xfff & (time2on + iduty);
 
-		//get least significant byte by truncation
-		//char LEDn_ON_L = static_cast<char>(time2on);
-		////get most significant byte by shifting right
-		//char LEDn_ON_H = static_cast<char>(time2on >> 8);
+	//get least significant byte by truncation
+	//char LEDn_ON_L = static_cast<char>(time2on);
+	////get most significant byte by shifting right
+	//char LEDn_ON_H = static_cast<char>(time2on >> 8);
 
-		////get least significant byte by truncation
-		//char LEDn_OFF_L = static_cast<char>(time2off);
-		////get most significant byte by shifting right
-		//char LEDn_OFF_H = static_cast<char>(time2off >> 8);
+	////get least significant byte by truncation
+	//char LEDn_OFF_L = static_cast<char>(time2off);
+	////get most significant byte by shifting right
+	//char LEDn_OFF_H = static_cast<char>(time2off >> 8);
 
-		std::vector<int> v_data;
-		v_data.push_back(time2on  & 0xff);
-		v_data.push_back(time2on  >> 8);
-		v_data.push_back(time2off & 0xff);
-		v_data.push_back(time2off >> 8);
+	std::vector<int> v_data;
+	v_data.push_back(time2on  & 0xff);
+	v_data.push_back(time2on  >> 8);
+	v_data.push_back(time2off & 0xff);
+	v_data.push_back(time2off >> 8);
 
-		//use wiringPI function to write to correct register
-		//and at the same time check for errors
-		//
-		WriteAI(reg_LED, v_data);
-	}
+	//use wiringPI function to write to correct register
+	//and at the same time check for errors
+	//
+	return WriteAI(reg_LED, v_data);
 }
 
-void LEDmanager::TurnLEDoff(std::string ledName)
+bool LEDmanager::TurnLEDoff(std::string ledName)
 {
-	if (changeLEDregisters)
-	{
-		//use wiringPI to write to set LEDn_OFFi_H[4] = 1
-		//which is the "always OFF" bit
-		//can be achieved by writing 0x10 to register ??
-		int reg_LED = 4 * mLED_chan[name] + 9;
-		Write(reg_LED, 0x00);
-	}
+	//use wiringPI to write to set LEDn_OFFi_H[4] = 1
+	//which is the "always OFF" bit
+	//can be achieved by writing 0x10 to register ??
+	int reg_LED = 4 * mLED_chan[ledName] + 9;
+
+	return Write(reg_LED, 0x00);
 }
 
 
@@ -336,75 +362,103 @@ void LEDmanager::TurnLEDoff(std::string ledName)
 
 // I2C communication functions
 //
-
-int LEDmanager::Read(int reg)
+//standard 8bit read
+bool LEDmanager::Read(int reg, int &data)
 {
-	if (file_decsript)
+	if (file_descript)
 	{
-		int data = wiringPiI2CReadReg8(file_descript, reg);
-		if (data == -1)
-			std::cerr << "LEDmanager::Read ERROR encountered " << errno << 
-				  << "                 while reading reg " << std::hex << reg << std::endl;
-		return data;
+		data = wiringPiI2CReadReg8(file_descript, reg);
+		if (data < 0)
+		{
+			Log("LEDmanager::Read ERROR " + errno, 0, verbose);
+			return false;
+		}
+		else
+			return true;
 	}
 	else
-		return -1;
+		return false;
 }
 
 //standard 8bit write
-int LEDmanager::Write(int reg, int data)
+bool LEDmanager::Write(int reg, int data)
 {
-	if (file_decsript)
+	if (file_descript)
 	{
 		int ret = wiringPiI2CWriteReg8(file_descript, reg, data & 0xFF);
-		if (ret == -1)
-			std::cerr << "LEDmanager::Write ERROR encountered " << errno << 
-				  << "                  while writing to reg " << std::hex << reg << std::endl;
-		return ret;
+		if (ret < 0)
+		{
+			Log("LEDmanager::Write ERROR " + errno, 0, verbose);
+			return false;
+		}
+		else
+			return true;
 	}
 	else
-		return -1;
-}
-
-//uses the autoincrement option to write to sequential registers faster
-//
-int LEDmanager::WriteAI(int reg, std::vector<int> &block_data)
-{
-	if (file_decsript)
-	{
-		int ret = Write(reg, block_data.front());
-		for (int i = 1; i < block_data.size(); ++i)
-			int ret = wiringPiI2CWrite(file_descript, block_data.front() & 0xFF);
-
-		if (ret == -1)
-			std::cerr << "LEDmanager::WriteAI ERROR encountered " << errno << 
-				  << "                  while writing to reg " << std::hex << reg << std::endl;
-		return ret;
-	}
-	else
-		return -1;
+		return false;
 }
 
 //uses the autoincrement option to read to sequential registers faster
 //
-std::vector<int> LEDmanager::ReadAI(int reg, int num_reg)
+bool LEDmanager::ReadAI(int reg, int num_reg, std::vector<int> &block)
 {
-	std::vector<int> block_data;
-	if (file_decsript)
+	block.clear();
+	if (file_descript)
 	{
-		int data = Read(reg);
-		block_data.push_back(data);
+		//read first register manually
+		int data = wiringPiI2CReadReg8(file_descript, reg);
+		if (data < 0)
+		{
+			Log("LEDmanager::ReadAI ERROR " + errno, 0, verbose);
+			return false;
+		}
+		block.push_back(data);
 
+		//read following registers sequentially
 		for (int i = 1; i < num_reg; ++i)
 		{
 			data = wiringPiI2CRead(file_descript);
-			block_data.push_back(data);
+			if (data < 0)
+			{
+				Log("LEDmanager::ReadAI ERROR " + errno, 1, verbose);
+				return false;
+			}
+			block.push_back(data);
 		}
 
-		if (data == -1)
-			std::cerr << "LEDmanager::WriteAI ERROR encountered " << errno << 
-				  << "                  while writing to reg " << std::hex << reg << std::endl;
+		return true;
 	}
+	else
+		return false;
+}
 
-	return block_data;
+//uses the autoincrement option to write to sequential registers faster
+//
+bool LEDmanager::WriteAI(int reg, const std::vector<int> &block)
+{
+	if (file_descript)
+	{
+		//write first register manually
+		int ret = wiringPiI2CWriteReg8(file_descript, reg, block.front() & 0xFF);
+		if (ret < 0)
+		{
+			Log("LEDmanager::WriteAI ERROR " + errno, 0, verbose);
+			return false;
+		}
+
+		//write following registers sequentially
+		for (int i = 1; i < block.size(); ++i)
+		{
+			ret = wiringPiI2CWrite(file_descript, block.at(i) & 0xFF);
+			if (ret < 0)
+			{
+				Log("LEDmanager::WriteAI ERROR " + errno, 0, verbose);
+				return false;
+			}
+		}
+
+		return true;
+	}
+	else
+		return false;
 }

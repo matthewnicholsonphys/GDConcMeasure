@@ -13,6 +13,20 @@
 
 #include <zmq.hpp>
 
+enum status
+{
+	idle		= 0,
+	calibration	= 1,
+	cal_conc_1	= -1,
+	cal_conc_2	= -2,
+	cal_conc_3	= -3,
+	cal_conc_4	= -4,
+	change_water	= 2,
+	init_spectr	= 3,
+	turnon,
+	measure
+};
+
 class DataModel {
 
 
@@ -32,7 +46,10 @@ class DataModel {
 
   zmq::context_t* context;
 
-  int mode; //ENUM
+  //status mode;	//state for scheduler
+  int mode;	//state for scheduler
+  bool endMeasure;
+
   
   // pointer to spectromiter
   
