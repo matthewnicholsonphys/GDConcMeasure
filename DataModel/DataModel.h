@@ -16,6 +16,7 @@
 enum status
 {
 	idle		= 0,
+	init,
 	calibration	= 1,
 	cal_conc_1	= -1,
 	cal_conc_2	= -2,

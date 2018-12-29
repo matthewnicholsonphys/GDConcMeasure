@@ -1,0 +1,21 @@
+# Dummy config file
+
+verbose 5
+
+#Configuration file for LED manager
+#
+
+###################################################
+# these parameters should not be changed that easily
+# resolution is fixed with the PWD driver, but it can be tweaked here
+# in case the driver is changed in the future and so there is no need to recompile
+###################################################
+frequency	1500	# Hz, frequency of the PWM scaler [24 Hz ~ 1526 Hz]
+resolution	12	# bit, of the internal counter
+##################################################
+
+voltage_supply	11.87	# V, external supply
+delay		50	# %, delay for turning on LED in duty cycle percentage
+
+map_wiring	configfiles/ledtest/wiring
+measurement	configfiles/ledtest/measurement

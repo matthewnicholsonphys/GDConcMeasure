@@ -34,9 +34,10 @@ class LEDmanager: public Tool
 		bool EstablishI2C();
 		void MapLED();
 		bool SetPWMfreq(double freq);
-
+		
 		bool TurnOn();
 		bool TurnOff();
+		bool IsSleeping();
 		bool WakeUpDriver();
 		bool SleepDriver();
 
@@ -58,12 +59,12 @@ class LEDmanager: public Tool
 		unsigned int iResolution;
 		double fVin, fDelay, frequencyPWM;
 		unsigned long lastTime;
+		bool measure;
 
 		//counting and flags
 		int measureCount;
-		bool awake;
 		int file_descript;
-		int ledONstatus;
+		unsigned int ledONstatus;
 
 		//map between led name and its "binary" value
 		std::map<std::string, unsigned int> mLED_name;

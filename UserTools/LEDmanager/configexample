@@ -1,0 +1,28 @@
+#Configuration file for LED manager
+#
+
+Voltage_supply	12	# V, external supply
+Delay		50	# %, delay for turning on LED in duty cycle percentage
+
+#LED list
+#name		voltage		channel of driver
+led260j		8		0
+led275j		8		1
+led385w		8		2
+led405e		8		3
+ledW7		8		4
+ledRGBE_R	8		5
+ledRGBE_G	8		6
+ledRGBE_B	8		7
+
+LEDon_config	/path/to/file
+
+
+###################################################
+# these parameters should not be changed that easily
+# resolution is fixed with the PWD driver, but it can be tweaked here
+# in case the driver is changed in the future and so there is no need to recompile
+###################################################
+Frequency	125	# Hz, frequency of the PWM scaler
+Resolution	12	# bit, of the internal counter
+##################################################
