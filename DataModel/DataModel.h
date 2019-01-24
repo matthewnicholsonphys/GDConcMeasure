@@ -13,7 +13,7 @@
 
 #include <zmq.hpp>
 
-enum status
+enum state
 {
 	idle		= 0,
 	init,
