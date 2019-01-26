@@ -38,31 +38,32 @@ bool LEDmanager::Execute()
 	//	std::cout << iLname->first << "\t" << iLname->second << "\t" << int(mLED_chan[iLname->first]) << "\t" << mLED_duty[iLname->first] << std::endl;
 	//}
 
-	measureCount = 0;
-	if (!measure && TurnOn())
-		measure = true;
+	//measureCount = 0;
+	//if (!measure && TurnOn())
+	//	measure = true;
 	
 
-	/*
 	switch (m_data->mode)
 	{
-		case status::init_spectr:	//about to make measurement, check LED mapping
+		case status::init:	//about to make measurement, check LED mapping
 			ledONstatus = 0;
 			measureCount = 0;
 			MapLED();
 			break;
-		case status::turnon:		//turn on led set
-			if (!TurnOn())		//if TurnOn is false, measurement is finished or there is a uncaught problem
-				m_data->endMeasure = true;
+		case status::measure_start:		//turn on led set
+		case status::calibrate_pure:		//turn on led set
+		case status::calibrate_gd:		//turn on led set
+			TurnOn();
+			//if (!TurnOn())		//if TurnOn is false, measurement is finished or there is a uncaught problem
+			//	m_data->measurementDone = true;
 			break;
-		case status::measure:	//wait for measurement
+		case status::measure_stop:	//wait for measurement
+			TurnOff();
 			break;
 		default:		//turn off in any other state
 			TurnOff();
 			break;
 	}
-	*/
-
 
 	return true;
 }
@@ -143,6 +144,8 @@ void LEDmanager::MapLED()
 				mLED_duty[key] = volt / fVin;
 		}
 	}
+
+	m_data->LED_name = mLED_name;	//store the LED mapping in the data model
 }
 
 //this routine will setup I2C connection with first address found
@@ -200,30 +203,9 @@ bool LEDmanager::TurnOn()
 	if (IsSleeping() && !WakeUpDriver())
 		return false;
 
-	std::ifstream inLED(configLED.c_str());
-	std::string line;
-	int i = 0;
-	while (i < measureCount+1 && std::getline(inLED, line))	//skip to line measureCount+1
-		if (line[0] != '#')
-			++i;
-
-	unsigned int ledON = 0;
-	if (i == measureCount+1)
+	if (m_data->ledON != ledONstatus)
 	{
-		if (line.find_first_of('#') != std::string::npos)
-			line.erase(line.find_first_of('#'));
-		std::stringstream ssl(line);		//setup binary value
-		while(ssl >> line)
-			ledON = ledON | mLED_name[line];
-
-		++measureCount;
-	}
-	else
-		return false;		//stop measuring
-
-	if (ledON != ledONstatus)
-	{
-		ledONstatus = ledON;
+		ledONstatus = m_data->ledON;
 		return TurnLEDArray(ledONstatus);	//if everything is ok, this returns true
 	}
 	else

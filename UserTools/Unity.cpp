@@ -8,3 +8,4 @@
 #include "Measurement/Measurement.cpp"
 #include "Analysis/Analysis.cpp"
 #include "Output/Output.cpp"
+#include "Writer/Writer.cpp"

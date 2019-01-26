@@ -22,7 +22,7 @@ bool Scheduler::Execute()
 	{
 		case state::idle:				//in idle nothing works
 			last = Wait(idle_time);
-			m_data->mode = state::power_up;	//time to power up the PSU
+			m_data->mode = state::power_up;		//time to power up the PSU
 			break;
 		case state::power_up:				//enables PowerTool that turns on PSU
 			last = Wait(power_up_time);		//(small wait)
@@ -34,7 +34,11 @@ bool Scheduler::Execute()
 				m_data->mode = state::measure;
 			else
 				m_data->mode = state::calibrate;
-		case state::calibration:
+		case state::calibrate:
+			if (isCalibrated())
+				m_data->mode = state::measure;
+			break;
+		case state::measure:
 			Wait(idle_time);
 			break;
 		case state::idle:
@@ -47,7 +51,6 @@ bool Scheduler::isCalibrated()
 {
 	return m_data->isCalibrated;
 }
-
 
 bool Scheduler::Finalise()
 {

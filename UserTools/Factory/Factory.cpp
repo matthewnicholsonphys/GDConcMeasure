@@ -14,7 +14,8 @@ if (tool=="Pump") ret=new Pump;
 if (tool=="Calibration") ret=new Calibration;
 if (tool=="Measurement") ret=new Measurement;
 if (tool=="Analysis") ret=new Analysis;
-  if (tool=="Output") ret=new Output;
+if (tool=="Output") ret=new Output;
+  if (tool=="Writer") ret=new Writer;
 return ret;
 }
 

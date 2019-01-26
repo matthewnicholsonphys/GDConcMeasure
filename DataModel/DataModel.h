@@ -15,17 +15,16 @@
 
 enum state
 {
-	idle		= 0,
+	idle,
 	init,
-	calibration	= 1,
-	cal_conc_1	= -1,
-	cal_conc_2	= -2,
-	cal_conc_3	= -3,
-	cal_conc_4	= -4,
-	change_water	= 2,
-	init_spectr	= 3,
-	turnon,
-	measure
+	calibrate,
+	calibrate_dark,
+	calibrate_pure,
+	calibrate_gd,
+	calibrate_fit,
+	measure,
+	measure_start,
+	measure_stop
 };
 
 class DataModel {
