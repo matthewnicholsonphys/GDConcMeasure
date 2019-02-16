@@ -6,7 +6,8 @@ Power::Power() : Tool()
 
 bool Power::Initialise(std::string configfile, DataModel &data)
 {
-	if(configfile!="")  m_variables.Initialise(configfile);
+	if(configfile!="")
+		m_variables.Initialise(configfile);
 	//m_variables.Print();
 
 	m_data= &data;
@@ -32,4 +33,14 @@ bool Power::Execute()
 bool Power::Finalise()
 {
 	return true;
+}
+
+void Power::TurnOn()
+{
+	//write to GPIO
+}
+
+void Power::TurnOff()
+{
+	//write to GPIO
 }

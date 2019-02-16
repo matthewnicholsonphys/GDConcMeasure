@@ -9,15 +9,17 @@
 class Power: public Tool {
 
 
- public:
+	public:
 
-  Power();
-  bool Initialise(std::string configfile,DataModel &data);
-  bool Execute();
-  bool Finalise();
+		Power();
+		bool Initialise(std::string configfile,DataModel &data);
+		bool Execute();
+		bool Finalise();
 
+		void TurnOn();
+		void TurnOff();
 
- private:
+	private:
 
 
 

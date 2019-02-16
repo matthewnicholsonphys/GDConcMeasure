@@ -7,6 +7,10 @@
 #include <vector>
 #include <map>
 
+#include "TList.h"
+#include "TF1.h"
+#include "TF2.h"
+
 #include "Tool.h"
 
 class CalibrationManager: public Tool
@@ -24,9 +28,6 @@ class CalibrationManager: public Tool
 		bool IsUpdate(std::string name, int timeUpdate);
 		void NewCalibration();
 		bool Calibrate();
-		void LoadCalibration();
-		void NewCalibration();
-		bool IsCalibrated();
 
 	private:
 
@@ -38,9 +39,10 @@ class CalibrationManager: public Tool
 		std::string base_name;		//base name for calibration
 		std::string concFuncName;	//name of concentration function
 		std::string err_FuncName;	//name of uncertainity function
+		std::string concTreeName;
 
 		std::vector<std::string> calibList, updateList;
-		std::vector<std::string>::iterator im;
+		std::vector<std::string>::iterator ic;
 
 		std::map<std::string, int> timeUpdate;
 };

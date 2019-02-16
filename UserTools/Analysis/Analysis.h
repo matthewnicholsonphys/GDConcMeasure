@@ -4,7 +4,23 @@
 #include <string>
 #include <iostream>
 
+#include <vector>
+#include <deque>
+
+#include "TGraphErrors.h"
+
 #include "Tool.h"
+
+//sort the order of peaks and deeps
+struct Sort
+{
+	std::vector<double> vX;
+	bool peakORdeep;
+	bool operator()(int i, int j) const { return (2*peakORdeep - 1)*(vX.at(i) - vX.at(j)) > 0; }
+
+	Sort(const std::vector<double> &vv, bool PoD = true) : vX(vv), peakORdeep(PoD) {}
+};
+
 
 class Analysis: public Tool
 {
@@ -15,19 +31,27 @@ class Analysis: public Tool
 		bool Execute();
 		bool Finalise();
 
+		std::vector<double> PureTrace();
 		std::vector<double> AverageTrace(bool darkRemove);
 		std::vector<double> AbsorbTrace(const std::vector<double> &avgTrace);
-
-		bool Absorbance(std::vector<double> &avgTrace, std::vector<double> &absTrace, int &i1, int &i2);
+		std::vector<double> Absorbance(const std::vector<double> &avgTrace, int &i1, int &i2);
 		void CalibrationTrace(double gdconc, double gd_err);
+		void CalibrationComplete();
 		void MeasurementTrace();
-
 		void LinearFit();
-		void FindPeakDeep(const std::vector<double> &vTrace, std::vector<unsigned int> &iPeak, std::vector<unsigned int> &iDeep);
+		void FindPeakDeep(const std::vector<double> &vTrace,
+				  std::vector<int> &iPeak,
+				  std::vector<int> &iDeep);
+		long TimeStamp(int &Y, int &M, int &D, int &h, int &m, int &s);
 
 	private:
 
+		std::string m_configfile;
+		int verbose;
+
 		std::vector<double> darkTrace, pureTrace;
+
+		bool mustComplete;
 
 };
 

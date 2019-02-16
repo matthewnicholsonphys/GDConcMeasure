@@ -7,7 +7,10 @@ bool Analysis::Initialise(std::string configfile, DataModel &data)
 {
 
 	if(configfile!="")
+	{
+		m_configfile = configfile;
 		m_variables.Initialise(configfile);
+	}
 	//m_variables.Print();
 
 	m_data = &data;
@@ -35,7 +38,8 @@ bool Analysis::Execute()
 		case state::calibration_done:
 			if (mustComplete)
 				CalibrationComplete();	//complete missing holes in calibration
-			LinearFit();		//evaluate linear fit
+			if (m_data->calibrationName == m_data->concentrationName)
+				LinearFit();		//evaluate linear fit for concentration calibration
 			break;
 		case state::measurement:	//pure trace has been assigned by now
 			MeasurementTrace();
@@ -66,13 +70,13 @@ std::vector<double> Analysis::PureTrace()
 		std::cerr << "error\n";
 
 	std::vector<double> trace;
-	for (int i = 0; i < cal->GetEntries(); ++i)
+	for (int i = 0; i < calib->GetEntries(); ++i)
 	{
 		calib->GetEntry(i);
 		if (calib->GdConc == 0)
 		{
 			trace = calib->Trace;
-			trace.insert(trace.end(), oldTree->T_Err.begin(), oldTree->T_Err.end());
+			trace.insert(trace.end(), calib->T_Err.begin(), calib->T_Err.end());
 			break;
 		}
 	}
@@ -82,12 +86,12 @@ std::vector<double> Analysis::PureTrace()
 
 std::vector<double> Analysis::AverageTrace(bool darkRemove)
 {
-	int size = vTraceCollect.front().size();
+	int size = m_data->traceCollect.front().size();
 	std::vector<double> avgTrace(2 * size);
 	if (size)
 	{
 		std::vector<std::vector<double> >::iterator it;
-		for (it = vTraceCollect.begin(); it != vTraceCollect.end(); ++it)
+		for (it = m_data->traceCollect.begin(); it != m_data->traceCollect.end(); ++it)
 		{
 			int l = 0;
 			for (int i = 0, e = size; i < size; ++i, ++e)	//loop "size" entries
@@ -97,17 +101,17 @@ std::vector<double> Analysis::AverageTrace(bool darkRemove)
 			}
 		}
 
-		std::vector<double> &subTrace =
-				(darkRemove && darkTrace.size()) ? darkTrace : std::vector<double>(2 * size);
+		darkRemove = (darkRemove && darkTrace.size());
 
 		for (int i = 0, e = size; i < size; ++i, ++e)
 		{
 			avgTrace[e] -= pow(avgTrace[i], 2) / (size - 1);
 
-			//if there is darkRemove, subTrace is equal to darkTrace
-			//otherwise it is just empty
-			avgTrace[i] -= subTrace[i];
-			avgTrace[e] += subTrace[e];
+			if (darkRemove)	//remove background, aka dark current
+			{
+				avgTrace[i] -= darkTrace[i];
+				avgTrace[e] += darkTrace[e];
+			}
 		}
 	}
 	else
@@ -161,7 +165,7 @@ void Analysis::CalibrationTrace(double gdconc, double gd_err)
 		pureTrace = avgTrace;		//store this trace
 
 	int size = avgTrace.size() / 2;
-	GdTree *tree = m_data->currentTree;
+	GdTree *tree = m_data->GetGdTree(m_data->calibrationName);
 
 	int i1 = -1, i2 = -1;
 	std::vector<double> absTrace = Absorbance(avgTrace, i1, i2);
@@ -193,7 +197,7 @@ void Analysis::CalibrationTrace(double gdconc, double gd_err)
 
 	if (i1 >= 0)	//found one peak
 	{
-		tree->Wavelength_1 = X.at(i1);
+		tree->Wavelength_1 = m_data->wavelength.at(i1);
 		tree->Absorbance_1 = absTrace.at(i1);
 		tree->Absorb_Err_1 = absTrace.at(i1 + size);
 
@@ -212,7 +216,7 @@ void Analysis::CalibrationTrace(double gdconc, double gd_err)
 
 	if (i2 >= 0)	//found second peak
 	{
-		tree->Wavelength_2 = X.at(i2);
+		tree->Wavelength_2 = m_data->wavelength.at(i2);
 		tree->Absorbance_2 = absTrace.at(i2);
 		tree->Absorb_Err_2 = absTrace.at(i2 + size);
 
@@ -255,10 +259,10 @@ void Analysis::CalibrationComplete()
 	if (pureTrace.size())	//this is bad
 		return;
 
-	GdTree *oldTree = m_data->GetGdTree("calibration");	//should be calibration tree
+	GdTree *oldTree = m_data->GetGdTree(m_data->calibrationName);	//should be calibration tree
 	GdTree *newTree = new GdTree(*oldTree);	//copy
 
-	for (int i = 0; i < tree->GetEntries(); ++i)
+	for (int i = 0; i < oldTree->GetEntries(); ++i)
 	{
 		oldTree->GetEntry(i);
 
@@ -304,13 +308,13 @@ void Analysis::CalibrationComplete()
 			newTree->Absor = oldTree->Absor;
 			newTree->A_Err = oldTree->A_Err;
 
-			newTree->Wavelength_1 = oldTree->Wavelength_1
-			newTree->Absorbance_1 = oldTree->Absorbance_1
-			newTree->Absorb_Err_1 = oldTree->Absorb_Err_1
+			newTree->Wavelength_1 = oldTree->Wavelength_1;
+			newTree->Absorbance_1 = oldTree->Absorbance_1;
+			newTree->Absorb_Err_1 = oldTree->Absorb_Err_1;
 
-			newTree->Wavelength_2 = oldTree->Wavelength_2
-			newTree->Absorbance_2 = oldTree->Absorbance_2
-			newTree->Absorb_Err_2 = oldTree->Absorb_Err_2
+			newTree->Wavelength_2 = oldTree->Wavelength_2;
+			newTree->Absorbance_2 = oldTree->Absorbance_2;
+			newTree->Absorb_Err_2 = oldTree->Absorb_Err_2;
 
 			newTree->Absorb_Diff = oldTree->Absorb_Diff;
 			newTree->AbsDiff_Err = oldTree->AbsDiff_Err;
@@ -378,7 +382,7 @@ void Analysis::LinearFit()
 	 * where n-1 is the number of concentration probed
 	 * and 1 is the pure water reference
 	 */
-	GdTree *tree = m_data->currentTree;
+	GdTree *tree = m_data->GetGdTree(m_data->concentrationName);
 	int n = tree->GetEntries();
 
 	/* creating a graph with calibration points
@@ -399,7 +403,7 @@ void Analysis::LinearFit()
 		}
 	}
 
-	//keeps point sorted in X
+	//keeps point sorted in X diretion
 	gd->Sort();
 
 	/* creat function a + b*x for fit the graph
@@ -407,22 +411,27 @@ void Analysis::LinearFit()
 	TF1 *line = new TF1("dep", "1 ++ x", 0, 1);
 	int stat = gd->Fit(line, "RNQ");
 
+	//must change this
+	int iA = 0, iB = tree->Trace.size();
+
 	if (stat >= 0)	//successful fit
 	{
-		double a_val = gd->GetParameter(0);	//[0]
-		double b_val = gd->GetParameter(1);	//[1]
-		double a_err = gd->GetParError(0);	//[2]
-		double b_err = gd->GetParError(1);	//[3]
+		double a_val = line->GetParameter(0);	//[0]
+		double b_val = line->GetParameter(1);	//[1]
+		double a_err = line->GetParError(0);	//[2]
+		double b_err = line->GetParError(1);	//[3]
 
 		/* invert function line to have
 		 * concentration as a function of absorbance x = (y-a)/b
 		 */
 
-		if (m_data->concentrationFuncion && m_data->concentrationFunc_Err)
+		if (m_data->concentrationFunction && m_data->concentrationFunc_Err)
 		{
+			m_data->concentrationFunction->SetRange(iA, iB);
 			m_data->concentrationFunction->SetParameter(0, a_val);
 			m_data->concentrationFunction->SetParameter(1, b_val);
 
+			m_data->concentrationFunc_Err->SetRange(iA, iB);
 			m_data->concentrationFunc_Err->SetParameter(0, a_val);
 			m_data->concentrationFunc_Err->SetParameter(1, b_val);
 			m_data->concentrationFunc_Err->SetParameter(2, a_err);
@@ -440,7 +449,7 @@ void Analysis::LinearFit()
  * it is not robust and stable
  * but it works quite ok for now
  */
-void Analysis::FindPeakDeep(const std::vector<double> &vTrace, std::vector<unsigned int> &iPeak, std::vector<unsigned int> &iDeep)
+void Analysis::FindPeakDeep(const std::vector<double> &vTrace, std::vector<int> &iPeak, std::vector<int> &iDeep)
 {
 	/* Find maximum (and min) value and position
 	 * this is needed to find the peaks of a trace
@@ -468,6 +477,9 @@ void Analysis::FindPeakDeep(const std::vector<double> &vTrace, std::vector<unsig
 
 	std::deque<unsigned int> dPeak, dDeep;
 	dPeak.push_back(iMax);
+
+	//this depends on the LED, be careful
+	int iA = 0, iB = size;
 
 	/* start peak searching from highest peak
 	 * going left first, and then right
@@ -539,12 +551,12 @@ long Analysis::TimeStamp(int &Y, int &M, int &D, int &h, int &m, int &s)
 	//std::string date = tc.substr(0, tc.find_first_of('T'));
 	//std::string time = tc.substr(tc.find_first_of('T')+1);
 
-	Y = std::strtol(tc.substr(0,  4), NULL, 10);
-	M = std::strtol(tc.substr(4,  2), NULL, 10);
-	D = std::strtol(tc.substr(6,  2), NULL, 10);
-	h = std::strtol(tc.substr(9,  2), NULL, 10);
-	m = std::strtol(tc.substr(11, 2), NULL, 10);
-	s = std::strtol(tc.substr(13, 2), NULL, 10);
+	Y = std::strtol(tc.substr(0,  4).c_str(), NULL, 10);
+	M = std::strtol(tc.substr(4,  2).c_str(), NULL, 10);
+	D = std::strtol(tc.substr(6,  2).c_str(), NULL, 10);
+	h = std::strtol(tc.substr(9,  2).c_str(), NULL, 10);
+	m = std::strtol(tc.substr(11, 2).c_str(), NULL, 10);
+	s = std::strtol(tc.substr(13, 2).c_str(), NULL, 10);
 
 	boost::posix_time::ptime epoch(boost::gregorian::date(1970,1,1));
 	return (current - epoch).total_seconds();

@@ -59,7 +59,7 @@ bool CalibrationManager::Execute()
 			m_data->isCalibrated = true;
 			break;
 		case state::finalise:
-			Finalise()
+			Finalise();
 			//delete some tree/function objects?
 			break;
 		default:
@@ -121,12 +121,12 @@ std::vector<std::string> CalibrationManager::CalibrationList()
 		int tu;
 		while (ssl)
 		{
-			if (!std::isalnum(ssl.peek()) && ssl.peek != '_')
+			if (!std::isalnum(ssl.peek()) && ssl.peek() != '_')
 				ssl.ignore();
 			else if (ssl >> word)
 			{
 				if (word.find("time") != std::string::npos)
-					tu = std::strtol(word.substr(word.find("time")+1), NULL);
+					tu = std::strtol(word.substr(word.find("time")+1).c_str(), NULL, 10);
 				else
 					name += word + "_";
 			}
@@ -166,7 +166,7 @@ std::vector<std::string> CalibrationManager::LoadCalibration(std::vector<std::st
 
 	//find latest calibration of each type
 	TList *lk = m_data->calibrationFile->GetListOfKeys();
-	lk->Sort(TList::kSortDescending);
+	lk->Sort(kSortDescending);
 
 	//loop on calibration directories
 	//they are sorted from last to first
@@ -208,12 +208,12 @@ void CalibrationManager::Load(std::string name, std::string type)
 	std::string gdname = name + "/" + type;
 	TTree *gdt = static_cast<TTree*>(m_data->calibrationFile->Get(gdname.c_str())->Clone());
 	GdTree *calib = new GdTree(gdt);
-	std::string cname = base_name + type;
+	std::string cname = base_name + "_" + type;
 	m_data->AddGdTree(cname, calib);
 
 	if (type == concTreeName)	//happens once
 	{
-		m_data->concentrationTree = cname;
+		m_data->concentrationName = cname;
 
 		std::string f1name = name + "/" + concFuncName;
 		std::string f2name = name + "/" + err_FuncName;
@@ -257,18 +257,19 @@ void CalibrationManager::NewCalibration()
 
 	for (ic = updateList.begin(); ic != updateList.end(); ++ic)
 	{
-		std::string name = base_name + *ic;
+		std::string name = base_name + "_" + *ic;
 		GdTree *calib = new GdTree(name.c_str());
 		m_data->AddGdTree(name.c_str(), calib);
 
 		if (*ic == concTreeName)	//happens once
 		{
-			m_data->concentrationTree = concTreeName;
+			m_data->concentrationName = name;
 
 			//create functions for absorbance, value and error
-			m_data->concentrationFunction = new TF1(concFuncName, "(x - [0])/[1]", 0, 1);
-			m_data->concentrationFunc_Err = new TF1(err_FuncName, "gdconc(x)^2 * ( (y^2 + [2]^2)/(x - [0])^2 +
-												([3]/[1])^2 )", 0, 1);
+			m_data->concentrationFunction = new TF1(concFuncName.c_str(),
+					"(x - [0])/[1]", 0, 1);
+			m_data->concentrationFunc_Err = new TF2(err_FuncName.c_str(),
+					"((x - [0])/[1])^2 * ( (y^2 + [2]^2)/(x - [0])^2 + ([3]/[1])^2 )", 0, 1);
 		}
 	}
 }
@@ -287,10 +288,11 @@ bool CalibrationManager::Calibrate()
 		std::cout << "which concentration have you put " << *ic << "?\n";
 		//acknowledge!!
 
-		m_data->gdconc = std::strtod(acknowledge, NULL);
-		m_data->gd_err = std::strtod(acknowledge, NULL);
+		m_data->gdconc = std::strtod(acknowledge.c_str(), NULL);
+		m_data->gd_err = std::strtod(acknowledge.c_str(), NULL);
 	}
 
 	m_data->turnOnPump = true;	//must change water
 	m_data->turnOnLED = *ic;
+	m_data->calibrationName = base_name + "_" + *ic;
 }

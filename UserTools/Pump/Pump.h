@@ -9,15 +9,17 @@
 class Pump: public Tool {
 
 
- public:
+	public:
 
-  Pump();
-  bool Initialise(std::string configfile,DataModel &data);
-  bool Execute();
-  bool Finalise();
+		Pump();
+		bool Initialise(std::string configfile,DataModel &data);
+		bool Execute();
+		bool Finalise();
 
+		void TurnOn();
+		void TurnOff();
 
- private:
+	private:
 
 
 

@@ -18,16 +18,22 @@ class Scheduler: public Tool
 		bool Execute();
 		bool Finalise();
 
-		void Configure();
 		bool IsCalibrated();
 		bool IsCalibrationDone();
 		bool IsMeasurementDone();
 
-		boost::posix_time::second_clock Wait(double t = 0.0);
+		boost::posix_time::ptime Wait(double t = 0.0);
 
 	private:
+
 		boost::posix_time::ptime last;
 
+		int verbose;
+
+		int idle_time;
+		int power_up_time;
+		int power_down_time;
+		int change_water_time;
 
 };
 

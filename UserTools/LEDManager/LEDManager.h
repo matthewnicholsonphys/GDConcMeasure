@@ -37,7 +37,7 @@ class LEDManager: public Tool
 		
 		bool TurnOn();
 		bool TurnOff();
-bool LEDManager::TurnOffAndSleep()
+		bool TurnOffAndSleep();
 		bool IsSleeping();
 		bool WakeUpDriver();
 		bool SleepDriver();
@@ -53,6 +53,7 @@ bool LEDManager::TurnOffAndSleep()
 	
 	
 	private:
+		std::string m_configfile;
 		//verbosity
 		int verbose;
 		//set up by configure
@@ -63,7 +64,7 @@ bool LEDManager::TurnOffAndSleep()
 
 		//counting and flags
 		int file_descript;
-		unsigned int ledONstatus;
+		unsigned int ledONstate;
 
 		//map between led name and its "binary" value
 		std::map<std::string, unsigned int> mLED_name;

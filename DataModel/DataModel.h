@@ -12,6 +12,10 @@
 #include "Logging.h"
 #include "GdTree.h"
 
+#include "TFile.h"
+#include "TF1.h"
+#include "TF2.h"
+
 #include <zmq.hpp>
 
 enum state
@@ -63,7 +67,7 @@ class DataModel
 		bool calibrationDone;	//true if calibration is complete
 		//
 		//	used in Analysis
-		std::string concentrationTree;	//name of tree for concentration measurmenet
+		std::string concentrationName;	//name of tree for concentration measurmenet
 		TF1 *concentrationFunction;
 		TF2 *concentrationFunc_Err;
 		double gdconc, gd_err;	//value of gd concentration and error
@@ -80,6 +84,8 @@ class DataModel
 		//
 		//	used in Writing
 		TFile* measurementFile;
+		//	used in analysis
+		std::string measurementName;
 
 		//LEDmanager
 		//string used by calibration and measurement managers
@@ -88,7 +94,7 @@ class DataModel
 		//Pump
 		//
 		//override scheduler
-		bool m_data->turnOnPump;	//must change water
+		bool turnOnPump;	//must change water
 
 
 		//filled by Spectrometer, for Analysis

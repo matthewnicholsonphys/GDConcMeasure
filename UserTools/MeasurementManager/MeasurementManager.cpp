@@ -30,7 +30,7 @@ bool MeasurementManager::Execute()
 	switch (m_data->mode)
 	{
 		case state::init:	//about to make measurement, check LED mapping
-			Initialise(m_configfile, *data);
+			Initialise(m_configfile, *m_data);
 			measureList = LoadMeasurement();
 			im = measureList.begin();	//global iterator
 			//std::cout << "Set up for " << measureList.size() << " measurements.\n";
@@ -77,7 +77,7 @@ std::vector<std::string> MeasurementManager::MeasurementList()
 {
 	std::vector<std::string> vList;
 
-	std::ifstream cf(calibFile.c_str());
+	std::ifstream cf(measureFile.c_str());
 	std::string line;
 	while (std::getline(cf, line))
 	{
@@ -88,7 +88,7 @@ std::vector<std::string> MeasurementManager::MeasurementList()
 		std::string name, word;
 		while (ssl)
 		{
-			if (!std::isalnum(ssl.peek()) && ssl.peek != '_')
+			if (!std::isalnum(ssl.peek()) && ssl.peek() != '_')
 				ssl.ignore();
 			else if (ssl >> word)
 			{
@@ -125,7 +125,7 @@ std::vector<std::string> MeasurementManager::LoadMeasurement()
 		//else create new
 		
 		GdTree *measure = new GdTree(gdt);
-		std::string name = base_name + *im;
+		std::string name = base_name + "_" + *im;
 		m_data->AddGdTree(name.c_str(), measure);
 	}
 
@@ -135,4 +135,5 @@ std::vector<std::string> MeasurementManager::LoadMeasurement()
 bool MeasurementManager::Measure()
 {
 	m_data->turnOnLED = *im;
+	m_data->measurementName = base_name + "_" + *im;
 }

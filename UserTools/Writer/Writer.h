@@ -9,15 +9,17 @@
 class Writer: public Tool {
 
 
- public:
+	public:
 
-  Writer();
-  bool Initialise(std::string configfile,DataModel &data);
-  bool Execute();
-  bool Finalise();
+		Writer();
+		bool Initialise(std::string configfile,DataModel &data);
+		bool Execute();
+		bool Finalise();
 
+		void WriteTree();
+		void WriteFunctions();
 
- private:
+	private:
 
 
 

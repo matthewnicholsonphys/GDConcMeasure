@@ -6,10 +6,13 @@ LEDManager::LEDManager():Tool(){}
 bool LEDManager::Initialise(std::string configfile, DataModel &data)
 {
 	if(configfile!="")
+	{
+		m_configfile = configfile;
 		m_variables.Initialise(configfile);
+	}
 	//m_variables.Print();
 	
-	m_data= &data;
+	m_data = &data;
 	
 	Configure();
 	return EstablishI2C();	//it is true if connections is ok!
@@ -46,7 +49,7 @@ bool LEDManager::Execute()
 	{
 		case state::init:	//about to make measurement, check LED mapping
 			ledONstate = 0;
-			Initialise(m_configfile, *data);
+			Initialise(m_configfile, *m_data);
 			break;
 		case state::calibration:		//turn on led set
 		case state::measurement:		//turn on led set
@@ -200,8 +203,8 @@ bool LEDManager::TurnOn()
 
 	std::stringstream ssl(m_data->turnOnLED);
 	std::string led;
-	while (std::getline(ssl, led, "_"))
-		ledON = ledON | LED_name[led];
+	while (std::getline(ssl, led, '_'))
+		ledON = ledON | mLED_name[led];
 
 	if (ledON != ledONstate)
 	{
