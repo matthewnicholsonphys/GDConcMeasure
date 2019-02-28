@@ -3,6 +3,11 @@
 
 #include <string>
 #include <iostream>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include "api/seabreezeapi/SeaBreezeAPI.h"
+#include <unistd.h>
 
 #include "Tool.h"
 
@@ -16,17 +21,17 @@ class Spectrometer: public Tool {
 		bool Execute();
 		bool Finalise();
 
-		void EstablishUSB();
-		void DarkLevel();
-		void GetData();
-
+		bool EstablishUSB();
+		bool GetData();
+		void RelinquishUSB();
+		
 	private:
 
 		std::string m_configfile;
 		int verbose;
-
-
-
+		long*  device_ids;
+		long* spectrometer_ids;
+		int error;
 
 };
 

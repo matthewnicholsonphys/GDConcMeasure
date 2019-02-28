@@ -5,6 +5,8 @@
 #include <iostream>
 
 #include "Tool.h"
+#include "TTree.h"
+#include "TFile.h"
 
 class Writer: public Tool {
 

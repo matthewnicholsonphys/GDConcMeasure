@@ -1,3 +1,6 @@
 #test1 DummyTool configfiles/DummyToolConfig
 #test2 DummyTool configfiles/DummyToolConfig
-Scheduler Scheduler Null 
+#Scheduler Scheduler Null
+StateTest StateTest Null
+Power Power configfiles/test/PowerConfig
+Spectrometer Spectrometer NULL

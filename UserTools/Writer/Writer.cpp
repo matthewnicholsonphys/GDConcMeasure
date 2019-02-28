@@ -41,13 +41,31 @@ bool Writer::Finalise()
 
 void Writer::WriteTree()
 {
-	//some loop on GdTrees
-	//and call GdTree->Write()
-	//and at the same time erase GdTree from map
+
+  TFile file("datatest.root","RECREATE");
+  
+  for (std::map<std::string, GdTree*>::iterator it=m_data->m_gdtrees.begin(); it!=m_data->m_gdtrees.end(); ++it) it->second->Write();
+
+  file.Close();
+  
+
+  //some loop on GdTrees
+  //and call GdTree->Write()
+  //and at the same time erase GdTree from map
 }
 
 void Writer::WriteFunctions()
 {
-	//m_data->concentrationFunction->Write();
+
+  TFile file("calibtest.root","RECREATE");
+
+  m_data->GetGdTree(m_data->calibrationName)->Write();
+
+  m_data->concentrationFunction->Write();
+  m_data->concentrationFunc_Err->Write();
+  
+  file.Close();
+
+  //m_data->concentrationFunction->Write();
 	//m_data->concentrationFunc_Err->Write();
 }

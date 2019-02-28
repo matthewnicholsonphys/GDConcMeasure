@@ -21,7 +21,7 @@ class Pump: public Tool {
 
 	private:
 
-
+		int pumppin;
 
 
 

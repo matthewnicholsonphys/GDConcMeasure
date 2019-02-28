@@ -102,11 +102,11 @@ class DataModel
 		std::vector<std::vector<double> > traceCollect;
 		std::vector<double> wavelength;	//can be retrieved from seabreeze
 
+		std::map<std::string, GdTree*> m_gdtrees; 
 
 	private:
 
 		//std::map<std::string, TTree*> m_trees; 
-		std::map<std::string, GdTree*> m_gdtrees; 
 };
 
 

@@ -11,8 +11,8 @@ BoostInclude= -I $(ToolDAQPath)/boost_1_66_0/install/include
 DataModelInclude= $(RootInclude)
 DataModelLib=  $(RootLib)
 
-MyToolsInclude= $(RootInclude)
-MyToolsLib= $(RootLib) -lwiringPi
+MyToolsInclude= $(RootInclude) -I  /home/pi/seabreeze-3.0.11/SeaBreeze/include/
+MyToolsLib= $(RootLib) -lwiringPi -L/usr/lib/arm-linux-gnueabihf/ -lusb -L /home/pi/seabreeze-3.0.11/SeaBreeze/lib/ -lseabreeze
 
 all: lib/libStore.so lib/libLogging.so lib/libDataModel.so include/Tool.h lib/libMyTools.so lib/libServiceDiscovery.so lib/libToolChain.so main RemoteControl  NodeDaemon
 

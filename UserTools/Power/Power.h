@@ -3,7 +3,8 @@
 
 #include <string>
 #include <iostream>
-
+#include <stdlib.h>
+#include <sstream>
 #include "Tool.h"
 
 class Power: public Tool {
@@ -21,7 +22,7 @@ class Power: public Tool {
 
 	private:
 
-
+		int powerpin;
 
 
 

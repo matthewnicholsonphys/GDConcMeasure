@@ -1,5 +1,4 @@
 #include "Pump.h"
-
 Pump::Pump() : Tool()
 {
 }
@@ -11,6 +10,16 @@ bool Pump::Initialise(std::string configfile, DataModel &data)
 
 	m_data= &data;
 
+	m_variables.Get("pump_pin",pumppin);
+
+	std::stringstream command;
+	command<<"echo \""<<pumppin<<"\" > /sys/class/gpio/export";
+	system(command.str().c_str());
+
+	command.str("");
+	command<<"echo \"out\" > /sys/class/gpio/gpio"<<pumppin<<"/direction";
+	system(command.str().c_str());
+	
 	return true;
 }
 
@@ -37,9 +46,18 @@ bool Pump::Finalise()
 void Pump::TurnOn()
 {
 	//write to GPIO
+  std::stringstream command;
+  command<<"echo \"1\" > /sys/class/gpio/gpio"<<pumppin<<"/value";
+  system(command.str().c_str());
+
 }
 
 void Pump::TurnOff()
 {
 	//write to GPIO
+  std::stringstream command;
+  command<<"echo \"0\" > /sys/class/gpio/gpio"<<pumppin<<"/value";
+  system(command.str().c_str());
+  
+  
 }
