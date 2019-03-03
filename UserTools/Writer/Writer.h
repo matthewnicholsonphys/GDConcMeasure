@@ -18,8 +18,10 @@ class Writer: public Tool {
 		bool Execute();
 		bool Finalise();
 
-		void WriteTree();
-		void WriteFunctions();
+		void WriteCalibration();
+		void WriteMeasurement();
+
+		void Loop();
 
 	private:
 

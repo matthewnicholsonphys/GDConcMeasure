@@ -15,10 +15,10 @@
 struct Sort
 {
 	std::vector<double> vX;
-	bool peakORdeep;
-	bool operator()(int i, int j) const { return (2*peakORdeep - 1)*(vX.at(i) - vX.at(j)) > 0; }
+	int peakORdeep;
+	bool operator()(int i, int j) const { return peakORdeep*(vX.at(i) - vX.at(j)) > 0; }
 
-	Sort(const std::vector<double> &vv, bool PoD = true) : vX(vv), peakORdeep(PoD) {}
+	Sort(const std::vector<double> &vv, int PoD = 1) : vX(vv), peakORdeep(PoD) {}
 };
 
 
@@ -42,7 +42,9 @@ class Analysis: public Tool
 		void FindPeakDeep(const std::vector<double> &vTrace,
 				  std::vector<int> &iPeak,
 				  std::vector<int> &iDeep);
-		long TimeStamp(int &Y, int &M, int &D, int &h, int &m, int &s);
+
+		void Fill(GdTree *tree, std::vector<double> &abst, int i1, int i2, int size, bool stamp = true);
+		ULong64_t TimeStamp(int &Y, int &M, int &D, int &h, int &m, int &s);
 
 	private:
 
@@ -52,7 +54,6 @@ class Analysis: public Tool
 		std::vector<double> darkTrace, pureTrace;
 
 		bool mustComplete;
-
 };
 
 

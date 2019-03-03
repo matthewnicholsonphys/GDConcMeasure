@@ -6,6 +6,7 @@
 
 #include <vector>
 #include <map>
+#include <algorithm>
 
 #include "TList.h"
 #include "TF1.h"
@@ -23,10 +24,10 @@ class CalibrationManager: public Tool
 		bool Finalise();
 
 		std::vector<std::string> CalibrationList();
-		std::vector<std::string> LoadCalibration(std::vector<std::string> &uList);
-		void Load(std::string name, std::string type);
+		std::vector<std::string> LoadCalibration();
+		void Load(TFile &f, std::string name, std::string type);
+		void Create(std::string name);
 		bool IsUpdate(std::string name, int timeUpdate);
-		void NewCalibration();
 		bool Calibrate();
 
 	private:
@@ -35,13 +36,11 @@ class CalibrationManager: public Tool
 		int verbose;
 
 		std::string calibFile;		//file in which calibration list is
-		std::string outputFile;		//root file in which calibration will saved
-		std::string base_name;		//base name for calibration
 		std::string concFuncName;	//name of concentration function
 		std::string err_FuncName;	//name of uncertainity function
 		std::string concTreeName;
 
-		std::vector<std::string> calibList, updateList;
+		std::vector<std::string> calibList;
 		std::vector<std::string>::iterator ic;
 
 		std::map<std::string, int> timeUpdate;

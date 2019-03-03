@@ -3,6 +3,7 @@
 
 #include <string>
 #include <iostream>
+#include <algorithm>
 
 #include "Tool.h"
 
@@ -26,8 +27,6 @@ class MeasurementManager: public Tool
 		int verbose;
 
 		std::string measureFile;	//file with list of measurements to take
-		std::string outputFile;		//file with list of measurements to take
-		std::string base_name;		//name of output tree
 
 		std::vector<std::string> measureList;
 		std::vector<std::string>::iterator im;

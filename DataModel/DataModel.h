@@ -64,7 +64,8 @@ class DataModel
 		//	used globally
 		std::string calibrationName;
 		bool isCalibrated;	//true if there is calibratio file!
-		bool calibrationDone;	//true if calibration is complete
+		bool calibrationDone;	//true if calibration is finished
+		bool calibrationComplete;	//true if calibration can be completed
 		//
 		//	used in Analysis
 		std::string concentrationName;	//name of tree for concentration measurmenet
@@ -73,7 +74,8 @@ class DataModel
 		double gdconc, gd_err;	//value of gd concentration and error
 		//
 		//	used in Writing
-		TFile* calibrationFile;
+		std::string calibrationFile;
+		std::string calibrationBase;
 
 	
 		//Calibration manager
@@ -82,10 +84,10 @@ class DataModel
 		//	used globally
 		bool measurementDone;	//true if the measurement is finished
 		//
-		//	used in Writing
-		TFile* measurementFile;
-		//	used in analysis
+		//	used in Writing & used in analysis
+		std::string measurementFile;
 		std::string measurementName;
+		std::string measurementBase;
 
 		//LEDmanager
 		//string used by calibration and measurement managers

@@ -18,7 +18,8 @@ if (tool=="Output") ret=new Output;
 if (tool=="Writer") ret=new Writer;
 if (tool=="CalibrationManager") ret=new CalibrationManager;
 if (tool=="MeasurementManager") ret=new MeasurementManager;
-  if (tool=="StateTest") ret=new StateTest;
+if (tool=="StateTest") ret=new StateTest;
+  if (tool=="FakeSpectrometer") ret=new FakeSpectrometer;
 return ret;
 }
 

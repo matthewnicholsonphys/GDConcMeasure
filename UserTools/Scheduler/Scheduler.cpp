@@ -19,12 +19,26 @@ bool Scheduler::Initialise(std::string configfile, DataModel &data)
 	m_variables.Get("power_down",	power_down_time);
 	m_variables.Get("change_water", change_water_time);
 
+	last = boost::posix_time::second_clock::local_time();
+
+	stateName[state::idle]			= "idle";
+	stateName[state::power_up]              = "power_up";
+	stateName[state::power_down]            = "power_down";
+	stateName[state::init]                  = "init";
+	stateName[state::calibration]           = "calibration";
+	stateName[state::calibration_done]      = "calibration_done";
+	stateName[state::measurement]           = "measurement";
+	stateName[state::measurement_done]      = "measurement_done";
+	stateName[state::finalise]              = "finalise";
+	stateName[state::change_water]     	= "change_water";
+
 	return true;
 }
 
 bool Scheduler::Execute()
 {
-	//std::cout<<"mode="<<m_data->mode<<std::endl;
+	std::cout << "mode start = " << stateName[m_data->mode] << std::endl;
+
 	switch (m_data->mode)
 	{
 		case state::idle:
@@ -41,6 +55,7 @@ bool Scheduler::Execute()
 				m_data->mode = state::measurement;	//if there is calibration, then schedluer skips to measurement
 			else
 				m_data->mode = state::calibration;	//if there isn't calibration, this one must be done first!
+			break;
 		case state::calibration:
 			last = Wait();
 			if (IsCalibrationDone())				//check if calibration is completed
@@ -73,6 +88,10 @@ bool Scheduler::Execute()
 			m_data->mode = state::idle;			//and move to idle
 			break;
 	}
+
+	std::cout << "mode end = " << stateName[m_data->mode] << std::endl;
+
+	return true;
 }
 
 bool Scheduler::Finalise()
@@ -95,17 +114,21 @@ bool Scheduler::IsMeasurementDone()
 	return m_data->measurementDone;
 }
 
-//check if enought time has passed since last status change
+//check if enough time has passed since last status change
 //wait remaining time so that in total t seconds have passed since last
 //with t = 0, no wait happens and current time is passed
 boost::posix_time::ptime Scheduler::Wait(double t)
 {
+	std::cout << "waiting " << t << std::endl;
+
 	boost::posix_time::ptime current(boost::posix_time::second_clock::local_time());
 	boost::posix_time::time_duration period(0, 0, t, 0);
 	boost::posix_time::time_duration lapse(period - (current - last));
 
 	if (!lapse.is_negative())			//if positive, wait!
 		usleep(lapse.total_microseconds());
+
+	std::cout << "done" << std::endl;
 
 	return boost::posix_time::second_clock::local_time();
 }

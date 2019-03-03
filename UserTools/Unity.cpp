@@ -12,3 +12,4 @@
 #include "CalibrationManager/CalibrationManager.cpp"
 #include "MeasurementManager/MeasurementManager.cpp"
 #include "StateTest/StateTest.cpp"
+#include "FakeSpectrometer/FakeSpectrometer.cpp"

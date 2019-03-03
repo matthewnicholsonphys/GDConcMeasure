@@ -35,6 +35,9 @@ class Scheduler: public Tool
 		int power_down_time;
 		int change_water_time;
 
+
+		std::map<state, std::string> stateName;
+
 };
 
 

@@ -16,16 +16,17 @@ bool Writer::Initialise(std::string configfile, DataModel &data)
 
 bool Writer::Execute()
 {
+	Loop();
+
 	switch (m_data->mode)
 	{
 		case state::init:
 			break;
+		case state::calibration_done:
+			WriteCalibration();
 			break;
-		case state::calibration_done:		//outputFile & outputTree are calibration's
-			WriteFunctions();
-		case state::measurement:		//outputFile & outputTree are calibration's
-		case state::measurement_done:		//outputFile & outputTree are measurement's
-			WriteTree();
+		case state::measurement_done:
+			WriteMeasurement();
 			break;
 		default:
 			break;
@@ -39,33 +40,85 @@ bool Writer::Finalise()
 	return true;
 }
 
-void Writer::WriteTree()
+/* this method saves calibration trees in the calibration output
+ * it is arranged in sub-directories with the same name as the calibration + timestamp
+ * the sub-directories will contain the calibration and the fitting functions, if present
+ * the method creates the subdir, unless they exist already
+ */
+void Writer::WriteCalibration()
 {
+	//	    012345678901234
+	//format is YYYYMMDDTHHMMSS (there shouldn't be fractional seconds
+	boost::posix_time::ptime current(boost::posix_time::second_clock::local_time());
+	std::string tc = boost::posix_time::to_iso_string(current);
 
-  TFile file("datatest.root","RECREATE");
-  
-  for (std::map<std::string, GdTree*>::iterator it=m_data->m_gdtrees.begin(); it!=m_data->m_gdtrees.end(); ++it) it->second->Write();
+	TFile file(m_data->calibrationFile.c_str(), "UPDATE");
 
-  file.Close();
-  
+	std::map<std::string, GdTree*>::iterator it = m_data->m_gdtrees.begin();
+	for (; it != m_data->m_gdtrees.end(); ++it)
+	{
+		if (it->first.find(m_data->calibrationBase) != 0)	//string starts with base_name
+			continue;
 
-  //some loop on GdTrees
-  //and call GdTree->Write()
-  //and at the same time erase GdTree from map
+		std::string dirname = it->first + "_" + tc;
+
+		if (!file.GetDirectory(dirname.c_str()))	//no sub-dir
+			file.mkdir(dirname.c_str());
+
+		file.cd(dirname.c_str());
+		it->second->Write();
+
+		if ((it->first == m_data->concentrationName) &&
+				m_data->concentrationFunction &&
+				m_data->concentrationFunc_Err)
+		{
+			m_data->concentrationFunction->Write();
+			m_data->concentrationFunc_Err->Write();
+		}
+		if (it->first.find(m_data->calibrationBase) == 0)
+			it->second->Write();
+	}
+
+	file.Close();
 }
 
-void Writer::WriteFunctions()
+/* this method saves measurement trees in the measurment output
+ * it is arranged in sub-directories with the same name as the measurement
+ * the sub-directories will contain also the calibration used for that measurement
+ * the method creates the subdir, unless they exist already
+ */
+void Writer::WriteMeasurement()
 {
+	TFile file(m_data->measurementFile.c_str(), "UPDATE");
 
-  TFile file("calibtest.root","RECREATE");
+	std::map<std::string, GdTree*>::iterator it = m_data->m_gdtrees.begin();
+	for (; it != m_data->m_gdtrees.end(); ++it)
+	{
+		std::string dirname = it->first;
 
-  m_data->GetGdTree(m_data->calibrationName)->Write();
+		if (dirname.find(m_data->calibrationBase) == 0)
+			dirname.replace(0, m_data->calibrationBase.length(), m_data->measurementBase);
 
-  m_data->concentrationFunction->Write();
-  m_data->concentrationFunc_Err->Write();
-  
-  file.Close();
+		if (!file.GetDirectory(dirname.c_str()))	//no sub-dir
+			file.mkdir(dirname.c_str());
 
-  //m_data->concentrationFunction->Write();
-	//m_data->concentrationFunc_Err->Write();
+		file.cd(dirname.c_str());
+		it->second->Write();
+	}
+
+	file.Close();
+}
+
+void Writer::Loop()
+{
+	std::cout << "Currently in GdTree map: " << m_data->m_gdtrees.size() << std::endl;
+	std::map<std::string, GdTree*>::iterator it = m_data->m_gdtrees.begin();
+	for (; it != m_data->m_gdtrees.end(); ++it)
+	{
+		std::cout << "  ---   " << it->first << ",\t" << it->second;
+		if (it->second)
+			std::cout << ":\t" << it->second->GetEntries() << std::endl;
+		else
+			std::cout << std::endl;
+	}
 }

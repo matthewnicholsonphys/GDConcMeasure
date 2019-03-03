@@ -44,6 +44,7 @@ bool Power::Execute()
 
 bool Power::Finalise()
 {
+	TurnOff();
 	return true;
 }
 

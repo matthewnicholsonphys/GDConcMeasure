@@ -30,11 +30,17 @@ class GdTree {
 		double Absorb_Err_2;
 		double Absorb_Diff;
 		double AbsDiff_Err;
+		std::vector<double> Wavelength;
 		std::vector<double> Trace;
 		std::vector<double> T_Err;
-		std::vector<double> Absor;
-		std::vector<double> A_Err;
-		unsigned long Epoch;
+		std::vector<double> Absorbance;
+		std::vector<double> Absorb_Err;
+		std::vector<double> *p_Wavelength;
+		std::vector<double> *p_Trace;
+		std::vector<double> *p_T_Err;
+		std::vector<double> *p_Absorbance;
+		std::vector<double> *p_Absorb_Err;
+		ULong64_t Epoch;
 		int Year;
 		int Month;
 		int Day;
@@ -53,10 +59,11 @@ class GdTree {
 		TBranch *b_Absorb_Err_2;
 		TBranch *b_Absorb_Diff;
 		TBranch *b_AbsDiff_Err;
+		TBranch *b_Wavelength;
 		TBranch *b_Trace;
 		TBranch *b_T_Err;
-		TBranch *b_Absor;
-		TBranch *b_A_Err;
+		TBranch *b_Absorbance;
+		TBranch *b_Absorb_Err;
 		TBranch *b_Epoch;
 		TBranch *b_Year;
 		TBranch *b_Month;
@@ -66,10 +73,11 @@ class GdTree {
 		TBranch *b_Second;
 
 		GdTree(const std::string &treeName);
-		GdTree(TTree *tree);
+		GdTree(TTree *tree = 0);
 		GdTree(const GdTree& gdtree);
 		~GdTree();
 
+		TTree* GetTree();
 		void Write(std::string outName = "");
 		void Fill();
 		int GetEntry(long entry);
@@ -82,14 +90,21 @@ class GdTree {
 
 GdTree::GdTree(const std::string &treeName)
 {
+	std::cout << "constructor1 "<< std::endl;
 	chain = Create(treeName);
+	chain->SetDirectory(0);
 }
 
 GdTree::GdTree(TTree *tree)
 {
-	chain = static_cast<TTree*>(tree->Clone());
-	chain->SetDirectory(0);
-	Init();
+	if (tree)
+	{
+		chain = tree;
+		chain->SetDirectory(0);
+		Init();
+	}
+	else
+		GdTree("_tree0");
 }
 
 GdTree::GdTree(const GdTree& gdtree)	//copy tree with same name, but empty
@@ -100,6 +115,11 @@ GdTree::GdTree(const GdTree& gdtree)	//copy tree with same name, but empty
 GdTree::~GdTree()
 {
 	delete chain;
+}
+
+TTree* GdTree::GetTree()
+{
+	return chain;
 }
 
 void GdTree::Write(std::string outName)
@@ -117,7 +137,7 @@ void GdTree::Fill()
 
 int GdTree::GetEntry(long entry)
 {
-	if (chain)
+	if (!chain)
 		return 0;
 
 	return chain->GetEntry(entry);
@@ -125,7 +145,7 @@ int GdTree::GetEntry(long entry)
 
 int GdTree::GetEntries()
 {
-	if (chain)
+	if (!chain)
 		return 0;
 
 	return chain->GetEntries();
@@ -135,47 +155,57 @@ TTree* GdTree::Create(const std::string &treeName)
 {
 	TTree* chain = new TTree(treeName.c_str(), treeName.c_str());
 
-	b_GdConc	= chain->Branch("GdConc",	&GdConc);	//"GdConc/D");
-	b_Gd_Err	= chain->Branch("Gd_Err",	&Gd_Err);	//"Gd_Err/D");
-	b_Wavelength_1	= chain->Branch("Wavelength_1",	&Wavelength_1);	//"Wavelength_1gd/D");
-	b_Absorbance_1	= chain->Branch("Absorbance_1",	&Absorbance_1);	//"Absorbance_1gd/D");
-	b_Absorb_Err_1	= chain->Branch("Absorb_Err_1",	&Absorb_Err_1);	//"Absorb_Err_1gd/D");
-	b_Wavelength_2	= chain->Branch("Wavelength_2",	&Wavelength_2);	//"Wavelength_2gd/D");
-	b_Absorbance_2	= chain->Branch("Absorbance_2",	&Absorbance_2);	//"Absorbance_2gd/D");
-	b_Absorb_Err_2	= chain->Branch("Absorb_Err_2",	&Absorb_Err_2);	//"Absorb_Err_2gd/D");
-	b_Absorb_Diff	= chain->Branch("Absorb_Diff",	&Absorb_Diff);	//"Absorb_Diff/D");
-	b_AbsDiff_Err	= chain->Branch("AbsDiff_Err",	&AbsDiff_Err);	//"AbsDiff_Err/D");
-	b_Trace		= chain->Branch("Trace",	&Trace);	//"Trace/D");
-	b_T_Err 	= chain->Branch("T_Err",	&T_Err);	//"T_Err/D");	
-	b_Absor 	= chain->Branch("Absor",	&Absor);	//"Absor/D");
-	b_A_Err 	= chain->Branch("A_Err",	&A_Err);	//"A_Err/D");	
-	b_Epoch 	= chain->Branch("Epoch",	&Epoch);
-	b_Year		= chain->Branch("Year", 	&Year);
-	b_Month		= chain->Branch("Month",	&Month);
-	b_Day		= chain->Branch("Day",		&Day);
-	b_Hour		= chain->Branch("Hour",		&Hour);
-	b_Minute	= chain->Branch("Minute",	&Minute);
-	b_Second	= chain->Branch("Second",	&Second);
+	p_Wavelength	= &Wavelength;
+	p_Trace		= &Trace;
+	p_T_Err		= &T_Err;
+	p_Absorbance	= &Absorbance;
+	p_Absorb_Err	= &Absorb_Err;
 
+	b_GdConc	= chain->Branch("GdConc",	&GdConc,	"GdConc/D");
+	b_Gd_Err	= chain->Branch("Gd_Err",	&Gd_Err,	"Gd_Err/D");
+	b_Wavelength_1	= chain->Branch("Wavelength_1",	&Wavelength_1,	"Wavelength_1gd/D");
+	b_Absorbance_1	= chain->Branch("Absorbance_1",	&Absorbance_1,	"Absorbance_1gd/D");
+	b_Absorb_Err_1	= chain->Branch("Absorb_Err_1",	&Absorb_Err_1,	"Absorb_Err_1gd/D");
+	b_Wavelength_2	= chain->Branch("Wavelength_2",	&Wavelength_2,	"Wavelength_2gd/D");
+	b_Absorbance_2	= chain->Branch("Absorbance_2",	&Absorbance_2,	"Absorbance_2gd/D");
+	b_Absorb_Err_2	= chain->Branch("Absorb_Err_2",	&Absorb_Err_2,	"Absorb_Err_2gd/D");
+	b_Absorb_Diff	= chain->Branch("Absorb_Diff",	&Absorb_Diff,	"Absorb_Diff/D");
+	b_AbsDiff_Err	= chain->Branch("AbsDiff_Err",	&AbsDiff_Err,	"AbsDiff_Err/D");
+	b_Trace		= chain->Branch("Wavelength",	&p_Wavelength);	//,"Wavelength/D");
+	b_Trace		= chain->Branch("Trace",	&p_Trace);	//,"Trace/D");
+	b_T_Err 	= chain->Branch("T_Err",	&p_T_Err);	//,"T_Err/D");	
+	b_Absorbance 	= chain->Branch("Absorbance",	&p_Absorbance);	//,"Absorbance/D");
+	b_Absorb_Err 	= chain->Branch("Absorb_Err",	&p_Absorb_Err);	//,"Absorb_Err/D");
+	b_Epoch 	= chain->Branch("Epoch",	&Epoch,		"Epoch/l"  );
+	b_Year		= chain->Branch("Year", 	&Year,		"Year/I");
+	b_Month		= chain->Branch("Month",	&Month,		"Month/I");
+	b_Day		= chain->Branch("Day",		&Day,		"Day/I");
+	b_Hour		= chain->Branch("Hour",		&Hour,		"Hour/I");
+	b_Minute	= chain->Branch("Minute",	&Minute,	"Minute/I");
+	b_Second	= chain->Branch("Second",	&Second,	"Second/I");
+	
 	return chain;
 }
 
 void GdTree::Init()
 {
-	chain->SetBranchAddress("GdConc",	&GdConc,	&b_GdConc);
-	chain->SetBranchAddress("Gd_Err",	&Gd_Err,	&b_Gd_Err);
-	chain->SetBranchAddress("Wavelength_1", &Wavelength_1,	&b_Wavelength_1);
-	chain->SetBranchAddress("Absorbance_1", &Absorbance_1,	&b_Absorbance_1);
+	p_Wavelength	= &Wavelength;
+	p_Trace		= &Trace;
+	p_T_Err		= &T_Err;
+	p_Absorbance	= &Absorbance;
+	p_Absorb_Err	= &Absorb_Err;
+
 	chain->SetBranchAddress("Absorb_Err_1", &Absorb_Err_1,	&b_Absorb_Err_1);
 	chain->SetBranchAddress("Wavelength_2", &Wavelength_2,	&b_Wavelength_2);
 	chain->SetBranchAddress("Absorbance_2", &Absorbance_2,	&b_Absorbance_2);
 	chain->SetBranchAddress("Absorb_Err_2", &Absorb_Err_2,	&b_Absorb_Err_2);
 	chain->SetBranchAddress("Absorb_Diff",	&Absorb_Diff,	&b_Absorb_Diff);
 	chain->SetBranchAddress("AbsDiff_Err",	&AbsDiff_Err,	&b_AbsDiff_Err);
-	chain->SetBranchAddress("Trace",	&Trace,		&b_Trace);
-	chain->SetBranchAddress("A_Err",	&A_Err,		&b_A_Err);
-	chain->SetBranchAddress("Absor",	&Absor,		&b_Absor);
-	chain->SetBranchAddress("A_Err",	&A_Err,		&b_A_Err);
+	chain->SetBranchAddress("Wavelength",	&p_Wavelength,	&b_Wavelength);
+	chain->SetBranchAddress("Trace",	&p_Trace,	&b_Trace);
+	chain->SetBranchAddress("T_Err",	&p_T_Err,	&b_T_Err);
+	chain->SetBranchAddress("Absorbance",	&p_Absorbance,	&b_Absorbance);
+	chain->SetBranchAddress("Absorb_Err",	&p_Absorb_Err,	&b_Absorb_Err);
 	chain->SetBranchAddress("Epoch",	&Epoch,		&b_Epoch);
 	chain->SetBranchAddress("Year", 	&Year,		&b_Year);
 	chain->SetBranchAddress("Month",	&Month,		&b_Month);
