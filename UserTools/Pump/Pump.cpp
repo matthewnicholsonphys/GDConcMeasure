@@ -27,7 +27,7 @@ bool Pump::Execute()
 {
 	switch (m_data->mode)
 	{
-		case state::change_water:
+		case state::finalise:
 			TurnOn();
 			break;
 		case state::power_down:

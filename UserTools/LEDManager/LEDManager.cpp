@@ -48,6 +48,7 @@ bool LEDManager::Execute()
 	switch (m_data->mode)
 	{
 		case state::init:	//about to make measurement, check LED mapping
+			m_data->turnOnLED = "";
 			ledONstate = 0;
 			Initialise(m_configfile, *m_data);
 			break;

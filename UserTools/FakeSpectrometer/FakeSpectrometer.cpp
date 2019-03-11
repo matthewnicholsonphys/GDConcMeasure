@@ -30,13 +30,14 @@ bool FakeSpectrometer::Execute()
 			GetDark();	//measure dark noise on wake up
 			break;
 		case state::calibration:
-			if (m_data->gdconc > 0.0)
-				GetData(m_data->gdconc);
-			else
-				GetPure();
+			//if (m_data->gdconc > 0.0)
+			//	GetData(m_data->gdconc);
+			//else
+			//	GetPure();
 			break;
 		case state::measurement:
-			GetData(conc);
+			Wait();
+			//GetData(conc);
 			break;
 		case state::finalise:
 			//Finalise();
@@ -50,54 +51,15 @@ bool FakeSpectrometer::Execute()
 
 bool FakeSpectrometer::Finalise()
 {
-	/*
-	std::vector<double> Abs(vx.size());
-	for (int i = 0; i < vx.size(); ++i)
-	{
-		vpure[i] -= vdark[i]; 
-		vdata[i] -= vdark[i]; 
-
-		if (vpure[i] < 0 || std::abs(vpure[i]) < noise)
-			vpure[i] = 0;
-
-		if (vdata[i] < 0 || std::abs(vdata[i]) < noise)
-			vdata[i] = 0;
-
-		if (std::abs(vpure[i]) < noise)
-			Abs.at(i) = 0.0;
-		else
-			Abs.at(i) = log10(vpure[i]/vdata[i]);
-
-		if (!std::isfinite(Abs.at(i)))
-			Abs.at(i) = 0.0;
-	}
-
-	std::vector<double> dev1(vx.size()), dev2(vx.size());
-	std::vector<double> smooth;
-	for (int i = 1; i < vx.size(); ++i)
-		dev1.at(i) = (Abs[i+1] - Abs[i-1])/(vx[i+1]-vx[i-1]);
-
-	smooth[0] = Abs[0];
-	for (int i = 1; i < vx.size(); ++i)
-	{
-		dev2.at(i) = (dev1[i+1] - dev1[i-1])/(vx[i+1]-vx[i-1]);
-		if (i % 2 != 0)
-			smooth[i] = (Abs[i-1] + Abs[i]) / 2.0;
-		else
-			smooth[i] = smooth[i-1];
-	}
-
-	std::ofstream out("fakeall1.dat");
-	std::ofstream dev("derivate1.dat");
-	for (int i = 0; i < vx.size(); ++i)
-	{
-		out << vx[i] << "\t" << vdark[i] << "\t" << vpure[i] << "\t" << vdata[i] << std::endl;
-		dev << vx[i] << "\t" << Abs[i] << "\t" << smooth[i] << "\t" << dev1[i] << "\t" << dev2[i] << std::endl;
-	}
-	*/
-
 	return true;
 }
+
+void FakeSpectrometer::Wait()
+{
+	std::cout << "Waiting for you to finish... \n";
+	std::cin.get();
+}
+
 
 bool FakeSpectrometer::GetDark()
 {

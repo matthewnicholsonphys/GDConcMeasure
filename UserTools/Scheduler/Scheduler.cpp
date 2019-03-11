@@ -30,7 +30,6 @@ bool Scheduler::Initialise(std::string configfile, DataModel &data)
 	stateName[state::measurement]           = "measurement";
 	stateName[state::measurement_done]      = "measurement_done";
 	stateName[state::finalise]              = "finalise";
-	stateName[state::change_water]     	= "change_water";
 
 	return true;
 }
@@ -79,7 +78,7 @@ bool Scheduler::Execute()
 			last = Wait();
 			m_data->mode = state::finalise;			//measurement done, turn on pump and change water for next measurement and finalise
 			break;
-		case state::change_water:
+		case state::finalise:
 			last = Wait(change_water_time);			//wait for pump to complete if needed
 			m_data->mode = state::power_down;		//turn off PSU
 			break;

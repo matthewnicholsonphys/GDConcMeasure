@@ -1,0 +1,8 @@
+verbose 2
+
+#Configuration file for Measurement manager
+#
+
+measurement	configfiles/test/list	#file with list of calibration/measurement
+output		output/datatest.root	#file in which calibration is saved
+base_name	M			#base_name for calibation

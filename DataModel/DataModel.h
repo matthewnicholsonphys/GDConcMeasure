@@ -28,8 +28,7 @@ enum state
 	calibration_done,
 	measurement,
 	measurement_done,
-	finalise,
-	change_water = finalise
+	finalise
 };
 
 class DataModel

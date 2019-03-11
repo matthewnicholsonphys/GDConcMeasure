@@ -26,6 +26,8 @@ class FakeSpectrometer: public Tool {
   double Dark(int i);
   double X(int i);
 
+  void Wait();
+
  private:
 
   TRandom3 *mt;
