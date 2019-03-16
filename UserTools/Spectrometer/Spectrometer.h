@@ -22,6 +22,7 @@ class Spectrometer: public Tool {
 		bool Finalise();
 
 		bool EstablishUSB();
+		bool EstablishUSB_try_catch();
 		bool GetData();
 		void RelinquishUSB();
 		
@@ -32,6 +33,9 @@ class Spectrometer: public Tool {
 		long*  device_ids;
 		long* spectrometer_ids;
 		int error;
+
+		int intTime;
+		int nTraces;
 
 };
 

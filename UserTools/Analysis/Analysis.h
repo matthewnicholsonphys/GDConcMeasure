@@ -8,6 +8,8 @@
 #include <deque>
 
 #include "TGraphErrors.h"
+#include "TFitResult.h"
+#include "TFitResultPtr.h"
 
 #include "Tool.h"
 
@@ -43,7 +45,8 @@ class Analysis: public Tool
 				  std::vector<int> &iPeak,
 				  std::vector<int> &iDeep);
 
-		void Fill(GdTree *tree, std::vector<double> &abst, int i1, int i2, int size, bool stamp = true);
+		void FillAbsorbance(GdTree *tree, std::vector<double> &abst,
+				    int i1, int i2, bool stamp = true);
 		ULong64_t TimeStamp(int &Y, int &M, int &D, int &h, int &m, int &s);
 
 	private:

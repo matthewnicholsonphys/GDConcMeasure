@@ -24,7 +24,7 @@ class CalibrationManager: public Tool
 		bool Finalise();
 
 		std::vector<std::string> CalibrationList();
-		std::vector<std::string> LoadCalibration();
+		std::vector<std::string> LoadCalibration(std::vector<std::string> &cList);
 		void Load(TFile &f, std::string name, std::string type);
 		void Create(std::string name);
 		bool IsUpdate(std::string name, int timeUpdate);
@@ -37,10 +37,11 @@ class CalibrationManager: public Tool
 
 		std::string calibFile;		//file in which calibration list is
 		std::string concFuncName;	//name of concentration function
-		std::string err_FuncName;	//name of uncertainity function
+		std::string statFuncName;	//name of uncertainity function
+		std::string systFuncName;	//name of uncertainity function
 		std::string concTreeName;
 
-		std::vector<std::string> calibList;
+		std::vector<std::string> calibList, allList;
 		std::vector<std::string>::iterator ic;
 
 		std::map<std::string, int> timeUpdate;

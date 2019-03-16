@@ -22,6 +22,8 @@ class GdTree {
 		// Declaration of leaf types
 		double GdConc;
 		double Gd_Err;
+		double Gd_ErrStat;
+		double Gd_ErrSyst;
 		double Wavelength_1;
 		double Absorbance_1;
 		double Absorb_Err_1;
@@ -51,6 +53,8 @@ class GdTree {
 		// List of branches
 		TBranch *b_GdConc;
 		TBranch *b_Gd_Err;
+		TBranch *b_Gd_ErrStat;
+		TBranch *b_Gd_ErrSyst;
 		TBranch *b_Wavelength_1;
 		TBranch *b_Absorbance_1;
 		TBranch *b_Absorb_Err_1;
@@ -90,8 +94,10 @@ class GdTree {
 
 GdTree::GdTree(const std::string &treeName)
 {
-	std::cout << "constructor1 "<< std::endl;
-	chain = Create(treeName);
+	if (treeName.empty())
+		chain = Create("_tree");
+	else
+		chain = Create(treeName);
 	chain->SetDirectory(0);
 }
 
@@ -104,7 +110,7 @@ GdTree::GdTree(TTree *tree)
 		Init();
 	}
 	else
-		GdTree("_tree0");
+		GdTree("_tree");
 }
 
 GdTree::GdTree(const GdTree& gdtree)	//copy tree with same name, but empty
@@ -163,12 +169,14 @@ TTree* GdTree::Create(const std::string &treeName)
 
 	b_GdConc	= chain->Branch("GdConc",	&GdConc,	"GdConc/D");
 	b_Gd_Err	= chain->Branch("Gd_Err",	&Gd_Err,	"Gd_Err/D");
-	b_Wavelength_1	= chain->Branch("Wavelength_1",	&Wavelength_1,	"Wavelength_1gd/D");
-	b_Absorbance_1	= chain->Branch("Absorbance_1",	&Absorbance_1,	"Absorbance_1gd/D");
-	b_Absorb_Err_1	= chain->Branch("Absorb_Err_1",	&Absorb_Err_1,	"Absorb_Err_1gd/D");
-	b_Wavelength_2	= chain->Branch("Wavelength_2",	&Wavelength_2,	"Wavelength_2gd/D");
-	b_Absorbance_2	= chain->Branch("Absorbance_2",	&Absorbance_2,	"Absorbance_2gd/D");
-	b_Absorb_Err_2	= chain->Branch("Absorb_Err_2",	&Absorb_Err_2,	"Absorb_Err_2gd/D");
+	b_Gd_ErrStat	= chain->Branch("Gd_ErrStat",	&Gd_ErrStat,	"Gd_ErrStat/D");
+	b_Gd_ErrSyst	= chain->Branch("Gd_ErrSyst",	&Gd_ErrSyst,	"Gd_ErrSyst/D");
+	b_Wavelength_1	= chain->Branch("Wavelength_1",	&Wavelength_1,	"Wavelength_1/D");
+	b_Absorbance_1	= chain->Branch("Absorbance_1",	&Absorbance_1,	"Absorbance_1/D");
+	b_Absorb_Err_1	= chain->Branch("Absorb_Err_1",	&Absorb_Err_1,	"Absorb_Err_1/D");
+	b_Wavelength_2	= chain->Branch("Wavelength_2",	&Wavelength_2,	"Wavelength_2/D");
+	b_Absorbance_2	= chain->Branch("Absorbance_2",	&Absorbance_2,	"Absorbance_2/D");
+	b_Absorb_Err_2	= chain->Branch("Absorb_Err_2",	&Absorb_Err_2,	"Absorb_Err_2/D");
 	b_Absorb_Diff	= chain->Branch("Absorb_Diff",	&Absorb_Diff,	"Absorb_Diff/D");
 	b_AbsDiff_Err	= chain->Branch("AbsDiff_Err",	&AbsDiff_Err,	"AbsDiff_Err/D");
 	b_Trace		= chain->Branch("Wavelength",	&p_Wavelength);	//,"Wavelength/D");
@@ -195,6 +203,12 @@ void GdTree::Init()
 	p_Absorbance	= &Absorbance;
 	p_Absorb_Err	= &Absorb_Err;
 
+	chain->SetBranchAddress("GdConc",	&GdConc,	&b_GdConc);
+	chain->SetBranchAddress("Gd_Err",	&Gd_Err,	&b_Gd_Err);
+	chain->SetBranchAddress("Gd_ErrStat",	&Gd_ErrStat,	&b_Gd_ErrStat);
+	chain->SetBranchAddress("Gd_ErrSyst",	&Gd_ErrSyst,	&b_Gd_ErrSyst);
+	chain->SetBranchAddress("Wavelength_1",	&Wavelength_1,	&b_Wavelength_1);
+	chain->SetBranchAddress("Wavelength_1",	&Wavelength_1,	&b_Wavelength_1);
 	chain->SetBranchAddress("Absorb_Err_1", &Absorb_Err_1,	&b_Absorb_Err_1);
 	chain->SetBranchAddress("Wavelength_2", &Wavelength_2,	&b_Wavelength_2);
 	chain->SetBranchAddress("Absorbance_2", &Absorbance_2,	&b_Absorbance_2);

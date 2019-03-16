@@ -1,4 +1,4 @@
-idle		0
-power_up	1
+idle		2	#how many seconds rest in between measurements
+power_up	2	#spectrometer takes 20 s to boot up
 power_down	0
 change_water	1

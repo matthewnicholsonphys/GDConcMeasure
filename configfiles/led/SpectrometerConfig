@@ -1,0 +1,4 @@
+#configuration for spectrometer
+
+traces		1000	#number of traces to take each measurement
+integration	6000	#integration time in microseconds

@@ -20,11 +20,16 @@ bool CalibrationManager::Initialise(std::string configfile, DataModel &data)
 	m_variables.Get("output",	m_data->calibrationFile);	//file in which calibration is saved
 	m_variables.Get("base_name",	m_data->calibrationBase);	//base_name for calibation
 	m_variables.Get("concfunction",	concFuncName);	//name of concentration function
-	m_variables.Get("err_function",	err_FuncName);	//name of uncertainity function
-
+	m_variables.Get("statfunction",	statFuncName);	//name of uncertainity function
+	m_variables.Get("systfunction",	systFuncName);	//name of uncertainity function
+	m_variables.Get("fit_function",	m_data->fitFuncName);	//name of uncertainity function
 
 	m_data->concentrationFunction = 0;
-	m_data->concentrationFunc_Err = 0;
+	m_data->concentrationFuncStat = 0;
+	m_data->concentrationFuncSyst = 0;
+
+	m_data->gdconc = 0;
+	m_data->gd_err = 0;
 
 	return true;
 }
@@ -36,7 +41,7 @@ bool CalibrationManager::Execute()
 	{
 		case state::init:	//about to make measurement, check LED mapping
 			Initialise(m_configfile, *m_data);
-			calibList = LoadCalibration();
+			calibList = LoadCalibration(allList);
 
 			std::cout << "TODO number of calibrations " << calibList.size() << std::endl;
 
@@ -49,7 +54,6 @@ bool CalibrationManager::Execute()
 				m_data->isCalibrated = true;
 
 			ic = calibList.begin();	//global iterator
-			std::cout << "I3\n";
 			break;
 		case state::calibration:		//turn on led set
 			if (ic != calibList.end())
@@ -80,15 +84,20 @@ bool CalibrationManager::Execute()
 bool CalibrationManager::Finalise()
 {
 	//clean
-	for (ic = calibList.begin(); ic != calibList.end(); ++ic)
-		m_data->DeleteGdTree(*ic);
+	for (ic = allList.begin(); ic != allList.end(); ++ic)
+		m_data->DeleteGdTree(m_data->calibrationBase + "_" + *ic);
 
 	calibList.clear();
+	allList.clear();
+
+	std::cout << "CM finalise " << m_data->SizeGdTree() << std::endl;
 
 	delete m_data->concentrationFunction;
-	delete m_data->concentrationFunc_Err;
+	delete m_data->concentrationFuncStat;
+	delete m_data->concentrationFuncSyst;
 	m_data->concentrationFunction = 0;
-	m_data->concentrationFunc_Err = 0;
+	m_data->concentrationFuncStat = 0;
+	m_data->concentrationFuncSyst = 0;
 
 	timeUpdate.clear();
 
@@ -161,19 +170,18 @@ std::vector<std::string> CalibrationManager::CalibrationList()
 
 /* this routine will load all the calibration listed in calibFile
  * and the trees are saved in the data model
- * returns a list of calibrations to do
+ * returns a list of calibrations to do and a list of all calibration, for memory mgmt
  */
-std::vector<std::string> CalibrationManager::LoadCalibration()
+std::vector<std::string> CalibrationManager::LoadCalibration(std::vector<std::string> &cList)
 {
 	//get list of calibrations
-	std::vector<std::string> cList = CalibrationList();
 	std::vector<std::string> uList;
+	cList = CalibrationList();
 
 	//open read only calibration file
 	TFile f(m_data->calibrationFile.c_str(), "OPEN");
 	if (f.IsZombie())
 	{
-		std::cerr << "Calibration file does not exist! A new one will be created\n";
 		uList = cList;
 		for (ic = uList.begin(); ic != uList.end(); ++ic)
 			Create(*ic);
@@ -237,15 +245,11 @@ std::vector<std::string> CalibrationManager::LoadCalibration()
 void CalibrationManager::Load(TFile &f, std::string dir, std::string type)
 {
 	std::string name = m_data->calibrationBase + "_" + type;
-	std::string full = dir + "/" + name;
+	std::string full = dir + "/" + m_data->calibrationBase;
+	//std::string full = dir + "/" + name;
 
-	std::cout << "LOOKING " << full << std::endl;
 	TTree *gdt = static_cast<TTree*>(f.Get(full.c_str()));
-	std::cout << "LOADED GDT " << gdt->GetEntries() << std::endl;
 	GdTree *calib = new GdTree(gdt);
-
-	std::cout << "LOADED calibraiton " << calib->GetTree()->GetEntries() << " w/ " << name << std::endl;
-	std::cout << "LOADED entries " << calib->GetEntries() << std::endl;
 
 	m_data->AddGdTree(name, calib);
 
@@ -253,12 +257,14 @@ void CalibrationManager::Load(TFile &f, std::string dir, std::string type)
 	{
 		m_data->concentrationName = name;
 
-		std::string f1name = name + "/" + concFuncName;
-		std::string f2name = name + "/" + err_FuncName;
+		std::string f1name = dir + "/" + concFuncName;
+		std::string f2name = dir + "/" + statFuncName;
+		std::string f3name = dir + "/" + systFuncName;
 
-		//clone tree and functions
+		//clone functions (no SetDirectory)
 		m_data->concentrationFunction = static_cast<TF1*>(f.Get(f1name.c_str())->Clone());
-		m_data->concentrationFunc_Err = static_cast<TF2*>(f.Get(f2name.c_str())->Clone());
+		m_data->concentrationFuncStat = static_cast<TF2*>(f.Get(f2name.c_str())->Clone());
+		m_data->concentrationFuncSyst = static_cast<TF2*>(f.Get(f3name.c_str())->Clone());
 	}
 }
 
@@ -267,17 +273,18 @@ void CalibrationManager::Create(std::string type)
 	std::string name = m_data->calibrationBase + "_" + type;
 	GdTree *calib = new GdTree(name.c_str());
 	m_data->AddGdTree(name.c_str(), calib);
-	std::cout << "creating " << name << std::endl;
 
 	if (type == concTreeName)	//happens once
 	{
 		m_data->concentrationName = name;
 
-		//create functions for absorbance, value and error
+		//create functions for absorbance, stat and syst error
 		m_data->concentrationFunction = new TF1(concFuncName.c_str(),
 				"(x - [0])/[1]", 0, 1);
-		m_data->concentrationFunc_Err = new TF2(err_FuncName.c_str(),
-				"((x - [0])/[1])^2 * ( (y^2 + [2]^2)/(x - [0])^2 + ([3]/[1])^2 )", 0, 1);
+		m_data->concentrationFuncStat = new TF2(statFuncName.c_str(),
+				"((x - [0])/[1])^2 * ( (y/(x - [0]))^2 )", 0, 1);
+		m_data->concentrationFuncSyst = new TF1(systFuncName.c_str(),
+				"((x - [0])/[1])^2 * ( ([2]/(x - [0]))^2 + ([3]/[1])^2 + 2*[4] / (x - [0]) / [1] )", 0, 1);
 	}
 }
 
@@ -285,9 +292,7 @@ void CalibrationManager::Create(std::string type)
 //with timestamp an iso string YYYYMMDDThhmmss
 bool CalibrationManager::IsUpdate(std::string name, int timeUpdate)
 {
-	std::cout << "update?" << std::endl;
 	std::string ts = name.substr(name.find_last_of('_') + 1);
-	std::cout << "U0 " << ts << std::endl;
 
 	//get current time
 	boost::posix_time::ptime last(boost::posix_time::from_iso_string(ts));
@@ -307,7 +312,11 @@ bool CalibrationManager::IsUpdate(std::string name, int timeUpdate)
 //calibrate is like a measurement
 bool CalibrationManager::Calibrate()
 {
-	std::string acknowledge;	// <--- this is some form of aknoledgment
+	m_data->calibrationName = m_data->calibrationBase + "_" + *ic;
+	//HACK
+	//m_data->turnOnLED = *ic;
+	m_data->turnOnLED = "";
+
 	double gdc, gde;
 	if (*ic != concTreeName)
 	{
@@ -321,13 +330,16 @@ bool CalibrationManager::Calibrate()
 	else
 	{
 		std::cout << "Calibrating " << *ic << std::endl;
-		std::cout << "Enter concentration loaded in cell now (-1 to quit, 0 for pure water) \n";
+		std::cout << "Enter concentration loaded in cell now (-1 to quit, 0.0 for pure water).";
+		std::cout << " Last concentration: " << m_data->gdconc << "\n";
 		std::cin >> gdc;
 		if (!(gdc < 0))	//not finished, repeat this step
 		{
-			std::cout << "Enter concentration error (0 is a fine value)\n";
-			std::cin >> gde;
-			m_data->gd_err = gde;
+			//std::cout << "Enter concentration error (0.0 is a fine value)\n";
+			//std::cin >> gde;
+			//std::cout << "H0" << std::endl;
+			//m_data->gd_err = gde;
+			m_data->gd_err = 0.0;
 			m_data->calibrationComplete = false;
 
 			--ic;
@@ -338,10 +350,9 @@ bool CalibrationManager::Calibrate()
 			m_data->gd_err = 0.0;;
 		}
 
+			std::cout << "H4" << std::endl;
 		m_data->gdconc = gdc;
 	}
 
-	m_data->turnOnPump = true;	//must change water
-	m_data->turnOnLED = *ic;
-	m_data->calibrationName = m_data->calibrationBase + "_" + *ic;
+	return true;
 }

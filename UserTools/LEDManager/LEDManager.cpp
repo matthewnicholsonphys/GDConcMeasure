@@ -13,48 +13,60 @@ bool LEDManager::Initialise(std::string configfile, DataModel &data)
 	//m_variables.Print();
 	
 	m_data = &data;
+	m_data->turnOnLED = "";
+	ledONstate = 0;
 	
-	Configure();
-	return EstablishI2C();	//it is true if connections is ok!
+	ledONstate = 0;
+
+	m_variables.Get("verbose", verbose);
+
+	m_variables.Get("frequency", frequencyPWM);
+	m_variables.Get("resolution", resolution);
+	resolution = static_cast<unsigned int>(pow(2, resolution)) - 1;
+
+	m_variables.Get("voltage_supply", fVin);
+	m_variables.Get("delay", fDelay);
+	m_variables.Get("map_wiring", wiringLED);
+	//m_variables.Get("measurement", configLED);
+
+	Log("LEDManager: LED wiring and setup will be read from " + wiringLED, 1, verbose);
+	//Log("LEDManager: LED measurement will be read from " + configLED, 1, verbose);
+
+	//check when mapping file was changed
+	std::string cmd = "stat -c %Y " + wiringLED + " > .led_timestamp";
+	int s = system(cmd.c_str());
+	std::ifstream inTimestamp(".led_timestamp");
+	unsigned long newTime = lastTime+1;	//initiliased randomly
+	if (std::getline(inTimestamp, cmd))
+		newTime = std::strtol(cmd.c_str(), NULL, 10);
+
+	//if it hasn't been changed since last time, don't do anyhting
+	if (newTime != lastTime)
+		MapLED();
+
+	lastTime = newTime;
+
+	return true;
 }
 
 bool LEDManager::Execute()
 {
-	//int mode1;
-	//bool test = Read(0x00, mode1);
-	//std::cout << "register 1 is " << std::hex << mode1 << std::endl;
-
-	//test = Read(0xfe, mode1);
-	//std::cout << "frequencyscaler is " << std::hex << mode1 << std::endl;
-
-	//WakeUpDriver();
-	//test = Read(0x00, mode1);
-	//std::cout << "awake and " << std::hex << mode1 << std::endl;
-
-	//SleepDriver();
-	//test = Read(0x00, mode1);
-	//std::cout << "sleeping and " << std::hex << mode1 << std::endl;
-
-	//for (iLname = mLED_name.begin(); iLname != mLED_name.end(); ++iLname)
-	//{
-	//	std::cout << iLname->first << "\t" << iLname->second << "\t" << int(mLED_chan[iLname->first]) << "\t" << mLED_duty[iLname->first] << std::endl;
-	//}
-
-	//measureCount = 0;
-	//if (!measure && TurnOn())
-	//	measure = true;
-	
-
 	switch (m_data->mode)
 	{
 		case state::init:	//about to make measurement, check LED mapping
-			m_data->turnOnLED = "";
-			ledONstate = 0;
 			Initialise(m_configfile, *m_data);
+			EstablishI2C();	//it is true if connections is ok!
 			break;
 		case state::calibration:		//turn on led set
+			if (!m_data->calibrationComplete || m_data->calibrationName != m_data->concentrationName)
+			{
+				TurnOn();
+				usleep(200);
+			}
+			break;
 		case state::measurement:		//turn on led set
 			TurnOn();
+			usleep(200);		//stabilises LED
 			break;
 		case state::calibration_done:	//wait for measurement
 		case state::measurement_done:	//wait for measurement
@@ -77,42 +89,15 @@ bool LEDManager::Finalise()
 //configure the class reading from configfile
 void LEDManager::Configure()
 {
-	lastTime = 0;
-	ledONstate = 0;
-
-	m_variables.Get("verbose", verbose);
-
-	m_variables.Get("frequency", frequencyPWM);
-	m_variables.Get("resolution", resolution);
-	resolution = static_cast<unsigned int>(pow(2, resolution)) - 1;
-
-	m_variables.Get("voltage_supply", fVin);
-	m_variables.Get("delay", fDelay);
-	m_variables.Get("map_wiring", wiringLED);
-	m_variables.Get("measurement", configLED);
-
-	Log("LEDManager: LED wiring and setup will be read from " + wiringLED, 1, verbose);
-	Log("LEDManager: LED measurement will be read from " + configLED, 1, verbose);
-
-	MapLED();
 }
 
 void LEDManager::MapLED()
 {
-	//check when mapping file was changed
-	std::string cmd = "stat -c %Y " + wiringLED + " > .tmp_timestamp";
-	int s = system(cmd.c_str());
-	std::ifstream inTimestamp(".tmp_timestamp");
-	unsigned long newTime = lastTime;
-	if (std::getline(inTimestamp, cmd))
-		newTime = std::strtol(cmd.c_str(), NULL, 10);
+	std::cout << "Remapping LED wiring" << std::endl;
 
-	//if it hasn't been changed since last time, don't do anyhting
-	if (newTime == lastTime)
-		return;
-
-	//else update wire mapping
-	lastTime = newTime;
+	mLED_name.clear();
+	mLED_chan.clear();
+	mLED_duty.clear();
 
 	std::ifstream inConfig(wiringLED.c_str());
 	std::string line;
@@ -130,7 +115,6 @@ void LEDManager::MapLED()
 		double volt;
 		if (ssl >> key >> pin >> volt)
 		{
-			std::cout << key << "\t" << pin << "\t" << volt << std::endl;
 			//name of LED is mapped to an incremental bit value
 			mLED_name[key] = static_cast<unsigned int>(pow(2, mLED_name.size()-1));
 			//name of LED is mapped to the pin it is connected to
@@ -151,8 +135,8 @@ void LEDManager::MapLED()
 bool LEDManager::EstablishI2C()
 {
 	std::cout << "establishing connection" << std::endl;
-	system("i2cdetect -y 1 > .tmp_wiring");
-	std::ifstream inWiring(".tmp_wiring");
+	system("i2cdetect -y 1 > .led_wiring");
+	std::ifstream inWiring(".led_wiring");
 	std::string line;
 	int addr;
 	while (std::getline(inWiring, line))
@@ -188,7 +172,7 @@ bool LEDManager::SetPWMfreq(double freq)
 		freq = 1526.0;
 
 	int prescale = std::round(25.0e6 / resolution / freq) - 1;
-	std::cout << "setting " << freq << " to " << std::hex << prescale << std::endl;
+	//std::cout << "setting " << freq << " to " << std::hex << prescale << std::endl;
 
 	//this address is is where the prescaler of the PWM frequency
 	//is stored
@@ -203,6 +187,7 @@ bool LEDManager::TurnOn()
 	unsigned int ledON = 0;
 
 	std::stringstream ssl(m_data->turnOnLED);
+	//std::cout << "decoding " << ssl.str() << std::endl;
 	std::string led;
 	while (std::getline(ssl, led, '_'))
 		ledON = ledON | mLED_name[led];
@@ -311,7 +296,6 @@ bool LEDManager::TurnLEDArray(unsigned int ledON)
 {
 	for (iLname = mLED_name.begin(); iLname != mLED_name.end(); ++iLname)
 	{
-		//std::cout << std::hex << ledON << "\t" << iLname->second << std::endl;
 		if (ledON & iLname->second)
 			TurnLEDon(iLname->first);
 		else
@@ -322,6 +306,7 @@ bool LEDManager::TurnLEDArray(unsigned int ledON)
 //set registers on PCA9685
 bool LEDManager::TurnLEDon(std::string ledName)
 {
+	std::cout << "Turning on " << ledName << std::endl;
 	//std::cout << "turning on " << ledName << std::endl;
 	//there are 4 registers to control LEDs
 	//and they are [6+4*channel : 9+4*channel]
@@ -368,7 +353,7 @@ bool LEDManager::TurnLEDon(std::string ledName)
 
 bool LEDManager::TurnLEDoff(std::string ledName)
 {
-	std::cout << "turning off " << ledName << std::endl;
+	std::cout << "Turning off " << ledName << std::endl;
 	//use wiringPI to write to set LEDn_OFFi_H[4] = 1
 	//which is the "always OFF" bit
 	//can be achieved by writing 0x10 to register ??

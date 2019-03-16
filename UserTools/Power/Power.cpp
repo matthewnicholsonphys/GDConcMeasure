@@ -23,7 +23,7 @@ bool Power::Initialise(std::string configfile, DataModel &data)
 	system(command.str().c_str());
 
 	TurnOff();
-	sleep(5);	
+	sleep(1);	
 	return true;
 }
 
@@ -33,6 +33,8 @@ bool Power::Execute()
 	{
 		case state::power_up:
 			TurnOn();
+			//sleep(4);	
+			//sleep(10);
 			break;
 		case state::power_down:
 			TurnOff();

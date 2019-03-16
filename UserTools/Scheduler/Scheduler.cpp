@@ -31,6 +31,11 @@ bool Scheduler::Initialise(std::string configfile, DataModel &data)
 	stateName[state::measurement_done]      = "measurement_done";
 	stateName[state::finalise]              = "finalise";
 
+	rest_time = 0;
+	
+	//HACK
+	//m_data->isCalibrated = true;
+
 	return true;
 }
 
@@ -41,7 +46,7 @@ bool Scheduler::Execute()
 	switch (m_data->mode)
 	{
 		case state::idle:
-			last = Wait(idle_time);				//ToolDAQ is put to sleep until next measurement
+			last = Wait(rest_time);				//ToolDAQ is put to sleep until next measurement
 			m_data->mode = state::power_up;			//time to power up the PSU!	in power up, Power tool turns on PSU
 			break;
 		case state::power_up:					//PSU has been turned on
@@ -51,7 +56,7 @@ bool Scheduler::Execute()
 		case state::init:					//ToolChain has been configured, and dark noise has been taken and saved
 			last = Wait();
 			if (IsCalibrated())				//Check if calibration is present (was done by CalibrationManager during previous loop)
-				m_data->mode = state::measurement;	//if there is calibration, then schedluer skips to measurement
+				m_data->mode = state::measurement;	//if there is calibration, then scheduler skips to measurement
 			else
 				m_data->mode = state::calibration;	//if there isn't calibration, this one must be done first!
 			break;
@@ -72,7 +77,6 @@ bool Scheduler::Execute()
 				m_data->mode = state::measurement_done;	//if so, it can be saved to disk
 			else
 				m_data->mode = state::measurement;	//if not, repeat calibration loop
-			Wait(idle_time);
 			break;
 		case state::measurement_done:
 			last = Wait();
@@ -84,6 +88,7 @@ bool Scheduler::Execute()
 			break;
 		case state::power_down:
 			last = Wait(power_down_time);			//small wait to let PSU be down
+			rest_time = idle_time;
 			m_data->mode = state::idle;			//and move to idle
 			break;
 	}
@@ -131,54 +136,3 @@ boost::posix_time::ptime Scheduler::Wait(double t)
 
 	return boost::posix_time::second_clock::local_time();
 }
-
-/*
-{
-	if (m_data->mode == 1){
-		//    std::cout<<"mode1"<<std::endl;
-		boost::posix_time::ptime current(boost::posix_time::second_clock::local_time());
-		boost::posix_time::time_duration duration(current - last);
-		boost::posix_time::time_duration period(0,0,10,0);
-		//    std::cout<<duration<<std::endl;
-		if (duration<period) usleep(500000);
-		else{
-			m_data->mode=2;
-			std::cout<<"Start Up"<<std::endl;
-		}
-	}
-
-	else if (m_data->mode==2){
-		// std::cout<<"mode2"<<std::endl;
-		last=boost::posix_time::second_clock::local_time();
-		m_data->mode=3; std::cout<<"Pumping"<<std::endl;
-		//  std::cout<<"t"<<std::endl;
-	}
-
-	else if (m_data->mode==3){
-		boost::posix_time::ptime current(boost::posix_time::second_clock::local_time());
-		boost::posix_time::time_duration duration(current - last);
-		boost::posix_time::time_duration period(0,0,5,0);
-		//    std::cout<<duration<<std::endl;
-		if (duration<period) usleep(500000);
-		else{
-			m_data->mode=4;
-			last=boost::posix_time::second_clock::local_time();
-			std::cout<<"Setteling"<<std::endl;
-		}
-	}
-
-	else if (m_data->mode==4){
-		boost::posix_time::ptime current(boost::posix_time::second_clock::local_time());
-		boost::posix_time::time_duration duration(current - last);
-		boost::posix_time::time_duration period(0,0,5,0);
-		//    std::cout<<duration<<std::endl;
-		if (duration<period) usleep(500000);
-		else{
-			m_data->mode=5;
-			std::cout<<"Measuring"<<std::endl;
-		}
-	}    
-
-	return true;
-}
-*/

@@ -3,8 +3,10 @@ verbose 2
 #Configuration file for Measurement manager
 #
 
-calibration	configfiles/test/list	#file with list of calibration/measurement
-output		output/calibtest.root	#file in which calibration is saved
-base_name	C			#base_name for calibation
+calibration	configfiles/led/list	#file with list of calibration/measurement
+output		output/threecal3.root	#file in which calibration is saved
+base_name	calibTree		#base_name for calibation
 concfunction	concF			#name of concentration function
-err_function	err_F			#name of uncertainity function
+statfunction	statF			#name of statistical error of function
+systfunction	systF			#name of systematic error function
+fit_function	infoF			#name of fit data & information

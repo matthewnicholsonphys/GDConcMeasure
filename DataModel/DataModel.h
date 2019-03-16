@@ -15,6 +15,8 @@
 #include "TFile.h"
 #include "TF1.h"
 #include "TF2.h"
+#include "TFitResult.h"
+#include "TFitResultPtr.h"
 
 #include <zmq.hpp>
 
@@ -44,6 +46,7 @@ class DataModel
 		GdTree* GetGdTree(std::string name);
 		void AddGdTree(std::string name, GdTree *tree);
 		void DeleteGdTree(std::string name);
+		int SizeGdTree();
 
 		Store vars;
 		BoostStore CStore;
@@ -68,8 +71,13 @@ class DataModel
 		//
 		//	used in Analysis
 		std::string concentrationName;	//name of tree for concentration measurmenet
+		//function accepts absorbance in and gives concentration
 		TF1 *concentrationFunction;
-		TF2 *concentrationFunc_Err;
+		TF2 *concentrationFuncStat;	//y variable is error on absorbance
+		TF1 *concentrationFuncSyst;
+		TFitResultPtr concentrationFit;	//fit result
+		std::string fitFuncName;	//name of fit result
+
 		double gdconc, gd_err;	//value of gd concentration and error
 		//
 		//	used in Writing

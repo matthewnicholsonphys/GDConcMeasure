@@ -23,8 +23,8 @@ void DataModel::DeleteTTree(std::string name)
 
 GdTree* DataModel::GetGdTree(std::string name)
 {
-	std::cout << "map size " << m_gdtrees.size() << std::endl;
-	std::cout << "GETTING from map " << name << "." << std::endl;
+//	std::cout << "map size " << m_gdtrees.size() << std::endl;
+//	std::cout << "GETTING from map " << name << "." << std::endl;
 	if (m_gdtrees.count(name))
 		return m_gdtrees[name];
 	else
@@ -37,6 +37,7 @@ void DataModel::AddGdTree(std::string name, GdTree *tree)
 	std::cout << "map size " << m_gdtrees.size() << std::endl;
 	std::cout << "ADDING to map " << name << ",\t" << tree << "." << std::endl;
 	m_gdtrees[name]=tree;
+	std::cout << m_gdtrees[name] << std::endl;
 }
 
 
@@ -46,4 +47,9 @@ void DataModel::DeleteGdTree(std::string name)
 	std::cout << "REMOVING from map " << name << "." << std::endl;
 	delete m_gdtrees[name];
 	m_gdtrees.erase(name);
+}
+
+int DataModel::SizeGdTree()
+{
+	return m_gdtrees.size();
 }

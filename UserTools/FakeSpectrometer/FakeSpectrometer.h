@@ -3,9 +3,9 @@
 
 #include <string>
 #include <iostream>
+#include <random>
 
 #include "Tool.h"
-#include "TRandom3.h"
 
 class FakeSpectrometer: public Tool {
 
@@ -17,29 +17,31 @@ class FakeSpectrometer: public Tool {
   bool Execute();
   bool Finalise();
 
+  bool GetX();
   bool GetDark();
   bool GetPure();
   bool GetData(double cc);
   double Pure(int i);
-  double Absorb(int i, double cc);
+  double PureFunc(int i);
   double Data(int i, double cc);
-  double Dark(int i);
+  double DataFunc(int i, double cc);
+  double Absorb(int i, double cc);
+  double Dark(int i = 0);
+  double Error();
   double X(int i);
 
   void Wait();
 
  private:
 
-  TRandom3 *mt;
+  std::mt19937 mt;
+  std::uniform_real_distribution<> ran, err;
+  std::string m_configfile;
 
-  double noise, pedestal;
+  double noise, pedestal, error;
   int nnn;
 
   double conc;
-
-  std::vector<double> vx, vdark, vpure, vdata;
-
-
 
 };
 

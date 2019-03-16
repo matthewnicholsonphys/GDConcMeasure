@@ -22,6 +22,9 @@ bool MeasurementManager::Initialise(std::string configfile, DataModel &data)
 	m_variables.Get("base_name",	m_data->measurementBase);	//base_name for calibation
 	//m_variables.Get("tree_name", treeName);		//name of output tree
 
+	//HACK
+	//m_data->calibrationBase = m_data->measurementBase;
+
 	return true;
 }
 
@@ -66,9 +69,11 @@ bool MeasurementManager::Execute()
 bool MeasurementManager::Finalise()
 {
 	for (im = measureList.begin(); im != measureList.end(); ++im)
-		m_data->DeleteGdTree(*im);
+		m_data->DeleteGdTree(m_data->measurementBase + "_" + *im);
 
 	measureList.clear();
+
+	std::cout << "MM finalise " << m_data->SizeGdTree() << std::endl;
 
 	return true;
 }
@@ -120,7 +125,7 @@ std::vector<std::string> MeasurementManager::LoadMeasurement()
 	//open read only calibration file
 	TFile f(m_data->measurementFile.c_str(), "OPEN");
 	if (f.IsZombie())
-		std::cerr << "Measurement file does not exist!\n";
+		std::cerr << "A new file will be created!\n";
 	else
 		std::cout << "Opened file " << f.GetName() << std::endl;
 	
@@ -133,16 +138,16 @@ std::vector<std::string> MeasurementManager::LoadMeasurement()
 		TTree *gdt = 0;
 
 		std::string name = m_data->measurementBase + "_" + *im;
-		std::string full = name + "/" + name;
+		std::string full = "d_" + *im + "/" + m_data->measurementBase;
 		//if exists, get it
-		std::cout << "LOOKING " << full << std::endl;
+		//std::cout << "LOOKING " << full << std::endl;
 		if (f.IsOpen())
 			gdt = static_cast<TTree*>(f.Get(full.c_str()));
 		if (gdt)
 			std::cout << "LOADED GDT " << gdt->GetEntries() << std::endl;
 		//else create new
 		
-		std::cout << "\t--> " << name << std::endl;
+		//std::cout << "\t--> " << name << std::endl;
 		GdTree *measure = gdt ? new GdTree(gdt) : new GdTree(name);
 
 		m_data->AddGdTree(name.c_str(), measure);
@@ -156,10 +161,12 @@ std::vector<std::string> MeasurementManager::LoadMeasurement()
 
 bool MeasurementManager::Measure()
 {
-	m_data->turnOnLED = *im;
-
 	m_data->measurementName = m_data->measurementBase + "_" + *im;
 	m_data->calibrationName = m_data->calibrationBase + "_" + *im;
-
 	std::cout << "Measure " << *im << "\t" << m_data->measurementName << std::endl;
+	std::cout << "with cal " << m_data->calibrationName << std::endl;
+
+	//HACK
+	//m_data->turnOnLED = *im;
+	m_data->turnOnLED = "";
 }
