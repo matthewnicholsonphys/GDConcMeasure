@@ -30,7 +30,9 @@ bool Scheduler::Initialise(std::string configfile, DataModel &data)
 	stateName[state::measurement]           = "measurement";
 	stateName[state::measurement_done]      = "measurement_done";
 	stateName[state::finalise]              = "finalise";
+	stateName[state::turn_off_led]          = "turn_off_led";
 
+	nextState = state::idle;
 	rest_time = 0;
 	
 	//HACK
@@ -63,9 +65,16 @@ bool Scheduler::Execute()
 		case state::calibration:
 			last = Wait();
 			if (IsCalibrationDone())				//check if calibration is completed
-				m_data->mode = state::calibration_done;	//if so, it can be saved to disk
+				nextState = state::calibration_done;	//if so, it can be saved to disk
 			else
-				m_data->mode = state::calibration;	//if not, repeat calibration loop
+				nextState = state::calibration;	//if not, repeat calibration loop
+			std::cout << "next state should be " << stateName[nextState] << std::endl;
+
+			if (IsLEDOn())	//check if LED is off before continuing
+				m_data->mode = state::turn_off_led;
+			else
+				m_data->mode = nextState;
+			std::cout << "so moving to " << stateName[m_data->mode] << std::endl;
 			break;
 		case state::calibration_done:
 			last = Wait();
@@ -74,13 +83,26 @@ bool Scheduler::Execute()
 		case state::measurement:
 			last = Wait();
 			if (IsMeasurementDone())			//check if calibration is completed
-				m_data->mode = state::measurement_done;	//if so, it can be saved to disk
+				nextState = state::measurement_done;	//if so, it can be saved to disk
 			else
-				m_data->mode = state::measurement;	//if not, repeat calibration loop
+				nextState = state::measurement;	//if not, repeat calibration loop
+
+			if (IsLEDOn())	//check if LED is off before continuing
+				m_data->mode = state::turn_off_led;
+			else
+				m_data->mode = nextState;
 			break;
 		case state::measurement_done:
 			last = Wait();
 			m_data->mode = state::finalise;			//measurement done, turn on pump and change water for next measurement and finalise
+			break;
+		case state::turn_off_led:
+			std::cout << "is led off?" << std::endl;
+			if (IsLEDOn())	//check if LED is off before continuing
+				m_data->mode = state::turn_off_led;
+			else
+				m_data->mode = nextState;
+			std::cout << "so moving to " << stateName[m_data->mode] << std::endl;
 			break;
 		case state::finalise:
 			last = Wait(change_water_time);			//wait for pump to complete if needed
@@ -111,6 +133,11 @@ bool Scheduler::IsCalibrated()
 bool Scheduler::IsCalibrationDone()
 {
 	return m_data->calibrationDone;
+}
+
+bool Scheduler::IsLEDOn()
+{
+	return m_data->isLEDon;
 }
 
 bool Scheduler::IsMeasurementDone()

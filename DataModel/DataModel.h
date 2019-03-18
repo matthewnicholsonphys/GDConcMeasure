@@ -30,7 +30,8 @@ enum state
 	calibration_done,
 	measurement,
 	measurement_done,
-	finalise
+	finalise,
+	turn_off_led
 };
 
 class DataModel
@@ -98,6 +99,7 @@ class DataModel
 
 		//LEDmanager
 		//string used by calibration and measurement managers
+		bool isLEDon;		//true if led on
 		std::string turnOnLED;	//led to be turned on
 
 		//Pump

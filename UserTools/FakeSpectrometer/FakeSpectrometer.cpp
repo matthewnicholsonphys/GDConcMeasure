@@ -44,10 +44,11 @@ bool FakeSpectrometer::Execute()
 				GetData(m_data->gdconc+Error());
 			else
 				GetPure();
+			Wait();
 			break;
 		case state::measurement:
-			//Wait();
 			GetData(conc+Error());
+			Wait();
 			break;
 		case state::finalise:
 			Finalise();
@@ -69,8 +70,9 @@ bool FakeSpectrometer::Finalise()
 
 void FakeSpectrometer::Wait()
 {
-	std::cout << "Waiting for you to finish... \n";
-	std::cin.get();
+	sleep(5);
+	//std::cout << "Waiting for you to finish... \n";
+	//std::cin.get();
 }
 
 bool FakeSpectrometer::GetX()

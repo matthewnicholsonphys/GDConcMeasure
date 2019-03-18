@@ -314,8 +314,8 @@ bool CalibrationManager::Calibrate()
 {
 	m_data->calibrationName = m_data->calibrationBase + "_" + *ic;
 	//HACK
-	//m_data->turnOnLED = *ic;
-	m_data->turnOnLED = "";
+	m_data->turnOnLED = *ic;
+	//m_data->turnOnLED = "";
 
 	double gdc, gde;
 	if (*ic != concTreeName)
@@ -336,10 +336,9 @@ bool CalibrationManager::Calibrate()
 		if (!(gdc < 0))	//not finished, repeat this step
 		{
 			//std::cout << "Enter concentration error (0.0 is a fine value)\n";
-			//std::cin >> gde;
-			//std::cout << "H0" << std::endl;
-			//m_data->gd_err = gde;
-			m_data->gd_err = 0.0;
+			std::cin >> gde;
+			m_data->gd_err = gde*gde;
+			//m_data->gd_err = 0.0;
 			m_data->calibrationComplete = false;
 
 			--ic;
@@ -350,7 +349,6 @@ bool CalibrationManager::Calibrate()
 			m_data->gd_err = 0.0;;
 		}
 
-			std::cout << "H4" << std::endl;
 		m_data->gdconc = gdc;
 	}
 

@@ -167,6 +167,8 @@ bool MeasurementManager::Measure()
 	std::cout << "with cal " << m_data->calibrationName << std::endl;
 
 	//HACK
-	//m_data->turnOnLED = *im;
-	m_data->turnOnLED = "";
+	//std::cout << "Ready?\n";
+	//std::cin.get();
+	m_data->turnOnLED = *im;
+	//m_data->turnOnLED = "";
 }

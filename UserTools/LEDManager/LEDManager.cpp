@@ -14,10 +14,8 @@ bool LEDManager::Initialise(std::string configfile, DataModel &data)
 	
 	m_data = &data;
 	m_data->turnOnLED = "";
-	ledONstate = 0;
+	ledONstate = -1;
 	
-	ledONstate = 0;
-
 	m_variables.Get("verbose", verbose);
 
 	m_variables.Get("frequency", frequencyPWM);
@@ -55,22 +53,29 @@ bool LEDManager::Execute()
 	{
 		case state::init:	//about to make measurement, check LED mapping
 			Initialise(m_configfile, *m_data);
+			TurnOff();
+			m_data->isLEDon = false;
 			EstablishI2C();	//it is true if connections is ok!
 			break;
 		case state::calibration:		//turn on led set
 			if (!m_data->calibrationComplete || m_data->calibrationName != m_data->concentrationName)
 			{
 				TurnOn();
+				m_data->isLEDon = true;
 				usleep(200);
 			}
 			break;
 		case state::measurement:		//turn on led set
 			TurnOn();
 			usleep(200);		//stabilises LED
+			m_data->isLEDon = true;
 			break;
-		case state::calibration_done:	//wait for measurement
-		case state::measurement_done:	//wait for measurement
+		case state::turn_off_led:	//turn off led for good measure (cit.)
+		case state::calibration_done:
+		case state::measurement_done:
 			TurnOff();
+			usleep(200);		//stabilises LED
+			m_data->isLEDon = false;
 			break;
 		case state::finalise:		//turn off in any other state
 			TurnOffAndSleep();

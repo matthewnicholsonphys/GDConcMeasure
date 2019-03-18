@@ -4,7 +4,7 @@ verbose 2
 #
 
 calibration	configfiles/led/list	#file with list of calibration/measurement
-output		output/threecal3.root	#file in which calibration is saved
+output		output/newcal1.root	#file in which calibration is saved
 base_name	calibTree		#base_name for calibation
 concfunction	concF			#name of concentration function
 statfunction	statF			#name of statistical error of function

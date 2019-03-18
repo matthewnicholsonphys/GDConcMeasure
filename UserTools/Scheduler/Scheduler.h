@@ -21,6 +21,7 @@ class Scheduler: public Tool
 		bool IsCalibrated();
 		bool IsCalibrationDone();
 		bool IsMeasurementDone();
+		bool IsLEDOn();
 
 		boost::posix_time::ptime Wait(double t = 0.0);
 
@@ -36,6 +37,8 @@ class Scheduler: public Tool
 		int change_water_time;
 
 		int rest_time;
+
+		state nextState;
 
 		std::map<state, std::string> stateName;
 
