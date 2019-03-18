@@ -208,7 +208,7 @@ void GdTree::Init()
 	chain->SetBranchAddress("Gd_ErrStat",	&Gd_ErrStat,	&b_Gd_ErrStat);
 	chain->SetBranchAddress("Gd_ErrSyst",	&Gd_ErrSyst,	&b_Gd_ErrSyst);
 	chain->SetBranchAddress("Wavelength_1",	&Wavelength_1,	&b_Wavelength_1);
-	chain->SetBranchAddress("Wavelength_1",	&Wavelength_1,	&b_Wavelength_1);
+	chain->SetBranchAddress("Absorbance_1",	&Absorbance_1,	&b_Absorbance_1);
 	chain->SetBranchAddress("Absorb_Err_1", &Absorb_Err_1,	&b_Absorb_Err_1);
 	chain->SetBranchAddress("Wavelength_2", &Wavelength_2,	&b_Wavelength_2);
 	chain->SetBranchAddress("Absorbance_2", &Absorbance_2,	&b_Absorbance_2);

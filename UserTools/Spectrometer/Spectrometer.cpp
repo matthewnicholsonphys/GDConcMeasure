@@ -152,9 +152,10 @@ bool Spectrometer::GetData()
 	sbapi_spectrometer_get_wavelengths(device_ids[0], spectrometer_ids[0],
 					   &error, wavelength, size);
 	m_data->wavelength.resize(size);
-	memcpy(&(m_data->wavelength)[0], &wavelength[0], size*sizeof(int));
-	free(wavelength);
+	memcpy(&(m_data->wavelength)[0], &wavelength[0], size*sizeof(double));
+
 	free(data);
+	free(wavelength);
 
 	return true;
 }
