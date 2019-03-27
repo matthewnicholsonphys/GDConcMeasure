@@ -12,7 +12,7 @@ DataModelInclude= $(RootInclude)
 DataModelLib=  $(RootLib)
 
 MyToolsInclude= $(RootInclude)
-MyToolsLib= $(RootLib)
+MyToolsLib= $(RootLib) -lwiringPi
 
 all: lib/libStore.so lib/libLogging.so lib/libDataModel.so include/Tool.h lib/libMyTools.so lib/libServiceDiscovery.so lib/libToolChain.so main RemoteControl  NodeDaemon
 

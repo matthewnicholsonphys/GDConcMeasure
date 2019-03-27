@@ -1,0 +1,11 @@
+#this is a measurement file where the measurement are defined
+#meaning of measurement is a wavelength spectrum defined by a certain combination of LEDs
+#the easiest this is to have one LED per measurment, but more LEDs at the same time can be turned on
+#this will make 5 measurement and each line says which LED should be turn on
+#led15
+led00	led01	led02	led03	led04	led05	led06	led07	led08	led09	led10	led11	led12	led13	led14	led15
+#led275j
+#led260j	led275j
+#led405e
+#ledW7
+#ledRGBE_R	ledRGBE_G	ledRGBE_B

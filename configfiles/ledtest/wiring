@@ -1,0 +1,27 @@
+#LED list wired up to the raspPI
+#name		channel	voltage			
+led00		0	8.5		
+led01		1	9.0
+led02		2	9.5		
+led03		3	10.0		
+led04		4	10.5		
+led05		5	11.0		
+led06		6	11.5
+led07		7	12.0		
+led08		8	8.0		
+led09		9	5.0
+led10		10	5.5
+led11		11	6.0
+led12		12	5.5		
+led13		13	5.0		
+led14		14	4.5		
+led15		15	4.0
+#led15		15	4		
+#led275j	1	8		
+#led385w	2	4		
+#led405e	3	3		
+#ledW7		4	3		
+#ledRGBE_R	5	3		
+#ledRGBE_G	6	2		
+#ledRGBE_B	7	3		
+
