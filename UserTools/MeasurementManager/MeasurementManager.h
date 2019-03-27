@@ -1,17 +1,17 @@
-#ifndef Measurement_H
-#define Measurement_H
+#ifndef MeasurementManager_H
+#define MeasurementManager_H
 
 #include <string>
 #include <iostream>
 
 #include "Tool.h"
 
-class Measurement: public Tool {
+class MeasurementManager: public Tool {
 
 
  public:
 
-  Measurement();
+  MeasurementManager();
   bool Initialise(std::string configfile,DataModel &data);
   bool Execute();
   bool Finalise();

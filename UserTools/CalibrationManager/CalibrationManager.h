@@ -1,17 +1,17 @@
-#ifndef Calibration_H
-#define Calibration_H
+#ifndef CalibrationManager_H
+#define CalibrationManager_H
 
 #include <string>
 #include <iostream>
 
 #include "Tool.h"
 
-class Calibration: public Tool {
+class CalibrationManager: public Tool {
 
 
  public:
 
-  Calibration();
+  CalibrationManager();
   bool Initialise(std::string configfile,DataModel &data);
   bool Execute();
   bool Finalise();

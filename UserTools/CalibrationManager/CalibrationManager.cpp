@@ -1,9 +1,9 @@
-#include "Calibration.h"
+#include "CalibrationManager.h"
 
-Calibration::Calibration():Tool(){}
+CalibrationManager::CalibrationManager():Tool(){}
 
 
-bool Calibration::Initialise(std::string configfile, DataModel &data)
+bool CalibrationManager::Initialise(std::string configfile, DataModel &data)
 {
 
 	if(configfile!="")  m_variables.Initialise(configfile);
@@ -15,7 +15,7 @@ bool Calibration::Initialise(std::string configfile, DataModel &data)
 }
 
 
-bool Calibration::Execute()
+bool CalibrationManager::Execute()
 {
 	switch (m_data->mode)
 	{
@@ -49,17 +49,17 @@ bool Calibration::Execute()
 	return true;
 }
 
-bool Calibration::Finalise()
+bool CalibrationManager::Finalise()
 {
 	return true;
 }
 
-void Calibration::FitCalibration()
+void CalibrationManager::FitCalibration()
 {
 }
 
 /*
-double Calibration::DefineCalibration()
+double CalibrationManager::DefineCalibration()
 {
 	std::ifstream cal(calibList.c_str());
 	std::string line;
@@ -83,7 +83,7 @@ double Calibration::DefineCalibration()
 */
 
 
-bool Calibration::IsCalibrated()
+bool CalibrationManager::IsCalibrated()
 {
 	std::string calibFile;
 	int calibUpdate;

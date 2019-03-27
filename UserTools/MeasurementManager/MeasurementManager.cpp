@@ -1,10 +1,10 @@
-#include "Measurement.h"
+#include "MeasurementManager.h"
 
-Measurement::Measurement() : Tool()
+MeasurementManager::MeasurementManager() : Tool()
 {
 }
 
-bool Measurement::Initialise(std::string configfile, DataModel &data)
+bool MeasurementManager::Initialise(std::string configfile, DataModel &data)
 {
 	if(configfile!="")  m_variables.Initialise(configfile);
 	//m_variables.Print();
@@ -15,7 +15,7 @@ bool Measurement::Initialise(std::string configfile, DataModel &data)
 }
 
 
-bool Measurement::Execute()
+bool MeasurementManager::Execute()
 {
 	switch (m_data->mode)
 	{
@@ -38,12 +38,12 @@ bool Measurement::Execute()
 }
 
 
-bool Measurement::Finalise()
+bool MeasurementManager::Finalise()
 {
 	return true;
 }
 
-void LEDmanager::Configure()
+void MeasurementManager::Configure()
 {
 	m_variables.Get("verbose", verbose);
 
@@ -52,7 +52,7 @@ void LEDmanager::Configure()
 	Log("LEDManager: LED measurement will be read from " + measureList, 1, verbose);
 }
 
-bool Calibration::Measure()
+bool MeasurementManager::Measure()
 {
 	if (m_data->LED_name.size())	//led mapping has been loaded
 	{

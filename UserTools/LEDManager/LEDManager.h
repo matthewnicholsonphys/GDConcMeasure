@@ -1,5 +1,5 @@
-#ifndef LEDmanager_H
-#define LEDmanager_H
+#ifndef LEDManager_H
+#define LEDManager_H
 
 #include <string>
 #include <iostream>
@@ -21,11 +21,11 @@ enum LED
 	led_B   = 128,
 };
 
-class LEDmanager: public Tool
+class LEDManager: public Tool
 {
 	public:
 	
-		LEDmanager();
+		LEDManager();
 		bool Initialise(std::string configfile,DataModel &data);
 		bool Execute();
 		bool Finalise();
