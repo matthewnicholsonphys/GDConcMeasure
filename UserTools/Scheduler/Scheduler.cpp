@@ -12,6 +12,8 @@ bool Scheduler::Initialise(std::string configfile, DataModel &data)
 
 	m_data->mode = state::idle;
 
+	Configure();
+
 	return true;
 }
 
@@ -29,20 +31,24 @@ bool Scheduler::Execute()
 			m_data->mode = state::init;			//init the other Tools (calibration, measurement, LED, spectrometer, analysis...)
 			break;
 		case state::init:					//ToolChain has been configured, and dark noise has been taken and saved
+			last = Wait();
 			if (IsCalibrated())				//Check if calibration is present (was done by CalibrationManager during previous loop)
 				m_data->mode = state::measurement;	//if there is calibration, then schedluer skips to measurement
 			else
 				m_data->mode = state::calibration;	//if there isn't calibration, this one must be done first!
 		case state::calibration:
+			last = Wait();
 			if (IsCalibrationDone())				//check if calibration is completed
 				m_data->mode = state::calibration_done;	//if so, it can be saved to disk
 			else
 				m_data->mode = state::calibration;	//if not, repeat calibration loop
 			break;
 		case state::calibration_done:
+			last = Wait();
 			m_data->mode = state::measurement;		//calibration done and saved, start measurement
 			break;
 		case state::measurement:
+			last = Wait();
 			if (IsMeasurementDone())			//check if calibration is completed
 				m_data->mode = state::measurement_done;	//if so, it can be saved to disk
 			else
@@ -50,6 +56,7 @@ bool Scheduler::Execute()
 			Wait(idle_time);
 			break;
 		case state::measurement_done:
+			last = Wait();
 			m_data->mode = state::finalise;			//measurement done, turn on pump and change water for next measurement and finalise
 			break;
 		case state::change_water:
@@ -62,11 +69,6 @@ bool Scheduler::Execute()
 			m_data->mode = state::idle;			//and move to idle
 			break;
 	}
-}
-
-bool Scheduler::isCalibrated()
-{
-	return m_data->isCalibrated;
 }
 
 bool Scheduler::Finalise()
@@ -84,9 +86,24 @@ void Scheduler::Configure()
 	m_variables.Get("change_water", change_water_time);
 }
 
-//wait t seconds using boost lib
-//the DAQ can't do anything while waiting (?)
-//check if enough time has passed since last time
+bool Scheduler::IsCalibrated()
+{
+	return m_data->isCalibrated;
+}
+
+bool Scheduler::IsCalibrationDone()
+{
+	return m_data->calibrationDone;
+}
+
+bool Scheduler::IsMeasurementDone()
+{
+	return m_data->measurementDone;
+}
+
+//check if enought time has passed since last status change
+//wait remaining time so that in total t seconds have passed since last
+//with t = 0, no wait happens and current time is passed
 boost::posix_time::second_clock Scheduler::Wait(double t)
 {
 	boost::posix_time::ptime current(boost::posix_time::second_clock::local_time());
