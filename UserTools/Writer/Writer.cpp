@@ -23,9 +23,9 @@ bool Writer::Execute()
 			pureTrace.clear();
 			vTraceCollect.clear();
 			break;
-		case state::write_measure:
-			break;
-		case state::write_calibrate:
+		case state::calibration_done:		//outputFile & outputTree are calibration's
+		case state::measurement_done:		//outputFile & outputTree are measurement's
+			Write();
 			break;
 		default:
 			break;
@@ -37,4 +37,11 @@ bool Writer::Execute()
 bool Writer::Finalise()
 {
 	return true;
+}
+
+void Witer::Write()
+{
+	//some loop on GdTrees
+	//and call GdTree->Write()
+	//and at the same time erase GdTree from map
 }

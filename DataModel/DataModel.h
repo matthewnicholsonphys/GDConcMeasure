@@ -10,58 +10,64 @@
 #include "Store.h"
 #include "BoostStore.h"
 #include "Logging.h"
+#include "GdTree.h"
 
 #include <zmq.hpp>
 
 enum state
 {
 	idle,
+	power_up,
+	power_down,
 	init,
-	calibrate,
-	calibrate_dark,
-	calibrate_pure,
-	calibrate_gd,
-	calibrate_fit,
-	measure,
-	measure_start,
-	measure_stop
+	calibration,
+	calibration_done,
+	measurement,
+	measurement_done,
+	finalise,
+	change_water = finalise
 };
 
-class DataModel {
+class DataModel
+{
+	public:
+
+		DataModel();
+
+		TTree* GetTTree(std::string name);
+		void AddTTree(std::string name, TTree *tree);
+		void DeleteTTree(std::string name);
+
+		GdTree* GetGdTree(std::string name);
+		void AddGdTree(std::string name, GdTree *tree);
+		void DeleteGdTree(std::string name);
+
+		Store vars;
+		BoostStore CStore;
+		std::map<std::string,BoostStore*> Stores;
+
+		Logging *Log;
+
+		zmq::context_t* context;
+
+		state mode;	//state for scheduler
+		//int mode;	//state for scheduler
+		bool endMeasure;
+
+		std::vector<std::vector<double> > vTraceCollect;
+		std::vector<double> xAxis;
+
+		TF1 *concentrationFunction;
+		TF2 *concentrationFunc_Err;
+		// pointer to spectromiter
+
+	private:
+
+		std::map<std::string, TTree*> m_trees; 
+		std::map<std::string, GdTree*> m_gdtrees; 
 
 
- public:
-  
-  DataModel();
-
-  TTree* GetTTree(std::string name);
-  void AddTTree(std::string name,TTree *tree);
-  void DeleteTTree(std::string name);
-
-  Store vars;
-  BoostStore CStore;
-  std::map<std::string,BoostStore*> Stores;
-  
-  Logging *Log;
-
-  zmq::context_t* context;
-
-  //status mode;	//state for scheduler
-  int mode;	//state for scheduler
-  bool endMeasure;
-
-  
-  // pointer to spectromiter
-  
- private:
-
-  
-  std::map<std::string,TTree*> m_trees; 
-  
-  
-  
 };
-
 
 
 #endif

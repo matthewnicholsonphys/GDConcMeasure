@@ -6,11 +6,13 @@ MeasurementManager::MeasurementManager() : Tool()
 
 bool MeasurementManager::Initialise(std::string configfile, DataModel &data)
 {
-	if(configfile!="")  m_variables.Initialise(configfile);
+	if (configfile!="")
+		m_variables.Initialise(configfile);
 	//m_variables.Print();
 
 	m_data= &data;
 
+	Configure();
 	return true;
 }
 
@@ -20,15 +22,23 @@ bool MeasurementManager::Execute()
 	switch (m_data->mode)
 	{
 		case state::init:	//about to make measurement, check LED mapping
-			Configure();
+			measureList = LoadMeasurement();
+			measureCount = 0;
+			std::cout << "Set up for " << measureList.size() << " measurements.\n";
 			break;
-		case state::measure:		//turn on led set
-			if (Measure())		//if TurnOn is false, measurement is finished or there is a uncaught problem
-				m_data->mode = state::measure_start;
+		case state::measurement:		//turn on led set
+			if (Measure())			//cheak if there are measurements to take
+			{
+				m_data->mode = state::measurement;
+			}
 			else
-				m_data->mode = state::measure_stop;
+				m_data->mode = state::measurement_done;
 			break;
-		case state::analyse:	//wait for measurement
+		case state::measurement_done:
+			m_data->outputFile = outFile;
+			break;
+		case state::finalise:
+			measureList.clear();
 			break;
 		default:		//turn off in any other state
 			TurnOff();
@@ -47,44 +57,52 @@ void MeasurementManager::Configure()
 {
 	m_variables.Get("verbose", verbose);
 
-	m_variables.Get("measurement", measureList);
+	m_variables.Get("measurement", measureList);	//file with list of measurements to take
+	m_variables.Get("output", outFile);	//file with list of measurements to take
+	m_variables.Get("tree_name", treeName);		//name of output tree
 
 	Log("LEDManager: LED measurement will be read from " + measureList, 1, verbose);
 }
 
+std::vector<std::string> MeasurementManager::LoadMeasurement()
+{
+	std::vector<std::string> vList;
+
+	std::ifstream (measureList.c_str());
+	std::string line;
+	while (std::getline(measureList, line))	//skip to line measureCount+1
+	{
+		if (line.find_first_of('#') != std::string::npos)
+			line.erase(line.find_first_of('#'));
+		vList.push_back();
+	}
+
+	return vList;
+}
+
 bool MeasurementManager::Measure()
 {
-	if (m_data->LED_name.size())	//led mapping has been loaded
-	{
-		std::ifstream (measureList.c_str());
-		std::string line;
-		int i = -1;
-		while (i < measureCount && std::getline(measureList, line))	//skip to line measureCount+1
-			if (line[0] != '#')
-				++i;
-
-		unsigned int ledON = 0;
-		if (i == measureCount)
+	if (m_data->LED_name.size() && measureCount < measureList.size())	//led mapping has been loaded
+	{									//and there are still measruements to take
+		std::string led;
+		std::string out;
+		std::stringstream ssl(measureList.at(measureCount));		//setup binary value in data model
+		while(ssl >> led)
 		{
-			if (line.find_first_of('#') != std::string::npos)
-				line.erase(line.find_first_of('#'));
-			std::stringstream ssl(line);		//setup binary value
-			while(ssl >> line)
-				m_data->ledON = m_data->ledON | m_data->LED_name[line];
-
-			++measureCount;
+			out = led + "_";
+			m_data->ledON = m_data->ledON | m_data->LED_name[led];
 		}
-		else
-			return false;
 
-		if (ledON != ledONstatus)
+		if (!out.empty())
+			out.erase(erase.size()-1);
+
+		if (!m_data->GetGdTree(out))					//create a tree for measurement if it doesn't exist
 		{
-			ledONstatus = ledON;
-			return TurnLEDArray(ledONstatus);	//if everything is ok, this returns true
+			GdTree *measure = new GdTree(treeName, outFile);	//get tree of measurement
+			m_data->AddGdTree(out, measure);
+
 		}
-		else
-			return true;		//continue measuring
 	}
 	else
-		std::cout << "LED mapping not done\n";
+		return false;
 }

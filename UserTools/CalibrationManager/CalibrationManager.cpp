@@ -6,11 +6,13 @@ CalibrationManager::CalibrationManager():Tool(){}
 bool CalibrationManager::Initialise(std::string configfile, DataModel &data)
 {
 
-	if(configfile!="")  m_variables.Initialise(configfile);
+	if (configfile!="")
+		m_variables.Initialise(configfile);
 	//m_variables.Print();
 
 	m_data= &data;
 
+	Configure();
 	return true;
 }
 
@@ -20,27 +22,48 @@ bool CalibrationManager::Execute()
 	switch (m_data->mode)
 	{
 		case state::init:	//about to make measurement, check LED mapping
-			LoadCalibration();
-			m_data->calibrated = IsCalibrated();
-			break;
-		case state::calibrate:		//turn on led set
-			std::string input;
-			std::cout << "Concentration loaded (0 for pure water, any other key to quit): ";
-			std::cin >> input;
-			if (!std::isdigit(input[0]))
+			if (IsCalibrated())
 			{
-				std::cout << "Calibration complete\n";
-				m_data->mode = state::calibrate_fit;
+				LoadCalibration();
+				m_data->isCalibrated = true;
 			}
 			else
 			{
-				m_data->ledON = m_data->LED_name["led265"];	//turn on LED UV
-				double gd = std::strtod(input, NULL);
-				if (gd == 0)
-					m_data->mode = state::calibrate_pure;
-				else
-					m_data->mode = state::calibrate_gd;
+				NewCalibration();
+				m_data->isCalibrated = false;
 			}
+			break;
+		case state::calibration:		//turn on led set
+			std::string input;
+			/* need some other smart way of doing this!
+			 */
+			//std::cout << "Concentration loaded (0 for pure water, any other key to quit): ";
+			//std::cin >> input;
+			if (!std::isdigit(input[0]))	//quit command occured
+			{
+				m_data->calibrationDone = true;
+				std::cout << "Calibration complete\n";
+			}
+			else
+			{
+				m_data->calibrationDone = false;
+
+				m_data->ledON = m_data->LED_name[calibLED];	//turn on LED UV
+				double gd = std::strtod(input, NULL);
+
+				m_data->gdconc = gd;
+				m_data->gd_err = 0.0;
+				//if (gd == 0)
+				//else
+				//	m_data->mode = state::calibrate_gd;
+			}
+			break;
+		case state::calibration_done:
+			m_data->isCalibrated = true;
+			m_data->outputFile = calibFile;
+			break;
+		case state::finalise:
+			//delete some tree/function objects?
 			break;
 		default:
 			break;
@@ -54,42 +77,48 @@ bool CalibrationManager::Finalise()
 	return true;
 }
 
-void CalibrationManager::FitCalibration()
+void CalibrationManager::Configure()
 {
+	m_variables.Get("verbose", verbose);
+
+	m_variables.Get("calibration",	calibFile);	//file in which calibration is saved
+	m_variables.Get("tree_name",	treeName);	//name of calibration tree
+	m_variables.Get("concfunction",	concFunc);	//name of concentration function
+	m_variables.Get("err_function",	err_Func);	//name of uncertainity function
+
+	m_variables.Get("update",	updateTime);	//number of seconds every time calibration should happen
+	m_variables.Get("routine",	fileList);	//file in which calibration is saved
+	m_variables.Get("LED_name",	calibLED);	//name of LED used to do calibration
 }
 
-/*
-double CalibrationManager::DefineCalibration()
+void CalibrationManager::LoadCalibration()
 {
-	std::ifstream cal(calibList.c_str());
-	std::string line;
-	int i = 0;
-	while (i < calibCount && std::getline(cal, line))	//skip to line measureCount+1
-		if (line[0] != '#' && !std::isspace(line[0]))
-			++i;
+	TFile inFile(calibFile, "OPEN");
+	TF1 *   valF  = static_cast<TF1*>(inFile.Get(concFunc)->Clone());
+	TF2 *   errF  = static_cast<TF2*>(inFile.Get(err_Func)->Clone());
 
-	double gd;
-	if (i == calibCount)
-	{
-		if (line.find_first_of('#') != std::string::npos)
-			line.erase(line.find_first_of('#'));
+	valF->SetDirectory(0);
+	errF->SetDirectory(0);
 
-		++calibCount;
-		return strtod(line, NULL);
-	}
-	else
-		return -1.0;
+	inFile.Close();
+
+	GdTree *calib = new GdTree(treeName, calibFile);
+
+	m_data->AddGdTree("calib", calib);
+	m_data->concentrationFunction = valF;
+	m_data->concentrationFunc_Err = errF;
 }
-*/
 
+void CalibrationManager::NewCalibration()
+{
+	GdTree *calib = new GdTree(treeName);
+	m_data->AddGdTree("calib", calib);
+}
 
 bool CalibrationManager::IsCalibrated()
 {
 	std::string calibFile;
 	int calibUpdate;
-	m_variables.Get("calibration", calibFile);	//file in which calibration is saved
-	m_variables.Get("update",      calibUpdate);	//number of seconds every time calibration should happen
-	m_variables.Get("routine", calibList);	//file in which calibration is saved
 
 	std::string cmd = "stat -c %y " + calibFile + " > .tmp_calibration";
 	std::system(cmd.c_str());
@@ -118,3 +147,27 @@ bool CalibrationManager::IsCalibrated()
 			return true;
 	}
 }
+/*
+double CalibrationManager::DefineCalibration()
+{
+	std::ifstream cal(calibList.c_str());
+	std::string line;
+	int i = 0;
+	while (i < calibCount && std::getline(cal, line))	//skip to line measureCount+1
+		if (line[0] != '#' && !std::isspace(line[0]))
+			++i;
+
+	double gd;
+	if (i == calibCount)
+	{
+		if (line.find_first_of('#') != std::string::npos)
+			line.erase(line.find_first_of('#'));
+
+		++calibCount;
+		return strtod(line, NULL);
+	}
+	else
+		return -1.0;
+}
+*/
+
