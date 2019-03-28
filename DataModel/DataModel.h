@@ -50,16 +50,26 @@ class DataModel
 
 		zmq::context_t* context;
 
-		state mode;	//state for scheduler
-		//int mode;	//state for scheduler
-		bool endMeasure;
 
+
+		state mode;	//state for scheduler
+
+		//for spectrometer
 		std::vector<std::vector<double> > vTraceCollect;
 		std::vector<double> xAxis;
 
 		TF1 *concentrationFunction;
 		TF2 *concentrationFunc_Err;
-		// pointer to spectromiter
+
+		double gdconc, gd_err;	//value of gd concentration and error
+
+		bool isCalibrated;	//true if there is calibratio file!
+		bool calibrationDone;	//true if calibration is complete
+		bool measurementDone;	//true if the measurement is finished
+
+		std::map<std::string, unsigned int> LED_name;	//led configurations
+		unsigned int ledON;
+
 
 	private:
 

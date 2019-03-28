@@ -5,12 +5,14 @@ CalibrationManager::CalibrationManager():Tool(){}
 
 bool CalibrationManager::Initialise(std::string configfile, DataModel &data)
 {
-
-	if (configfile!="")
+	if (configfile != "")
+	{
+		m_configfile = configfile;
 		m_variables.Initialise(configfile);
+	}
 	//m_variables.Print();
 
-	m_data= &data;
+	m_data = &data;
 
 	Configure();
 	return true;
@@ -22,6 +24,7 @@ bool CalibrationManager::Execute()
 	switch (m_data->mode)
 	{
 		case state::init:	//about to make measurement, check LED mapping
+			Initialise(m_configfile, *data);
 			if (IsCalibrated())
 			{
 				LoadCalibration();
@@ -49,18 +52,19 @@ bool CalibrationManager::Execute()
 				m_data->calibrationDone = false;
 
 				m_data->ledON = m_data->LED_name[calibLED];	//turn on LED UV
-				double gd = std::strtod(input, NULL);
 
-				m_data->gdconc = gd;
+				m_data->gdconc = std::strtod(input, NULL);	//passing this to analysis
 				m_data->gd_err = 0.0;
+
+				m_data->analyseTree = calibName;
 				//if (gd == 0)
 				//else
 				//	m_data->mode = state::calibrate_gd;
 			}
 			break;
 		case state::calibration_done:
+			m_data->outputName = treeName;
 			m_data->isCalibrated = true;
-			m_data->outputFile = calibFile;
 			break;
 		case state::finalise:
 			//delete some tree/function objects?
@@ -104,15 +108,22 @@ void CalibrationManager::LoadCalibration()
 
 	GdTree *calib = new GdTree(treeName, calibFile);
 
-	m_data->AddGdTree("calib", calib);
+	m_data->AddGdTree(treeName, calib);
 	m_data->concentrationFunction = valF;
 	m_data->concentrationFunc_Err = errF;
 }
 
 void CalibrationManager::NewCalibration()
 {
+	m_data->DeleteGdTree(treeName);
+
+	delete m_data->concentrationFunction;
+	delete m_data->concentrationFunc_Err;
+	m_data->concentrationFunction = 0;
+	m_data->concentrationFunc_Err = 0;
+
 	GdTree *calib = new GdTree(treeName);
-	m_data->AddGdTree("calib", calib);
+	m_data->AddGdTree(treeName, calib);
 }
 
 bool CalibrationManager::IsCalibrated()
@@ -147,27 +158,3 @@ bool CalibrationManager::IsCalibrated()
 			return true;
 	}
 }
-/*
-double CalibrationManager::DefineCalibration()
-{
-	std::ifstream cal(calibList.c_str());
-	std::string line;
-	int i = 0;
-	while (i < calibCount && std::getline(cal, line))	//skip to line measureCount+1
-		if (line[0] != '#' && !std::isspace(line[0]))
-			++i;
-
-	double gd;
-	if (i == calibCount)
-	{
-		if (line.find_first_of('#') != std::string::npos)
-			line.erase(line.find_first_of('#'));
-
-		++calibCount;
-		return strtod(line, NULL);
-	}
-	else
-		return -1.0;
-}
-*/
-

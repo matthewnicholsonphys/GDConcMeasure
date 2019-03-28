@@ -23,9 +23,12 @@ bool Writer::Execute()
 			pureTrace.clear();
 			vTraceCollect.clear();
 			break;
+			break;
 		case state::calibration_done:		//outputFile & outputTree are calibration's
+			WriteFunctions();
+		case state::measurement:		//outputFile & outputTree are calibration's
 		case state::measurement_done:		//outputFile & outputTree are measurement's
-			Write();
+			WriteTree();
 			break;
 		default:
 			break;
@@ -39,9 +42,18 @@ bool Writer::Finalise()
 	return true;
 }
 
-void Witer::Write()
+void Witer::WriteTree()
 {
 	//some loop on GdTrees
 	//and call GdTree->Write()
 	//and at the same time erase GdTree from map
+}
+
+void Witer::WriteTree()
+{
+	TFile outf(m_data->GetGdTree(m_data->treeName)->Output().c_str(), "UPDATE");
+
+	m_data->concentrationFunction->Write();
+	m_data->concentrationFunc_Err->Write();
+	outf.Close();
 }

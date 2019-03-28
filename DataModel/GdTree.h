@@ -82,6 +82,11 @@ GdTree::~GdTree()
 	delete fChain;
 }
 
+std::string GdTree::Output()
+{
+	return outFile;
+}
+
 void GdTree::Write()
 {
 	TFile outfile(outFile.c_str(), "UPDATE");

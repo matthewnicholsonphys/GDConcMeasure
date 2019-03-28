@@ -6,24 +6,29 @@
 
 #include "Tool.h"
 
-class MeasurementManager: public Tool {
+class MeasurementManager: public Tool
+{
+	public:
 
+		MeasurementManager();
+		bool Initialise(std::string configfile,DataModel &data);
+		bool Execute();
+		bool Finalise();
 
- public:
+		void Configure();
+		bool Measure();
+		std::vector<std::string> LoadMeasurement();
 
-  MeasurementManager();
-  bool Initialise(std::string configfile,DataModel &data);
-  bool Execute();
-  bool Finalise();
+	private:
 
+		std::vector<std::string> measureList;
 
- private:
+		std::string m_configfile;
+		int verbose;
 
-
-
-
-
+		std::string measureFile;	//file with list of measurements to take
+		std::string outFile;		//file with list of measurements to take
+		std::string treeName;		//name of output tree
 };
-
 
 #endif

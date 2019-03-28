@@ -6,22 +6,18 @@
 
 #include "Tool.h"
 
-class Analysis: public Tool {
+class Analysis: public Tool
+{
+	public:
 
+		Analysis();
+		bool Initialise(std::string configfile,DataModel &data);
+		bool Execute();
+		bool Finalise();
 
- public:
+	private:
 
-  Analysis();
-  bool Initialise(std::string configfile,DataModel &data);
-  bool Execute();
-  bool Finalise();
-
-
- private:
-
-
-
-
+		std::vector<double> darkTrace, pureTrace;
 
 };
 
