@@ -28,9 +28,10 @@ class GdTree {
 		double Absorb_Err_2;
 		double Absorb_Diff;
 		double AbsDiff_Err;
-		int    nTrace;
-		double Trace[1000];   //[n]
-		double Trace_Err[1000];   //[n]
+		std::vector<double> Trace;
+		std::vector<double> T_Err;
+		std::vector<double> Absor;
+		std::vector<double> A_Err;
 
 		// List of branches
 		TBranch *b_Gd_Conc;
@@ -43,9 +44,10 @@ class GdTree {
 		TBranch *b_Absorb_Err_2;
 		TBranch *b_Absorb_Diff;
 		TBranch *b_AbsDiff_Err;
-		TBranch *b_nTrace;
-		TBranch *b_Trace;   //[n]
-		TBranch *b_Trace_Err;   //[n]
+		TBranch *b_Trace;
+		TBranch *b_T_Err;
+		TBranch *b_Absor;
+		TBranch *b_A_Err;
 
 		GdTree(const std::string &treeName, const std::string &pathFile = 0);
 		~GdTree();
@@ -71,10 +73,20 @@ GdTree::GdTree(const std::string &treeName, const std::string &pathFile) :
 	{
 		chain->SetDirectory(0);
 		Init();
+		infile.Close();
+	}
 	else
+	{
+		infile.Close();
 		Create(treeName);
+	}
+}
 
-	infile.Close();
+GdTree::GdTree(const GdTree& gdtree) :
+	chain(0),
+	outFile(gdtree.outFile)
+{
+	Create(gdtree.chain->GetName());
 }
 
 GdTree::~GdTree()
@@ -111,19 +123,20 @@ void GdTree::Create(const std::string &treeName)
 {
 	chain = new TTree(treeName.c_str(), treeName.c_str());
 
-	b_Gd_Conc      = chain->SetBranchAddress("GdConc",	 &Gd_Conc,	"GdConc/D");
-	b_Gd_Conc_Err  = chain->SetBranchAddress("Gd_Err",	 &Gd_Conc_Err,	"Gd_Err/D");
-	b_Wavelength_1 = chain->SetBranchAddress("Wavelength_1", &Wavelength_1,	"Wavelength_1gd/D");
-	b_Absorbance_1 = chain->SetBranchAddress("Absorbance_1", &Absorbance_1,	"Absorbance_1gd/D");
-	b_Absorb_Err_1 = chain->SetBranchAddress("Absorb_Err_1", &Absorb_Err_1,	"Absorb_Err_1gd/D");
-	b_Wavelength_2 = chain->SetBranchAddress("Wavelength_2", &Wavelength_2,	"Wavelength_2gd/D");
-	b_Absorbance_2 = chain->SetBranchAddress("Absorbance_2", &Absorbance_2,	"Absorbance_2gd/D");
-	b_Absorb_Err_2 = chain->SetBranchAddress("Absorb_Err_2", &Absorb_Err_2,	"Absorb_Err_2gd/D");
-	b_Absorb_Diff  = chain->SetBranchAddress("Absorb_Diff",	 &Absorb_Diff,	"Absorb_Diff/D");
-	b_AbsDiff_Err  = chain->SetBranchAddress("AbsDiff_Err",	 &AbsDiff_Err,	"AbsDiff_Err/D");
-	b_nTrace       = chain->SetBranchAddress("nTrace",	 &nTrace,	"nTrace/I");
-	b_Trace	       = chain->SetBranchAddress("Trace",	 Trace,		"Trace[nTrace]/D");
-	b_Trace_Err    = chain->SetBranchAddress("Trace_Err",	 Trace_Err,	"Trace_Err[nTrace]/D");	
+	b_Gd_Conc      = chain->Branch("GdConc",	&Gd_Conc);	//"GdConc/D");
+	b_Gd_Conc_Err  = chain->Branch("Gd_Err",	&Gd_Conc_Err);	//"Gd_Err/D");
+	b_Wavelength_1 = chain->Branch("Wavelength_1",	&Wavelength_1);	//"Wavelength_1gd/D");
+	b_Absorbance_1 = chain->Branch("Absorbance_1",	&Absorbance_1);	//"Absorbance_1gd/D");
+	b_Absorb_Err_1 = chain->Branch("Absorb_Err_1",	&Absorb_Err_1);	//"Absorb_Err_1gd/D");
+	b_Wavelength_2 = chain->Branch("Wavelength_2",	&Wavelength_2);	//"Wavelength_2gd/D");
+	b_Absorbance_2 = chain->Branch("Absorbance_2",	&Absorbance_2);	//"Absorbance_2gd/D");
+	b_Absorb_Err_2 = chain->Branch("Absorb_Err_2",	&Absorb_Err_2);	//"Absorb_Err_2gd/D");
+	b_Absorb_Diff  = chain->Branch("Absorb_Diff",	&Absorb_Diff);	//"Absorb_Diff/D");
+	b_AbsDiff_Err  = chain->Branch("AbsDiff_Err",	&AbsDiff_Err);	//"AbsDiff_Err/D");
+	b_Trace	       = chain->Branch("Trace",		&Trace);	//"Trace/D");
+	b_T_Err	       = chain->Branch("T_Err",		&T_Err);	//"T_Err/D");	
+	b_Absor	       = chain->Branch("Absor",		&Absor);	//"Absor/D");
+	b_A_Err	       = chain->Branch("A_Err",		&A_Err);	//"A_Err/D");	
 }
 
 void GdTree::Init()
@@ -144,17 +157,18 @@ void GdTree::Init()
 	//fCurrent = -1;
 	//fChain->SetMakeClass(1);
 
-	chain->SetBranchAddress("Gd_Conc",	 &Gd_Conc,	&b_Gd_Conc);
-	chain->SetBranchAddress("Gd_Conc_Err",	 &Gd_Conc_Err,	&b_Gd_Conc_Err);
+	chain->SetBranchAddress("Gd_Conc",	&Gd_Conc,      &b_Gd_Conc);
+	chain->SetBranchAddress("Gd_Conc_Err",	&Gd_Conc_Err,  &b_Gd_Conc_Err);
 	chain->SetBranchAddress("Wavelength_1", &Wavelength_1, &b_Wavelength_1);
 	chain->SetBranchAddress("Absorbance_1", &Absorbance_1, &b_Absorbance_1);
 	chain->SetBranchAddress("Absorb_Err_1", &Absorb_Err_1, &b_Absorb_Err_1);
 	chain->SetBranchAddress("Wavelength_2", &Wavelength_2, &b_Wavelength_2);
 	chain->SetBranchAddress("Absorbance_2", &Absorbance_2, &b_Absorbance_2);
 	chain->SetBranchAddress("Absorb_Err_2", &Absorb_Err_2, &b_Absorb_Err_2);
-	chain->SetBranchAddress("Absorb_Diff",	 &Absorb_Diff,	&b_Absorb_Diff);
-	chain->SetBranchAddress("AbsDiff_Err",	 &AbsDiff_Err,	&b_AbsDiff_Err);
-	chain->SetBranchAddress("nTrace",	 &nTrace,	&b_nTrace);
-	chain->SetBranchAddress("Trace",	 Trace,		&b_Trace);
-	chain->SetBranchAddress("Trace_Err",	 Trace_Err,	&b_Trace_Err);
+	chain->SetBranchAddress("Absorb_Diff",	&Absorb_Diff,  &b_Absorb_Diff);
+	chain->SetBranchAddress("AbsDiff_Err",	&AbsDiff_Err,  &b_AbsDiff_Err);
+	chain->SetBranchAddress("Trace",	&Trace,	       &b_Trace);
+	chain->SetBranchAddress("A_Err",	&A_Err,	       &b_A_Err);
+	chain->SetBranchAddress("Absor",	&Absor,	       &b_Absor);
+	chain->SetBranchAddress("A_Err",	&A_Err,	       &b_A_Err);
 }

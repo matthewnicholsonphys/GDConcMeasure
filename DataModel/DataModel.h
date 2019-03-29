@@ -70,6 +70,8 @@ class DataModel
 		std::map<std::string, unsigned int> LED_name;	//led configurations
 		unsigned int ledON;
 
+		std::string treeName;	//name of tree that is currently used/analysed
+		GdTree *currentTree;
 
 	private:
 

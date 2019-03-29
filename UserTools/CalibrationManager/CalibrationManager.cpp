@@ -29,6 +29,7 @@ bool CalibrationManager::Execute()
 			{
 				LoadCalibration();
 				m_data->isCalibrated = true;
+				m_data->analyseTree = calibName;
 			}
 			else
 			{
@@ -63,7 +64,7 @@ bool CalibrationManager::Execute()
 			}
 			break;
 		case state::calibration_done:
-			m_data->outputName = treeName;
+			m_data->currentTree = m_data->GetGdTree(treeName);
 			m_data->isCalibrated = true;
 			break;
 		case state::finalise:
@@ -98,8 +99,8 @@ void CalibrationManager::Configure()
 void CalibrationManager::LoadCalibration()
 {
 	TFile inFile(calibFile, "OPEN");
-	TF1 *   valF  = static_cast<TF1*>(inFile.Get(concFunc)->Clone());
-	TF2 *   errF  = static_cast<TF2*>(inFile.Get(err_Func)->Clone());
+	TF1 * valF = static_cast<TF1*>(inFile.Get(concFunc)->Clone());
+	TF2 * errF = static_cast<TF2*>(inFile.Get(err_Func)->Clone());
 
 	valF->SetDirectory(0);
 	errF->SetDirectory(0);
