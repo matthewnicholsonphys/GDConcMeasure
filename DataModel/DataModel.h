@@ -10,58 +10,76 @@
 #include "Store.h"
 #include "BoostStore.h"
 #include "Logging.h"
+#include "GdTree.h"
 
 #include <zmq.hpp>
 
 enum state
 {
 	idle,
+	power_up,
+	power_down,
 	init,
-	calibrate,
-	calibrate_dark,
-	calibrate_pure,
-	calibrate_gd,
-	calibrate_fit,
-	measure,
-	measure_start,
-	measure_stop
+	calibration,
+	calibration_done,
+	measurement,
+	measurement_done,
+	finalise,
+	change_water = finalise
 };
 
-class DataModel {
+class DataModel
+{
+	public:
+
+		DataModel();
+
+		TTree* GetTTree(std::string name);
+		void AddTTree(std::string name, TTree *tree);
+		void DeleteTTree(std::string name);
+
+		GdTree* GetGdTree(std::string name);
+		void AddGdTree(std::string name, GdTree *tree);
+		void DeleteGdTree(std::string name);
+
+		Store vars;
+		BoostStore CStore;
+		std::map<std::string,BoostStore*> Stores;
+
+		Logging *Log;
+
+		zmq::context_t* context;
 
 
- public:
-  
-  DataModel();
 
-  TTree* GetTTree(std::string name);
-  void AddTTree(std::string name,TTree *tree);
-  void DeleteTTree(std::string name);
+		state mode;	//state for scheduler
 
-  Store vars;
-  BoostStore CStore;
-  std::map<std::string,BoostStore*> Stores;
-  
-  Logging *Log;
+		//for spectrometer
+		std::vector<std::vector<double> > vTraceCollect;
+		std::vector<double> xAxis;
 
-  zmq::context_t* context;
+		TF1 *concentrationFunction;
+		TF2 *concentrationFunc_Err;
 
-  //status mode;	//state for scheduler
-  int mode;	//state for scheduler
-  bool endMeasure;
+		double gdconc, gd_err;	//value of gd concentration and error
 
-  
-  // pointer to spectromiter
-  
- private:
+		bool isCalibrated;	//true if there is calibratio file!
+		bool calibrationDone;	//true if calibration is complete
+		bool measurementDone;	//true if the measurement is finished
 
-  
-  std::map<std::string,TTree*> m_trees; 
-  
-  
-  
+		std::map<std::string, unsigned int> LED_name;	//led configurations
+		unsigned int ledON;
+
+		std::string treeName;	//name of tree that is currently used/analysed
+		GdTree *currentTree;
+
+	private:
+
+		std::map<std::string, TTree*> m_trees; 
+		std::map<std::string, GdTree*> m_gdtrees; 
+
+
 };
-
 
 
 #endif

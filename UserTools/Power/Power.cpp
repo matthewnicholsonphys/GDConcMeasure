@@ -18,11 +18,11 @@ bool Power::Execute()
 {
 	switch (m_data->mode)
 	{
-		case state::power_off:
-			TurnOff();
-			break;
 		case state::power_up:
 			TurnOn();
+			break;
+		case state::idle:
+			TurnOff();
 			break;
 	}
 	return true;

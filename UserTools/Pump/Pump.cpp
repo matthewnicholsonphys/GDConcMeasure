@@ -19,10 +19,10 @@ bool Pump::Execute()
 	switch (m_data->mode)
 	{
 		case state::change_water:
-			TurnOff();
-			break;
-		case state::power_up:
 			TurnOn();
+			break;
+		case state::power_down:
+			TurnOff();
 			break;
 	}
 	return true;
