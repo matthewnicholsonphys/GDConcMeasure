@@ -32,6 +32,13 @@ class GdTree {
 		std::vector<double> T_Err;
 		std::vector<double> Absor;
 		std::vector<double> A_Err;
+		unsigned long epoch;
+		int Year;
+		int Month;
+		int Day;
+		int Hour;
+		int Minute;
+		int Second;
 
 		// List of branches
 		TBranch *b_Gd_Conc;
@@ -80,6 +87,11 @@ GdTree::GdTree(const std::string &treeName, const std::string &pathFile) :
 		infile.Close();
 		Create(treeName);
 	}
+}
+
+GdTree::GdTree(TTree *tree) :
+	chain(tree)
+{
 }
 
 GdTree::GdTree(const GdTree& gdtree) :

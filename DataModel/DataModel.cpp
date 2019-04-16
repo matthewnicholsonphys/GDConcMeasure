@@ -33,5 +33,7 @@ void DataModel::AddGdTree(std::string name, GdTree *tree)
 
 void DataModel::DeleteGdTree(std::string name)
 {
-	m_gdtrees.erase(name);
+	delete m_gdtrees[name];
+	m_gdtree[name] = NULL;
+	//m_gdtrees.erase(name);
 }

@@ -24,50 +24,34 @@ bool CalibrationManager::Execute()
 	switch (m_data->mode)
 	{
 		case state::init:	//about to make measurement, check LED mapping
-			Initialise(m_configfile, *data);
-			if (IsCalibrated())
+			Initialise(m_configfile, *m_data);
+			calibList = LoadCalibration(updateList);
+			if (updateList.size())
 			{
-				LoadCalibration();
-				m_data->isCalibrated = true;
-				m_data->analyseTree = calibName;
+				m_data->isCalibrated = false;
+				NewCalibration();
+				ic = updateList.begin();	//global iterator
 			}
 			else
-			{
-				NewCalibration();
-				m_data->isCalibrated = false;
-			}
+				m_data->isCalibrated = true;
 			break;
 		case state::calibration:		//turn on led set
-			std::string input;
-			/* need some other smart way of doing this!
-			 */
-			//std::cout << "Concentration loaded (0 for pure water, any other key to quit): ";
-			//std::cin >> input;
-			if (!std::isdigit(input[0]))	//quit command occured
+			if (ic != calibList.end())
 			{
-				m_data->calibrationDone = true;
-				std::cout << "Calibration complete\n";
+				Calibrate();		//no clue how to do this
+				++ic;
 			}
 			else
 			{
-				m_data->calibrationDone = false;
-
-				m_data->ledON = m_data->LED_name[calibLED];	//turn on LED UV
-
-				m_data->gdconc = std::strtod(input, NULL);	//passing this to analysis
-				m_data->gd_err = 0.0;
-
-				m_data->analyseTree = calibName;
-				//if (gd == 0)
-				//else
-				//	m_data->mode = state::calibrate_gd;
+				m_data->calibrationDone = true;
+				std::cout << "Calibration completed\n";
 			}
 			break;
 		case state::calibration_done:
-			m_data->currentTree = m_data->GetGdTree(treeName);
 			m_data->isCalibrated = true;
 			break;
 		case state::finalise:
+			Finalise()
 			//delete some tree/function objects?
 			break;
 		default:
@@ -79,6 +63,24 @@ bool CalibrationManager::Execute()
 
 bool CalibrationManager::Finalise()
 {
+	//clean
+	if (m_data->calibrationFile && m_data->calibrationFile->IsOpen())
+	{
+		m_data->calibrationFile->Close();
+		m_data->calibrationFile = NULL;
+	}
+
+	for (ic = calibList.begin(); ic != calibList.end(); ++ic)
+		m_data->DeleteGdTree(*ic);
+
+	calibList.clear();
+	updateList.clear();
+
+	delete m_data->concentrationFunction;
+	delete m_data->concentrationFunc_Err;
+	m_data->concentrationFunction = 0;
+	m_data->concentrationFunc_Err = 0;
+
 	return true;
 }
 
@@ -86,76 +88,212 @@ void CalibrationManager::Configure()
 {
 	m_variables.Get("verbose", verbose);
 
-	m_variables.Get("calibration",	calibFile);	//file in which calibration is saved
-	m_variables.Get("tree_name",	treeName);	//name of calibration tree
-	m_variables.Get("concfunction",	concFunc);	//name of concentration function
-	m_variables.Get("err_function",	err_Func);	//name of uncertainity function
-
-	m_variables.Get("update",	updateTime);	//number of seconds every time calibration should happen
-	m_variables.Get("routine",	fileList);	//file in which calibration is saved
-	m_variables.Get("LED_name",	calibLED);	//name of LED used to do calibration
+	m_variables.Get("calibration",	calibFile);	//file with list of calibration/measurement
+	m_variables.Get("output",	outputFile);	//file in which calibration is saved
+	m_variables.Get("base_name",	base_name);	//base_name for calibation
+	m_variables.Get("concfunction",	concFuncName);	//name of concentration function
+	m_variables.Get("err_function",	err_FuncName);	//name of uncertainity function
 }
 
-void CalibrationManager::LoadCalibration()
+//get list of calibration needed
+//eg.
+//*led0		time1000		#measurement of led0, to be calibrated every 1000s.
+//					#The star indicates this is the concentration measurement
+//led0, led1, led2, time54321		#measurement of led0_led1_led2, to be calibrated every 54321s
+//led1 led3, 	time99999		#measurement of led1_led3, to be calibrated every 99999s
+//
+std::vector<std::string> CalibrationManager::CalibrationList()
 {
-	TFile inFile(calibFile, "OPEN");
-	TF1 * valF = static_cast<TF1*>(inFile.Get(concFunc)->Clone());
-	TF2 * errF = static_cast<TF2*>(inFile.Get(err_Func)->Clone());
+	std::vector<std::string> vList;
 
-	valF->SetDirectory(0);
-	errF->SetDirectory(0);
+	std::ifstream cf(calibFile.c_str());
+	std::string line;
+	while (std::getline(cf, line))
+	{
+		if (line.find_first_of('#') != std::string::npos)
+			line.erase(line.find_first_of('#'));
 
-	inFile.Close();
+		bool ct;
+		if (line.find_first_of('*') != std::string::npos)
+			ct = true;
+		else
+			ct = false;
+		
+		std::stringstream ssl(line);
+		std::string name, word;
+		int tu;
+		while (ssl)
+		{
+			if (!std::isalnum(ssl.peek()) && ssl.peek != '_')
+				ssl.ignore();
+			else if (ssl >> word)
+			{
+				if (word.find("time") != std::string::npos)
+					tu = std::strtol(word.substr(word.find("time")+1), NULL);
+				else
+					name += word + "_";
+			}
+		}
 
-	GdTree *calib = new GdTree(treeName, calibFile);
+		name.erase(name.size()-1);
+		vList.push_back(name);
 
-	m_data->AddGdTree(treeName, calib);
-	m_data->concentrationFunction = valF;
-	m_data->concentrationFunc_Err = errF;
+		timeUpdate[name] = tu;
+
+		if (ct)
+			concTreeName = name;
+	}
+
+	return vList;
+}
+
+/* this routine will load all the calibration listed in calibFile
+ * and the trees are saved in the data model
+ * returns a list of calibrations to do
+ */
+std::vector<std::string> CalibrationManager::LoadCalibration(std::vector<std::string> &uList)
+{
+	//get list of calibrations
+	std::vector<std::string> cList = CalibrationList();
+
+	//open read only calibration file
+	m_data->calibrationFile = new TFile(outputFile.c_str(), "OPEN");
+	if (m_data->calibrationFile->IsZombie())
+	{
+		std::cerr << "Calibration file does not exist!\n";
+		uList = cList;
+		return cList;
+	}
+
+	uList.clear();
+
+	//find latest calibration of each type
+	TList *lk = m_data->calibrationFile->GetListOfKeys();
+	lk->Sort(TList::kSortDescending);
+
+	//loop on calibration directories
+	//they are sorted from last to first
+	//directory names are "calibname_timestamp"
+	//they contain a GdTree named "calib" and possily functions
+	std::string type;
+	for (int l = 0; l < lk->GetEntries(); ++l)
+	{
+		//skip forward because this type is already done
+		std::string name = lk->At(l)->GetName();
+		if (!type.empty() && name.find(type) != std::string::npos)
+			continue;
+
+		//loop on list of calibration types, which are "calibname"
+		for (ic = cList.begin(); ic != cList.end(); ++ic)
+		{
+			//name match to find it
+			if (name.find(*ic) != std::string::npos)
+			{
+				type = *ic;	//store type, needed to fast forward loop
+
+				if (IsUpdate(name, timeUpdate))	//needs an update
+				{
+					Load(name, type);
+					uList.push_back(type);
+				}
+
+				//found it, so break
+				break;
+			}
+		}
+	}
+
+	return cList;
+}
+
+void CalibrationManager::Load(std::string name, std::string type)
+{
+	std::string gdname = name + "/" + type;
+	TTree *gdt = static_cast<TTree*>(m_data->calibrationFile->Get(gdname.c_str())->Clone());
+	GdTree *calib = new GdTree(gdt);
+	std::string cname = base_name + type;
+	m_data->AddGdTree(cname, calib);
+
+	if (type == concTreeName)	//happens once
+	{
+		m_data->concentrationTree = cname;
+
+		std::string f1name = name + "/" + concFuncName;
+		std::string f2name = name + "/" + err_FuncName;
+
+		//clone tree and functions
+		TF1 * valF = static_cast<TF1*>(m_data->calibrationFile->Get(f1name.c_str())->Clone());
+		TF2 * errF = static_cast<TF2*>(m_data->calibrationFile->Get(f2name.c_str())->Clone());
+
+		m_data->concentrationFunction = valF;
+		m_data->concentrationFunc_Err = errF;
+	}
+
+}
+
+//directory names are "calibname_timestamp"
+//with timestamp an iso string YYYYMMDDThhmmss
+bool CalibrationManager::IsUpdate(std::string name, int timeUpdate)
+{
+	std::string ts = name.substr(name.find_last_of('_') + 1);
+
+	//get current time
+	boost::posix_time::ptime last(boost::posix_time::from_iso_string(ts));
+	boost::posix_time::ptime current(boost::posix_time::second_clock::local_time());
+	boost::posix_time::time_duration lapse(current - last);
+
+	if (lapse.total_seconds() > timeUpdate)
+	{
+		std::cout << "Calibration out of date!\n";
+		return false;
+	}
+	else
+		return true;
 }
 
 void CalibrationManager::NewCalibration()
 {
-	m_data->DeleteGdTree(treeName);
+	if (m_data->calibrationFile)
+		m_data->calibrationFile->Close();
 
-	delete m_data->concentrationFunction;
-	delete m_data->concentrationFunc_Err;
-	m_data->concentrationFunction = 0;
-	m_data->concentrationFunc_Err = 0;
+	m_data->calibrationFile = new TFile(outputFile.c_str(), "UPDATE");
 
-	GdTree *calib = new GdTree(treeName);
-	m_data->AddGdTree(treeName, calib);
+	for (ic = updateList.begin(); ic != updateList.end(); ++ic)
+	{
+		std::string name = base_name + *ic;
+		GdTree *calib = new GdTree(name.c_str());
+		m_data->AddGdTree(name.c_str(), calib);
+
+		if (*ic == concTreeName)	//happens once
+		{
+			m_data->concentrationTree = concTreeName;
+
+			//create functions for absorbance, value and error
+			m_data->concentrationFunction = new TF1(concFuncName, "(x - [0])/[1]", 0, 1);
+			m_data->concentrationFunc_Err = new TF1(err_FuncName, "gdconc(x)^2 * ( (y^2 + [2]^2)/(x - [0])^2 +
+												([3]/[1])^2 )", 0, 1);
+		}
+	}
 }
 
-bool CalibrationManager::IsCalibrated()
+//calibrate is like a measurement
+bool CalibrationManager::Calibrate()
 {
-	std::string calibFile;
-	int calibUpdate;
-
-	std::string cmd = "stat -c %y " + calibFile + " > .tmp_calibration";
-	std::system(cmd.c_str());
-	std::ifstream inCalibration(".tmp_calibration");
-	boost::posix_time::ptime lastUpdate;	//empty?
-	if (std::getline(inCalibration, cmd))
-		lastUpdate = boost::posix_time::ptime(time_from_string(updateTime));
-	//updateTime = std::strtol(cmd.c_str(), NULL, 10);
-
-	if (lastUpdate.is_not_a_date_and_time())
+	std::string acknowledge;	// <--- this is some form of aknoledgment
+	if (*ic != concTreeName)
 	{
-		std::cerr << "Calibration file does not exist!\n";
-		return false;
+		std::cout << "have you put pure water? Push button when done\n";
+		//acknowledge!!
 	}
 	else
 	{
-		boost::posix_time::ptime current(boost::posix_time::second_clock::local_time());
-		boost::posix_time::time_duration lapse(current - lastUpdate);
+		std::cout << "which concentration have you put " << *ic << "?\n";
+		//acknowledge!!
 
-		if (lapse.total_seconds() > calibUpdate)
-		{
-			std::cout << "Calibration out of date!\n";
-			return false;
-		}
-		else
-			return true;
+		m_data->gdconc = std::strtod(acknowledge, NULL);
+		m_data->gd_err = std::strtod(acknowledge, NULL);
 	}
+
+	m_data->turnOnPump = true;	//must change water
+	m_data->turnOnLED = *ic;
 }

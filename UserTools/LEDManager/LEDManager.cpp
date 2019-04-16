@@ -45,23 +45,20 @@ bool LEDManager::Execute()
 
 	switch (m_data->mode)
 	{
-		case status::init:	//about to make measurement, check LED mapping
-			ledONstatus = 0;
-			measureCount = 0;
-			MapLED();
+		case state::init:	//about to make measurement, check LED mapping
+			ledONstate = 0;
+			Initialise(m_configfile, *data);
 			break;
-		case status::measure_start:		//turn on led set
-		case status::calibrate_pure:		//turn on led set
-		case status::calibrate_gd:		//turn on led set
+		case state::calibration:		//turn on led set
+		case state::measurement:		//turn on led set
 			TurnOn();
-			//if (!TurnOn())		//if TurnOn is false, measurement is finished or there is a uncaught problem
-			//	m_data->measurementDone = true;
 			break;
-		case status::measure_stop:	//wait for measurement
+		case state::calibration_done:	//wait for measurement
+		case state::measurement_done:	//wait for measurement
 			TurnOff();
 			break;
-		default:		//turn off in any other state
-			TurnOff();
+		case state::finalise:		//turn off in any other state
+			TurnOffAndSleep();
 			break;
 	}
 
@@ -70,7 +67,7 @@ bool LEDManager::Execute()
 
 bool LEDManager::Finalise()
 {
-	TurnOff();	//0 will turn off all LEDs
+	TurnOffAndSleep();	//0 will turn off all LEDs
 	return true;
 }
 
@@ -79,13 +76,13 @@ void LEDManager::Configure()
 {
 	measureCount = 0;
 	lastTime = 0;
-	ledONstatus = 0;
+	ledONstate = 0;
 
 	m_variables.Get("verbose", verbose);
 
 	m_variables.Get("frequency", frequencyPWM);
-	m_variables.Get("resolution", iResolution);
-	iResolution = static_cast<unsigned int>(pow(2, iResolution)) - 1;
+	m_variables.Get("resolution", resolution);
+	resolution = static_cast<unsigned int>(pow(2, resolution)) - 1;
 
 	m_variables.Get("voltage_supply", fVin);
 	m_variables.Get("delay", fDelay);
@@ -144,8 +141,6 @@ void LEDManager::MapLED()
 				mLED_duty[key] = volt / fVin;
 		}
 	}
-
-	m_data->LED_name = mLED_name;	//store the LED mapping in the data model
 }
 
 //this routine will setup I2C connection with first address found
@@ -190,7 +185,7 @@ bool LEDManager::SetPWMfreq(double freq)
 	else if (freq > 1526.0)
 		freq = 1526.0;
 
-	int prescale = std::round(25.0e6 / iResolution / freq) - 1;
+	int prescale = std::round(25.0e6 / resolution / freq) - 1;
 	std::cout << "setting " << freq << " to " << std::hex << prescale << std::endl;
 
 	//this address is is where the prescaler of the PWM frequency
@@ -203,10 +198,17 @@ bool LEDManager::TurnOn()
 	if (IsSleeping() && !WakeUpDriver())
 		return false;
 
-	if (m_data->ledON != ledONstatus)
+	unsigned int ledON = 0;
+
+	std::stringstream ssl(m_data->turnOnLED);
+	std::string led;
+	while (std::getline(ssl, led, "_"))
+		ledON = ledON | LED_name[led];
+
+	if (ledON != ledONstate)
 	{
-		ledONstatus = m_data->ledON;
-		return TurnLEDArray(ledONstatus);	//if everything is ok, this returns true
+		ledONstate = ledON;
+		return TurnLEDArray(ledONstate);	//if everything is ok, this returns true
 	}
 	else
 		return true;		//continue measuring
@@ -216,10 +218,25 @@ bool LEDManager::TurnOff()
 {
 	if (!IsSleeping())
 	{
-		if (0 != ledONstatus)
+		if (0 != ledONstate)
 		{
 			TurnLEDArray(0);
-			ledONstatus = 0;
+			ledONstate = 0;
+		}
+
+		return true;
+	}
+	else
+		return true;
+}
+bool LEDManager::TurnOffAndSleep()
+{
+	if (!IsSleeping())
+	{
+		if (0 != ledONstate)
+		{
+			TurnLEDArray(0);
+			ledONstate = 0;
 		}
 
 		return SleepDriver();
@@ -317,11 +334,11 @@ bool LEDManager::TurnLEDon(std::string ledName)
 
 	
 	// the AND op with 0xFFF makes sure only 12-bit values are created
-	int iduty = 0xfff & static_cast<int>(iResolution * mLED_duty[ledName]);
+	int iduty = 0xfff & static_cast<int>(resolution * mLED_duty[ledName]);
 
 	//the LED_ON register stores the time from clock to ON state
 	//	which is delay
-	int time2on  = 0xfff & static_cast<int>(iResolution * fDelay);
+	int time2on  = 0xfff & static_cast<int>(resolution * fDelay);
 	//whereas the LED_OFF stores the time from clock to OFF state
 	//	which is delay+iduty
 	int time2off = 0xfff & (time2on + iduty);

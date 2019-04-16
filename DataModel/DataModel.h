@@ -54,21 +54,48 @@ class DataModel
 
 		state mode;	//state for scheduler
 
-		//for spectrometer
-		std::vector<std::vector<double> > vTraceCollect;
-		std::vector<double> xAxis;
-
-		TF1 *concentrationFunction;
-		TF2 *concentrationFunc_Err;
-
-		double gdconc, gd_err;	//value of gd concentration and error
-
+		//Calibration manager
+		//created and destroyed in the class
+		//
+		//	used globally
+		std::string calibrationName;
 		bool isCalibrated;	//true if there is calibratio file!
 		bool calibrationDone;	//true if calibration is complete
-		bool measurementDone;	//true if the measurement is finished
+		//
+		//	used in Analysis
+		std::string concentrationTree;	//name of tree for concentration measurmenet
+		TF1 *concentrationFunction;
+		TF2 *concentrationFunc_Err;
+		double gdconc, gd_err;	//value of gd concentration and error
+		//
+		//	used in Writing
+		TFile* calibrationFile;
 
-		std::map<std::string, unsigned int> LED_name;	//led configurations
-		unsigned int ledON;
+	
+		//Calibration manager
+		//created and destroyed in the class
+		//
+		//	used globally
+		bool measurementDone;	//true if the measurement is finished
+		//
+		//	used in Writing
+		TFile* measurementFile;
+
+		//LEDmanager
+		//string used by calibration and measurement managers
+		std::string turnOnLED;	//led to be turned on
+
+		//Pump
+		//
+		//override scheduler
+		bool m_data->turnOnPump;	//must change water
+
+
+		//filled by Spectrometer, for Analysis
+		//
+		std::vector<std::vector<double> > traceCollect;
+		std::vector<double> wavelength;	//can be retrieved from seabreeze
+
 
 		std::string treeName;	//name of tree that is currently used/analysed
 		GdTree *currentTree;
