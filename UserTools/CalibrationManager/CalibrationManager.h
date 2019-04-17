@@ -4,6 +4,9 @@
 #include <string>
 #include <iostream>
 
+#include <vector>
+#include <map>
+
 #include "Tool.h"
 
 class CalibrationManager: public Tool
@@ -15,7 +18,12 @@ class CalibrationManager: public Tool
 		bool Execute();
 		bool Finalise();
 
-		void Configure();
+		std::vector<std::string> CalibrationList();
+		std::vector<std::string> LoadCalibration(std::vector<std::string> &uList);
+		void Load(std::string name, std::string type);
+		bool IsUpdate(std::string name, int timeUpdate);
+		void NewCalibration();
+		bool Calibrate();
 		void LoadCalibration();
 		void NewCalibration();
 		bool IsCalibrated();
@@ -35,8 +43,6 @@ class CalibrationManager: public Tool
 		std::vector<std::string>::iterator im;
 
 		std::map<std::string, int> timeUpdate;
-
-
 };
 
 

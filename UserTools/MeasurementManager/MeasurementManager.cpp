@@ -15,7 +15,12 @@ bool MeasurementManager::Initialise(std::string configfile, DataModel &data)
 
 	m_data= &data;
 
-	Configure();
+	m_variables.Get("verbose", verbose);
+
+	m_variables.Get("measurement",	measureFile);	//file with list of calibration/measurement
+	m_variables.Get("output",	outputFile);	//file in which calibration is saved
+	m_variables.Get("base_name",	base_name);	//base_name for calibation
+	//m_variables.Get("tree_name", treeName);		//name of output tree
 	return true;
 }
 
@@ -68,18 +73,6 @@ bool MeasurementManager::Finalise()
 	return true;
 }
 
-void MeasurementManager::Configure()
-{
-	m_variables.Get("verbose", verbose);
-
-	m_variables.Get("measurement",	measurFile);	//file with list of calibration/measurement
-	m_variables.Get("output",	outputFile);	//file in which calibration is saved
-	m_variables.Get("base_name",	base_name);	//base_name for calibation
-	//m_variables.Get("tree_name", treeName);		//name of output tree
-
-	Log("LEDManager: LED measurement will be read from " + measureFile, 1, verbose);
-}
-
 std::vector<std::string> MeasurementManager::MeasurementList()
 {
 	std::vector<std::string> vList;
@@ -98,7 +91,10 @@ std::vector<std::string> MeasurementManager::MeasurementList()
 			if (!std::isalnum(ssl.peek()) && ssl.peek != '_')
 				ssl.ignore();
 			else if (ssl >> word)
-				name += word + "_";
+			{
+				if (word.find("time") == std::string::npos)	//no time
+					name += word + "_";
+			}
 		}
 
 		name.erase(name.size()-1);

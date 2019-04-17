@@ -16,19 +16,21 @@ class MeasurementManager: public Tool
 		bool Finalise();
 
 		void Configure();
-		bool Measure();
+		std::vector<std::string> MeasurementList();
 		std::vector<std::string> LoadMeasurement();
+		bool Measure();
 
 	private:
-
-		std::vector<std::string> measureList;
 
 		std::string m_configfile;
 		int verbose;
 
 		std::string measureFile;	//file with list of measurements to take
-		std::string outFile;		//file with list of measurements to take
-		std::string treeName;		//name of output tree
+		std::string outputFile;		//file with list of measurements to take
+		std::string base_name;		//name of output tree
+
+		std::vector<std::string> measureList;
+		std::vector<std::string>::iterator im;
 };
 
 #endif

@@ -1,5 +1,3 @@
-# Dummy config file
-
 verbose 5
 
 #Configuration file for LED manager
@@ -17,5 +15,4 @@ resolution	12	# bit, of the internal counter
 voltage_supply	11.94	# V, external supply
 delay		50	# %, delay for turning on LED in duty cycle percentage
 
-map_wiring	configfiles/ledtest/wiring
-measurement	configfiles/ledtest/measurement
+map_wiring	configfiles/GAD/wiring

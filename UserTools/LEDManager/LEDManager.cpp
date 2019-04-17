@@ -11,7 +11,6 @@ bool LEDManager::Initialise(std::string configfile, DataModel &data)
 	
 	m_data= &data;
 	
-	measure = false;
 	Configure();
 	return EstablishI2C();	//it is true if connections is ok!
 }
@@ -74,7 +73,6 @@ bool LEDManager::Finalise()
 //configure the class reading from configfile
 void LEDManager::Configure()
 {
-	measureCount = 0;
 	lastTime = 0;
 	ledONstate = 0;
 
@@ -309,7 +307,7 @@ bool LEDManager::TurnLEDArray(unsigned int ledON)
 {
 	for (iLname = mLED_name.begin(); iLname != mLED_name.end(); ++iLname)
 	{
-		std::cout << std::hex << ledON << "\t" << iLname->second << std::endl;
+		//std::cout << std::hex << ledON << "\t" << iLname->second << std::endl;
 		if (ledON & iLname->second)
 			TurnLEDon(iLname->first);
 		else
@@ -320,7 +318,7 @@ bool LEDManager::TurnLEDArray(unsigned int ledON)
 //set registers on PCA9685
 bool LEDManager::TurnLEDon(std::string ledName)
 {
-	std::cout << "turning on " << ledName << std::endl;
+	//std::cout << "turning on " << ledName << std::endl;
 	//there are 4 registers to control LEDs
 	//and they are [6+4*channel : 9+4*channel]
 	//
@@ -387,10 +385,7 @@ bool LEDManager::Read(int reg, int &data)
 	{
 		data = wiringPiI2CReadReg8(file_descript, reg);
 		if (data < 0)
-		{
-			Log("LEDManager::Read ERROR0 " + errno, 0, verbose);
 			return false;
-		}
 		else
 			return true;
 	}
@@ -405,10 +400,7 @@ bool LEDManager::Write(int reg, int data)
 	{
 		int ret = wiringPiI2CWriteReg8(file_descript, reg, data & 0xff);
 		if (ret < 0)
-		{
-			Log("LEDManager::Write ERROR1 " + errno, 0, verbose);
 			return false;
-		}
 		else
 			return true;
 	}
@@ -426,10 +418,7 @@ bool LEDManager::ReadAI(int reg, int num_reg, std::vector<int> &block)
 		//read first register manually
 		int data = wiringPiI2CReadReg8(file_descript, reg);
 		if (data < 0)
-		{
-			Log("LEDManager::ReadAI ERROR2 " + errno, 0, verbose);
 			return false;
-		}
 		block.push_back(data);
 
 		//read following registers sequentially
@@ -437,10 +426,7 @@ bool LEDManager::ReadAI(int reg, int num_reg, std::vector<int> &block)
 		{
 			data = wiringPiI2CRead(file_descript);
 			if (data < 0)
-			{
-				Log("LEDManager::ReadAI ERROR3 " + errno, 1, verbose);
 				return false;
-			}
 			block.push_back(data);
 		}
 
@@ -459,10 +445,7 @@ bool LEDManager::WriteAI(int reg, const std::vector<int> &block)
 		//write first register manually
 		int ret = wiringPiI2CWriteReg8(file_descript, reg, block.front() & 0xff);
 		if (ret < 0)
-		{
-			Log("LEDManager::WriteAI ERROR4 " + errno, 0, verbose);
 			return false;
-		}
 		int data = wiringPiI2CRead(file_descript);
 
 		//write following registers sequentially
@@ -471,10 +454,7 @@ bool LEDManager::WriteAI(int reg, const std::vector<int> &block)
 			ret = wiringPiI2CWrite(file_descript, block.at(i) & 0xff);
 			data = wiringPiI2CRead(file_descript);
 			if (ret < 0)
-			{
-				Log("LEDManager::WriteAI ERROR5 " + errno, 0, verbose);
 				return false;
-			}
 		}
 
 		return true;

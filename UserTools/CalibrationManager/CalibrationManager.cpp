@@ -14,7 +14,14 @@ bool CalibrationManager::Initialise(std::string configfile, DataModel &data)
 
 	m_data = &data;
 
-	Configure();
+	m_variables.Get("verbose", verbose);
+
+	m_variables.Get("calibration",	calibFile);	//file with list of calibration/measurement
+	m_variables.Get("output",	outputFile);	//file in which calibration is saved
+	m_variables.Get("base_name",	base_name);	//base_name for calibation
+	m_variables.Get("concfunction",	concFuncName);	//name of concentration function
+	m_variables.Get("err_function",	err_FuncName);	//name of uncertainity function
+
 	return true;
 }
 
@@ -28,6 +35,7 @@ bool CalibrationManager::Execute()
 			calibList = LoadCalibration(updateList);
 			if (updateList.size())
 			{
+				//calibration out of date!
 				m_data->isCalibrated = false;
 				NewCalibration();
 				ic = updateList.begin();	//global iterator
@@ -84,23 +92,12 @@ bool CalibrationManager::Finalise()
 	return true;
 }
 
-void CalibrationManager::Configure()
-{
-	m_variables.Get("verbose", verbose);
-
-	m_variables.Get("calibration",	calibFile);	//file with list of calibration/measurement
-	m_variables.Get("output",	outputFile);	//file in which calibration is saved
-	m_variables.Get("base_name",	base_name);	//base_name for calibation
-	m_variables.Get("concfunction",	concFuncName);	//name of concentration function
-	m_variables.Get("err_function",	err_FuncName);	//name of uncertainity function
-}
-
 //get list of calibration needed
 //eg.
-//*led0		time1000		#measurement of led0, to be calibrated every 1000s.
+//*led0		time1000		#measurement of led0, to be calibrated every 1000 days.
 //					#The star indicates this is the concentration measurement
-//led0, led1, led2, time54321		#measurement of led0_led1_led2, to be calibrated every 54321s
-//led1 led3, 	time99999		#measurement of led1_led3, to be calibrated every 99999s
+//led0, led1, led2, time54321		#measurement of led0_led1_led2, to be calibrated every 54321 days
+//led1 led3, 	time99999		#measurement of led1_led3, to be calibrated every 99999 days
 //
 std::vector<std::string> CalibrationManager::CalibrationList()
 {
@@ -191,7 +188,7 @@ std::vector<std::string> CalibrationManager::LoadCalibration(std::vector<std::st
 			{
 				type = *ic;	//store type, needed to fast forward loop
 
-				if (IsUpdate(name, timeUpdate))	//needs an update
+				if (IsUpdate(name, timeUpdate[name]))	//needs an update
 				{
 					Load(name, type);
 					uList.push_back(type);
@@ -242,7 +239,7 @@ bool CalibrationManager::IsUpdate(std::string name, int timeUpdate)
 	boost::posix_time::ptime current(boost::posix_time::second_clock::local_time());
 	boost::posix_time::time_duration lapse(current - last);
 
-	if (lapse.total_seconds() > timeUpdate)
+	if (lapse.hours() > timeUpdate)
 	{
 		std::cout << "Calibration out of date!\n";
 		return false;

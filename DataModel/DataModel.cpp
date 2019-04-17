@@ -2,6 +2,7 @@
 
 DataModel::DataModel(){}
 
+/*
 TTree* DataModel::GetTTree(std::string name)
 {
 	return m_trees[name];
@@ -18,6 +19,7 @@ void DataModel::DeleteTTree(std::string name)
 {
 	m_trees.erase(name);
 }
+*/
 
 GdTree* DataModel::GetGdTree(std::string name)
 {

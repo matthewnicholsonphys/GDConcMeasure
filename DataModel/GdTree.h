@@ -55,6 +55,13 @@ class GdTree {
 		TBranch *b_T_Err;
 		TBranch *b_Absor;
 		TBranch *b_A_Err;
+		TBranch *b_epoch;
+		TBranch *b_Year;
+		TBranch *b_Month;
+		TBranch *b_Day;
+		TBranch *b_Hour;
+		TBranch *b_Minute;
+		TBranch *b_Second;
 
 		GdTree(const std::string &treeName, const std::string &pathFile = 0);
 		~GdTree();
@@ -70,33 +77,19 @@ class GdTree {
 //save pathfile as output file to save tree
 //constructor check if a tree exists already in the pathfile and uses that one
 //if there is no tree
-GdTree::GdTree(const std::string &treeName, const std::string &pathFile) :
-	chain(0),
-	outFile(pathFile)		//storing input/output file
+GdTree::GdTree(const std::string &treeName)
 {
-	TFile infile(outFile.c_str(), "OPEN");
-	chain = static_cast<TTree*>(infile.Get(treeName.c_str()));
-	if (chain)
-	{
-		chain->SetDirectory(0);
-		Init();
-		infile.Close();
-	}
-	else
-	{
-		infile.Close();
-		Create(treeName);
-	}
+	chain = Create(treeName);
 }
 
-GdTree::GdTree(TTree *tree) :
-	chain(tree)
+GdTree::GdTree(TTree *tree)
 {
+	chain = static_cast<TTree*>(tree->Clone());
+	chain->SetDirectory(0);
+	Init();
 }
 
-GdTree::GdTree(const GdTree& gdtree) :
-	chain(0),
-	outFile(gdtree.outFile)
+GdTree::GdTree(const GdTree& gdtree)	//copy tree with same name, but empty
 {
 	Create(gdtree.chain->GetName());
 }
@@ -106,21 +99,19 @@ GdTree::~GdTree()
 	delete fChain;
 }
 
-std::string GdTree::Output()
+void GdTree::Write(std::string outName = "")
 {
-	return outFile;
-}
+	if (outName.emtpy())
+		outName = chain->GetName();
 
-void GdTree::Write()
-{
-	TFile outfile(outFile.c_str(), "UPDATE");
-	chain->Write("", TObject::kWriteDelete);
+	chain->Write(outName.c_str(), TObject::kWriteDelete);
 }
 
 int GdTree::GetEntry(long entry)
 {
 	if (chain)
 		return 0;
+
 	return fChain->GetEntry(entry);
 }
 
@@ -128,12 +119,13 @@ int GdTree::GetEntries()
 {
 	if (chain)
 		return 0;
+
 	return chain->GetEntries();
 }
 
-void GdTree::Create(const std::string &treeName)
+TTree* GdTree::Create(const std::string &treeName)
 {
-	chain = new TTree(treeName.c_str(), treeName.c_str());
+	TTree* chain = new TTree(treeName.c_str(), treeName.c_str());
 
 	b_Gd_Conc      = chain->Branch("GdConc",	&Gd_Conc);	//"GdConc/D");
 	b_Gd_Conc_Err  = chain->Branch("Gd_Err",	&Gd_Conc_Err);	//"Gd_Err/D");
@@ -149,26 +141,19 @@ void GdTree::Create(const std::string &treeName)
 	b_T_Err	       = chain->Branch("T_Err",		&T_Err);	//"T_Err/D");	
 	b_Absor	       = chain->Branch("Absor",		&Absor);	//"Absor/D");
 	b_A_Err	       = chain->Branch("A_Err",		&A_Err);	//"A_Err/D");	
+	b_epoch	       = chain->Branch("epoch",		&epoch);
+	b_Year	       = chain->Branch("Year", 		&Year);
+	b_Month	       = chain->Branch("Month",		&Month);
+	b_Day	       = chain->Branch("Day",		&Day);
+	b_Hour	       = chain->Branch("Hour",		&Hour);
+	b_Minute       = chain->Branch("Minute",	&Minute);
+	b_Second       = chain->Branch("Second",	&Second);
+
+	return chain;
 }
 
 void GdTree::Init()
 {
-	// The Init() function is called when the selector needs to initialize
-	// a new tree or chain. Typically here the branch addresses and branch
-	// pointers of the tree will be set.
-	// It is normally not necessary to make changes to the generated
-	// code, but the routine can be extended by the user if needed.
-	// Init() will be called many times when running on PROOF
-	// (once per file to be processed).
-
-	// Set branch addresses and branch pointers
-	//if (!tree)
-	//	return;
-
-	//fChain = tree;
-	//fCurrent = -1;
-	//fChain->SetMakeClass(1);
-
 	chain->SetBranchAddress("Gd_Conc",	&Gd_Conc,      &b_Gd_Conc);
 	chain->SetBranchAddress("Gd_Conc_Err",	&Gd_Conc_Err,  &b_Gd_Conc_Err);
 	chain->SetBranchAddress("Wavelength_1", &Wavelength_1, &b_Wavelength_1);
@@ -183,4 +168,11 @@ void GdTree::Init()
 	chain->SetBranchAddress("A_Err",	&A_Err,	       &b_A_Err);
 	chain->SetBranchAddress("Absor",	&Absor,	       &b_Absor);
 	chain->SetBranchAddress("A_Err",	&A_Err,	       &b_A_Err);
+	chain->SetBranchAddress("epoch",	&epoch,        &b_epoch);
+	chain->SetBranchAddress("Year", 	&Year, 	       &b_Year);
+	chain->SetBranchAddress("Month",	&Month,        &b_Month);
+	chain->SetBranchAddress("Day",		&Day,	       &b_Day);
+	chain->SetBranchAddress("Hour",		&Hour,	       &b_Hour);
+	chain->SetBranchAddress("Minute",	&Minute,       &b_Minute);
+	chain->SetBranchAddress("Second",	&Second,       &b_Second);
 }

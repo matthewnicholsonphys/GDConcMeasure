@@ -34,9 +34,9 @@ class DataModel
 
 		DataModel();
 
-		TTree* GetTTree(std::string name);
-		void AddTTree(std::string name, TTree *tree);
-		void DeleteTTree(std::string name);
+		//TTree* GetTTree(std::string name);
+		//void AddTTree(std::string name, TTree *tree);
+		//void DeleteTTree(std::string name);
 
 		GdTree* GetGdTree(std::string name);
 		void AddGdTree(std::string name, GdTree *tree);
@@ -97,15 +97,10 @@ class DataModel
 		std::vector<double> wavelength;	//can be retrieved from seabreeze
 
 
-		std::string treeName;	//name of tree that is currently used/analysed
-		GdTree *currentTree;
-
 	private:
 
-		std::map<std::string, TTree*> m_trees; 
+		//std::map<std::string, TTree*> m_trees; 
 		std::map<std::string, GdTree*> m_gdtrees; 
-
-
 };
 
 
