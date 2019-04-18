@@ -4,6 +4,13 @@
 #include <string>
 #include <iostream>
 
+#include <vector>
+#include <map>
+
+#include "TList.h"
+#include "TF1.h"
+#include "TF2.h"
+
 #include "Tool.h"
 
 class CalibrationManager: public Tool
@@ -15,29 +22,29 @@ class CalibrationManager: public Tool
 		bool Execute();
 		bool Finalise();
 
-		void Configure();
-		void LoadCalibration();
+		std::vector<std::string> CalibrationList();
+		std::vector<std::string> LoadCalibration(std::vector<std::string> &uList);
+		void Load(std::string name, std::string type);
+		bool IsUpdate(std::string name, int timeUpdate);
 		void NewCalibration();
-		bool IsCalibrated();
+		bool Calibrate();
 
 	private:
 
 		std::string m_configfile;
 		int verbose;
 
-		int updateTime;		//number of seconds every time calibration should happen
-		std::string calibFile;	//file in which calibration is saved
-		std::string treeName;	//name of calibration tree
-		std::string concFunc;	//name of concentration function
-		std::string err_Func;	//name of uncertainity function
-		std::string fileList;	//file in which calibration is saved
-		std::string calibLED;	//name of LED used to do calibration
+		std::string calibFile;		//file in which calibration list is
+		std::string outputFile;		//root file in which calibration will saved
+		std::string base_name;		//base name for calibration
+		std::string concFuncName;	//name of concentration function
+		std::string err_FuncName;	//name of uncertainity function
+		std::string concTreeName;
 
+		std::vector<std::string> calibList, updateList;
+		std::vector<std::string>::iterator ic;
 
-
-
-
-
+		std::map<std::string, int> timeUpdate;
 };
 
 

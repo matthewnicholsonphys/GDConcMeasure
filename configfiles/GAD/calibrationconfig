@@ -1,0 +1,10 @@
+verbose 2
+
+#Configuration file for Measurement manager
+#
+
+calibration	configfiles/GAD/list	#file with list of calibration/measurement
+output		output/Calibrate.root	#file in which calibration is saved
+base_name	C			#base_name for calibation
+concfunction	concF			#name of concentration function
+err_function	err_F			#name of uncertainity function

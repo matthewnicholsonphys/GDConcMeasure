@@ -33,3 +33,13 @@ bool Pump::Finalise()
 {
 	return true;
 }
+
+void Pump::TurnOn()
+{
+	//write to GPIO
+}
+
+void Pump::TurnOff()
+{
+	//write to GPIO
+}

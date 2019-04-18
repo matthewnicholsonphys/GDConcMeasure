@@ -12,6 +12,10 @@
 #include "Logging.h"
 #include "GdTree.h"
 
+#include "TFile.h"
+#include "TF1.h"
+#include "TF2.h"
+
 #include <zmq.hpp>
 
 enum state
@@ -34,9 +38,9 @@ class DataModel
 
 		DataModel();
 
-		TTree* GetTTree(std::string name);
-		void AddTTree(std::string name, TTree *tree);
-		void DeleteTTree(std::string name);
+		//TTree* GetTTree(std::string name);
+		//void AddTTree(std::string name, TTree *tree);
+		//void DeleteTTree(std::string name);
 
 		GdTree* GetGdTree(std::string name);
 		void AddGdTree(std::string name, GdTree *tree);
@@ -54,31 +58,55 @@ class DataModel
 
 		state mode;	//state for scheduler
 
-		//for spectrometer
-		std::vector<std::vector<double> > vTraceCollect;
-		std::vector<double> xAxis;
-
-		TF1 *concentrationFunction;
-		TF2 *concentrationFunc_Err;
-
-		double gdconc, gd_err;	//value of gd concentration and error
-
+		//Calibration manager
+		//created and destroyed in the class
+		//
+		//	used globally
+		std::string calibrationName;
 		bool isCalibrated;	//true if there is calibratio file!
 		bool calibrationDone;	//true if calibration is complete
+		//
+		//	used in Analysis
+		std::string concentrationName;	//name of tree for concentration measurmenet
+		TF1 *concentrationFunction;
+		TF2 *concentrationFunc_Err;
+		double gdconc, gd_err;	//value of gd concentration and error
+		//
+		//	used in Writing
+		TFile* calibrationFile;
+
+	
+		//Calibration manager
+		//created and destroyed in the class
+		//
+		//	used globally
 		bool measurementDone;	//true if the measurement is finished
+		//
+		//	used in Writing
+		TFile* measurementFile;
+		//	used in analysis
+		std::string measurementName;
 
-		std::map<std::string, unsigned int> LED_name;	//led configurations
-		unsigned int ledON;
+		//LEDmanager
+		//string used by calibration and measurement managers
+		std::string turnOnLED;	//led to be turned on
 
-		std::string treeName;	//name of tree that is currently used/analysed
-		GdTree *currentTree;
+		//Pump
+		//
+		//override scheduler
+		bool turnOnPump;	//must change water
+
+
+		//filled by Spectrometer, for Analysis
+		//
+		std::vector<std::vector<double> > traceCollect;
+		std::vector<double> wavelength;	//can be retrieved from seabreeze
+
 
 	private:
 
-		std::map<std::string, TTree*> m_trees; 
+		//std::map<std::string, TTree*> m_trees; 
 		std::map<std::string, GdTree*> m_gdtrees; 
-
-
 };
 
 

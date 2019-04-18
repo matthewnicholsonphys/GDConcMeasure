@@ -12,7 +12,12 @@ bool Scheduler::Initialise(std::string configfile, DataModel &data)
 
 	m_data->mode = state::idle;
 
-	Configure();
+	m_variables.Get("verbose", verbose);
+
+	m_variables.Get("idle",		idle_time);
+	m_variables.Get("power_up",	power_up_time);
+	m_variables.Get("power_down",	power_down_time);
+	m_variables.Get("change_water", change_water_time);
 
 	return true;
 }
@@ -60,7 +65,6 @@ bool Scheduler::Execute()
 			m_data->mode = state::finalise;			//measurement done, turn on pump and change water for next measurement and finalise
 			break;
 		case state::change_water:
-		case state::measurement:
 			last = Wait(change_water_time);			//wait for pump to complete if needed
 			m_data->mode = state::power_down;		//turn off PSU
 			break;
@@ -74,16 +78,6 @@ bool Scheduler::Execute()
 bool Scheduler::Finalise()
 {
 	return true;
-}
-
-void Scheduler::Configure()
-{
-	m_variables.Get("verbose", verbose);
-
-	m_variables.Get("idle",		idle_time);
-	m_variables.Get("power_up",	power_up_time);
-	m_variables.Get("power_down",	power_down_time);
-	m_variables.Get("change_water", change_water_time);
 }
 
 bool Scheduler::IsCalibrated()
@@ -104,7 +98,7 @@ bool Scheduler::IsMeasurementDone()
 //check if enought time has passed since last status change
 //wait remaining time so that in total t seconds have passed since last
 //with t = 0, no wait happens and current time is passed
-boost::posix_time::second_clock Scheduler::Wait(double t)
+boost::posix_time::ptime Scheduler::Wait(double t)
 {
 	boost::posix_time::ptime current(boost::posix_time::second_clock::local_time());
 	boost::posix_time::time_duration period(0, 0, t, 0);
