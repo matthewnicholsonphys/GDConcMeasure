@@ -18,10 +18,12 @@ class Scheduler: public Tool
 		bool Execute();
 		bool Finalise();
 
+		bool ChangeWater();
+		bool Calibrate();
 		bool IsCalibrated();
 		bool IsCalibrationDone();
+		bool Measure();
 		bool IsMeasurementDone();
-		bool IsLEDOn();
 
 		boost::posix_time::ptime Wait(double t = 0.0);
 
@@ -35,6 +37,7 @@ class Scheduler: public Tool
 		int power_up_time;
 		int power_down_time;
 		int change_water_time;
+		int settle_water_time;
 
 		int rest_time;
 

@@ -23,6 +23,12 @@ bool CalibrationManager::Initialise(std::string configfile, DataModel &data)
 	m_variables.Get("statfunction",	statFuncName);	//name of uncertainity function
 	m_variables.Get("systfunction",	systFuncName);	//name of uncertainity function
 	m_variables.Get("fit_function",	m_data->fitFuncName);	//name of uncertainity function
+	m_variables.Get("force",	force);	//force to use this calibration
+
+	if (force == "yes")
+		forceCalib = true;
+	else
+		forceCalib = false;
 
 	m_data->concentrationFunction = 0;
 	m_data->concentrationFuncStat = 0;
@@ -30,6 +36,8 @@ bool CalibrationManager::Initialise(std::string configfile, DataModel &data)
 
 	m_data->gdconc = 0;
 	m_data->gd_err = 0;
+
+	m_data->isCalibrationTool = true;
 
 	return true;
 }
@@ -43,7 +51,7 @@ bool CalibrationManager::Execute()
 			Initialise(m_configfile, *m_data);
 			calibList = LoadCalibration(allList);
 
-			std::cout << "TODO number of calibrations " << calibList.size() << std::endl;
+			std::cout << "Number of calibrations out of date or not existing " << calibList.size() << std::endl;
 
 			if (calibList.size()) //calibration out of date!
 			{
@@ -182,9 +190,26 @@ std::vector<std::string> CalibrationManager::LoadCalibration(std::vector<std::st
 	TFile f(m_data->calibrationFile.c_str(), "OPEN");
 	if (f.IsZombie())
 	{
-		uList = cList;
+		std::cout << "No calibration file found" << std::endl;
+		if (!forceCalib)
+			uList = cList;
 		for (ic = uList.begin(); ic != uList.end(); ++ic)
-			Create(*ic);
+		{
+			char cal;
+			std::cout << "Do you want to calibrate " << *ic << "? (y/n)" << std::endl;
+			std::cin >> cal;
+
+			while (cal != 'y' && cal != 'n')
+			{
+				std::cout << "Reply 'y' or 'n'" << std::endl;
+				std::cin >> cal;
+			}
+
+			if (cal == 'y')
+				Create(*ic);
+			else if (cal == 'n')
+				std::cout << "Not calibrating" << std::endl;
+		}
 	}
 	else
 	{
@@ -204,30 +229,42 @@ std::vector<std::string> CalibrationManager::LoadCalibration(std::vector<std::st
 		{
 			//skip forward because this type is already done
 			std::string dir = lk->At(l)->GetName();
-			std::cout << "dir found " << dir << std::endl;
 			if (!type.empty() && dir.find(type) != std::string::npos)
 				continue;
 
 			//loop on list of calibration types, which are "calibname"
 			for (ic = cList.begin(); ic != cList.end(); ++ic)
 			{
-				std::cout << "match " << *ic << std::endl;
 				//name match to find it
 				if (dir.find(*ic) != std::string::npos)
 				{
 					type = *ic;	//store type, needed to fast forward loop
-					std::cout << "latest " << type << std::endl;
 
-					if (IsUpdate(dir, timeUpdate[type]))	//calibration is ok
-					{
-						std::cout << "is update" << std::endl;
+					if (IsUpdate(dir, timeUpdate[type]) || forceCalib)	//calibration is ok
 						Load(f, dir, type);
-					}
 					else
 					{
-						std::cout << "not update" << std::endl;
-						Create(type);
-						uList.push_back(type);
+						char cal;
+						std::cout << "Calibration of " << type << " out of date!\n";
+						std::cout << "Do you want to calibrate it? (y/n)" << std::endl;
+						std::cin >> cal;
+
+						while (cal != 'y' && cal != 'n')
+						{
+							std::cout << "Reply 'y' or 'n'" << std::endl;
+							std::cin >> cal;
+						}
+
+						if (cal == 'y')
+						{
+							Create(type);
+							uList.push_back(type);
+						}
+						else if (cal == 'n' || forceCalib)
+						{
+							std::cout << "Forcing old calibration" << std::endl;
+							Load(f, dir, type);
+						}
 					}
 
 					//found it, so break
@@ -237,6 +274,40 @@ std::vector<std::string> CalibrationManager::LoadCalibration(std::vector<std::st
 		}
 
 		f.Close();
+
+		for (ic = cList.begin(); ic != cList.end(); ++ic)
+		{
+			bool notFound = true;
+			std::vector<std::string>::iterator iu;
+			for (iu = uList.begin(); iu != uList.end(); ++iu)
+				if (*ic == *iu)
+				{
+					notFound = false;
+					break;
+				}
+
+			if (notFound && !forceCalib)
+			{
+				char cal;
+				std::cout << "Calibration of " << *ic << " not found\n";
+				std::cout << "Do you want to calibrate it? (y/n)" << std::endl;
+				std::cin >> cal;
+
+				while (cal != 'y' && cal != 'n')
+				{
+					std::cout << "Reply 'y' or 'n'" << std::endl;
+					std::cin >> cal;
+				}
+
+				if (cal == 'y')
+				{
+					Create(type);
+					uList.push_back(type);
+				}
+				else if (cal == 'n')
+					std::cout << "not calibrating" << std::endl;
+			}
+		}
 	}
 
 	return uList;
@@ -301,10 +372,7 @@ bool CalibrationManager::IsUpdate(std::string name, int timeUpdate)
 
 	std::cout << "lapse " << lapse.hours() << "\t" << timeUpdate << std::endl;
 	if (lapse.hours()/24.0 > timeUpdate)
-	{
-		std::cout << "Calibration out of date!\n";
 		return false;
-	}
 	else
 		return true;
 }
@@ -313,16 +381,16 @@ bool CalibrationManager::IsUpdate(std::string name, int timeUpdate)
 bool CalibrationManager::Calibrate()
 {
 	m_data->calibrationName = m_data->calibrationBase + "_" + *ic;
-	//HACK
 	m_data->turnOnLED = *ic;
-	//m_data->turnOnLED = "";
 
+	std::string input;
 	double gdc, gde;
 	if (*ic != concTreeName)
 	{
 		std::cout << "Calibrating " << *ic << std::endl;
 		std::cout << "Have you put pure water? Enter to continue...\n";
-		std::cin.get();
+		std::cin.ignore();
+
 		m_data->gdconc = 0.0;
 		m_data->gd_err = 0.0;
 		m_data->calibrationComplete = true;
@@ -331,12 +399,16 @@ bool CalibrationManager::Calibrate()
 	{
 		std::cout << "Calibrating " << *ic << std::endl;
 		std::cout << "Enter concentration loaded in cell now (-1 to quit, 0.0 for pure water).";
-		std::cout << " Last concentration: " << m_data->gdconc << "\n";
-		std::cin >> gdc;
+		std::cout << " Last concentration: " << m_data->gdconc << std::endl;
+		std::getline(std::cin, input);
+		gdc = std::strtod(input.c_str(), NULL);
 		if (!(gdc < 0))	//not finished, repeat this step
 		{
 			//std::cout << "Enter concentration error (0.0 is a fine value)\n";
-			std::cin >> gde;
+
+			std::getline(std::cin, input);
+			gde = std::strtod(input.c_str(), NULL);
+
 			m_data->gd_err = gde*gde;
 			//m_data->gd_err = 0.0;
 			m_data->calibrationComplete = false;
@@ -350,6 +422,7 @@ bool CalibrationManager::Calibrate()
 		}
 
 		m_data->gdconc = gdc;
+		m_data->changeWater = true;
 	}
 
 	return true;

@@ -22,6 +22,7 @@ bool MeasurementManager::Initialise(std::string configfile, DataModel &data)
 	m_variables.Get("base_name",	m_data->measurementBase);	//base_name for calibation
 	//m_variables.Get("tree_name", treeName);		//name of output tree
 
+	m_data->isMeasurementTool = true;
 	//HACK
 	//m_data->calibrationBase = m_data->measurementBase;
 
@@ -72,8 +73,6 @@ bool MeasurementManager::Finalise()
 		m_data->DeleteGdTree(m_data->measurementBase + "_" + *im);
 
 	measureList.clear();
-
-	std::cout << "MM finalise " << m_data->SizeGdTree() << std::endl;
 
 	return true;
 }
@@ -163,8 +162,7 @@ bool MeasurementManager::Measure()
 {
 	m_data->measurementName = m_data->measurementBase + "_" + *im;
 	m_data->calibrationName = m_data->calibrationBase + "_" + *im;
-	std::cout << "Measure " << *im << "\t" << m_data->measurementName << std::endl;
-	std::cout << "with cal " << m_data->calibrationName << std::endl;
+	std::cout << "Measure " << *im << " (" << m_data->measurementName << ") with cal " << m_data->calibrationName << std::endl;
 
 	//HACK
 	//std::cout << "Ready?\n";

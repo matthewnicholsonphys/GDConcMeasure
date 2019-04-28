@@ -32,13 +32,14 @@ bool Spectrometer::Execute()
 			//Initialise(m_configfile, *m_data);
 			if(!EstablishUSB())
 				return false;
-			GetData();	//measure dark noise on wake up
+			//GetData();	//measure dark noise on wake up
 			break;
-		case state::calibration:
-			if (!m_data->calibrationComplete || m_data->calibrationName != m_data->concentrationName)
-				GetData();
-			break;
+			//if (!m_data->calibrationComplete || m_data->calibrationName != m_data->concentrationName)
+			//	GetData();
+			//break;
+		case state::calibration:	//take dark cause LED is off
 		case state::measurement:
+		case state::take_spectrum:
 			GetData();
 			break;
 		case state::finalise:

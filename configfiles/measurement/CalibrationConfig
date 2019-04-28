@@ -1,0 +1,12 @@
+verbose 2
+
+#Configuration file for Measurement manager
+#
+
+calibration	configfiles/measurement/list	#file with list of calibration/measurement
+output		output/Calibration.root	#file in which calibration is saved
+base_name	calibTree		#base_name for calibation
+concfunction	concF			#name of concentration function
+statfunction	statF			#name of statistical error of function
+systfunction	systF			#name of systematic error function
+fit_function	infoF			#name of fit data & information

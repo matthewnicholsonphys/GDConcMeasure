@@ -1,6 +1,4 @@
-idle		574	#how many seconds rest in between measurements
-power_up	25	#spectrometer takes 20 s to boot up
-power_down	0
-change_water	1
-
-#sum is 600s = 10 minutes
+idle		1	#how many seconds rest in between measurements
+power_up	1	#spectrometer takes 20 s to boot up
+power_down	1
+change_water	0

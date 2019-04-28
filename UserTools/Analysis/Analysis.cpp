@@ -14,6 +14,7 @@ bool Analysis::Initialise(std::string configfile, DataModel &data)
 	//m_variables.Print();
 
 	m_data = &data;
+	analysis = Type::undefined;
 
 	return true;
 }
@@ -26,34 +27,44 @@ bool Analysis::Execute()
 	switch (m_data->mode)
 	{
 		case state::init:
-			//dark tracks should be loaded by spectrometer
 			pureTrace.clear();
+			//darkTrace = AverageTrace(0);
+			break;
+		case state::calibration:	//taking dark current
+			analysis = Type::calibrate;
 			darkTrace = AverageTrace(0);
 			break;
-		case state::calibration:	//calibration mode
-			if (!m_data->calibrationComplete || m_data->calibrationName != m_data->concentrationName)
+		case state::measurement:	//taking dark current
+			analysis = Type::measure;
+			darkTrace = AverageTrace(0);
+			break;
+		case state::take_spectrum:	//average data
+			avgTrace = AverageTrace(1);
+			break;
+		case state::analyse:	//led off again, we can analyse
+			if (analysis == Type::calibrate)
 			{
-				std::cout << "E0" << std::endl;
-				CalibrationTrace(m_data->gdconc, m_data->gd_err);
+				if (!m_data->calibrationComplete || m_data->calibrationName != m_data->concentrationName)
+					CalibrationTrace(m_data->gdconc, m_data->gd_err);
+				else
+					CalibrationComplete();	//complete missing holes in calibration-concentration
+			}
+			else if (analysis == Type::measure)
+			{
+				pureTrace = PureTrace();
+				MeasurementTrace();
 			}
 			else
-			{
-				std::cout << "E1" << std::endl;
-				CalibrationComplete();	//complete missing holes in calibration-concentration
-			}
+				std::cout << "Skip" << std::endl;
 			break;
 		case state::calibration_done:
-			std::cout << "E2" << std::endl;
 			LinearFit();		//evaluate linear fit for concentration calibration
 			break;
-		case state::measurement:	//pure trace has been assigned by now
-			pureTrace = PureTrace();
-			MeasurementTrace();
-			break;
 		case state::measurement_done:
-			//BulbCheck();
+			break;
 		case state::finalise:
 			Finalise();
+			break;
 		default:
 			break;
 	}
@@ -176,16 +187,11 @@ std::vector<double> Analysis::Absorbance(const std::vector<double> &avgTrace, in
 	i2 = -1;
 
 	if (!pureTrace.size())				//return empty vector;
-	{
-		std::cout << "AA no pure" << std::endl;
 		return std::vector<double>();
-	}
 
-	std::cout << "AA absorbance" << std::endl;
 	std::vector<int> iPeak, iDeep;
 	std::vector<double> absTrace = AbsorbTrace(avgTrace);
 
-	std::cout << "AA peak finding" << std::endl;
 	FindPeakDeep(absTrace, iPeak, iDeep);
 
 	if (iPeak.size() > 0)
@@ -193,7 +199,7 @@ std::vector<double> Analysis::Absorbance(const std::vector<double> &avgTrace, in
 	if (iPeak.size() > 1)
 		i2 = iPeak.at(1);
 
-	std::cout << "i1 " << i1 << "\t i2 " << i2 << std::endl;
+	//std::cout << "i1 " << i1 << "\t i2 " << i2 << std::endl;
 
 	return absTrace;
 }
@@ -204,16 +210,15 @@ std::vector<double> Analysis::Absorbance(const std::vector<double> &avgTrace, in
  */
 void Analysis::CalibrationTrace(double gdconc, double gd_err)
 {
-	std::vector<double> avgTrace = AverageTrace(1);
+	//std::vector<double> avgTrace = AverageTrace(1);
 	if (!avgTrace.size())	//empty? skip, it is an error
 	{
-		std::cout << "No data from spectrometer!!!!" << std::endl;
+		std::cout << "No data from spectrometer!!!! DON'T PANIC!!!!" << std::endl;
 		return;
 	}
 
 	int size = avgTrace.size() / 2;
 	GdTree *tree = m_data->GetGdTree(m_data->calibrationName);
-	std::cout << "CT tree " << tree->GetTree() << std::endl;
 
 	tree->GdConc = gdconc;
 	tree->Gd_Err = gd_err;
@@ -342,7 +347,7 @@ void Analysis::CalibrationComplete()
 
 void Analysis::MeasurementTrace()
 {
-	std::vector<double> avgTrace = AverageTrace(1);
+	//std::vector<double> avgTrace = AverageTrace(1);
 	if (!avgTrace.size())	//empty? skip, it is an error
 	{
 		std::cout << "No data from spectrometer!!!!" << std::endl;

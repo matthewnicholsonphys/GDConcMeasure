@@ -57,22 +57,33 @@ bool LEDManager::Execute()
 			m_data->isLEDon = false;
 			EstablishI2C();	//it is true if connections is ok!
 			break;
-		case state::calibration:		//turn on led set
-			if (!m_data->calibrationComplete || m_data->calibrationName != m_data->concentrationName)
-			{
-				TurnOn();
-				m_data->isLEDon = true;
-				usleep(200);
-			}
-			break;
-		case state::measurement:		//turn on led set
+		case state::take_spectrum:
 			TurnOn();
-			usleep(200);		//stabilises LED
+			usleep(200);
 			m_data->isLEDon = true;
 			break;
-		case state::turn_off_led:	//turn off led for good measure (cit.)
+		case state::calibration:
+		case state::measurement:
 		case state::calibration_done:
 		case state::measurement_done:
+		case state::analyse:		//turn off led for good measure (cit.)
+			TurnOff();
+			usleep(200);		//stabilises LED
+			m_data->isLEDon = false;
+			break;
+		case state::manual_on:
+			std::cout << "LED recognised and loaded:" << std::endl;
+			for (iLname = mLED_name.begin(); iLname != mLED_name.end(); ++iLname)
+				std::cout << "\t-  " << iLname->first << std::endl; 
+			std::cout << "\nEnter LED name to turn on" << std::endl;
+			std::getline(std::cin, m_data->turnOnLED);
+			m_data->isLEDon = false;
+			TurnOn();
+			usleep(200);
+			break;
+		case state::manual_off:
+			std::cout << "Waiting for you to finish...(press Enter)" << std::endl;
+			std::cin.ignore();
 			TurnOff();
 			usleep(200);		//stabilises LED
 			m_data->isLEDon = false;
@@ -195,7 +206,13 @@ bool LEDManager::TurnOn()
 	//std::cout << "decoding " << ssl.str() << std::endl;
 	std::string led;
 	while (std::getline(ssl, led, '_'))
+	{
+		std::cout << "found " << led << std::endl;
 		ledON = ledON | mLED_name[led];
+
+	}
+
+	std::cout << "ledON " << std::hex << ledON << std::endl;
 
 	if (ledON != ledONstate)
 	{
@@ -221,6 +238,7 @@ bool LEDManager::TurnOff()
 	else
 		return true;
 }
+
 bool LEDManager::TurnOffAndSleep()
 {
 	if (!IsSleeping())
@@ -349,6 +367,17 @@ bool LEDManager::TurnLEDon(std::string ledName)
 	akg &= Write(reg_LED + 2, time2off & 0xff);	//LEDn_OFF_L
 	akg &= Write(reg_LED + 3, time2off >> 8);	//LEDn_OFF_H
 
+
+	int data;
+	Read(reg_LED, data);
+	std::cout << "LED_ON_L " << data << std::endl;
+	Read(reg_LED+1, data);
+	std::cout << "LED_ON_H " << data << std::endl;
+	Read(reg_LED+2, data);
+	std::cout << "LED_OFF_L " << data << std::endl;
+	Read(reg_LED+3, data);
+	std::cout << "LED_OFF_H " << data << std::endl;
+
 	return akg;
 	//use wiringPI function to write to correct register
 	//and at the same time check for errors
@@ -362,12 +391,16 @@ bool LEDManager::TurnLEDoff(std::string ledName)
 	//use wiringPI to write to set LEDn_OFFi_H[4] = 1
 	//which is the "always OFF" bit
 	//can be achieved by writing 0x10 to register ??
-	int reg_LED = 4 * mLED_chan[ledName] + 9;
+	int reg_LED = 4 * mLED_chan[ledName] + 6;
 
-	return Write(reg_LED, 0x00);
+	bool akg = Write(reg_LED, 0x00);	//LEDn_ON_L
+	akg &= Write(reg_LED + 1, 0x00);	//LEDn_ON_H
+	akg &= Write(reg_LED + 2, 0x00);	//LEDn_OFF_L
+	akg &= Write(reg_LED + 3, 0x00);	//LEDn_OFF_H
+
+	return akg;
+	//return Write(reg_LED, 0x00);
 }
-
-
 
 
 // I2C communication functions

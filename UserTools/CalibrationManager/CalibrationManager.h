@@ -35,11 +35,13 @@ class CalibrationManager: public Tool
 		std::string m_configfile;
 		int verbose;
 
+		bool forceCalib;
 		std::string calibFile;		//file in which calibration list is
 		std::string concFuncName;	//name of concentration function
 		std::string statFuncName;	//name of uncertainity function
 		std::string systFuncName;	//name of uncertainity function
 		std::string concTreeName;
+		std::string force;
 
 		std::vector<std::string> calibList, allList;
 		std::vector<std::string>::iterator ic;

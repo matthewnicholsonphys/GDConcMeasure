@@ -1,8 +1,11 @@
-power		Power			configfiles/GAD/powerconfig
-pump		Pump			configfiles/GAD/pumpconfig
-calibration	CalibrationManager	configfiles/GAD/calibrationconfig
-measurement	MeasurementManager	configfiles/GAD/measurementconfig
-LED		LEDManager		configfiles/GAD/LEDconfig
-spectromener	Spectrometer		configfiles/GAD/spectrometerconfig
-analysis	Analysis		configfiles/GAD/analysisconfig
-writing		Writing			configfiles/GAD/writingconfig
+#GAD DAQ
+#
+Scheduler	Scheduler		configfiles/GAD/SchedulerConfig
+Power		Power			configfiles/GAD/PowerConfig
+Pump		Pump			configfiles/GAD/PumpConfig
+Calibration	CalibrationManager	configfiles/GAD/CalibrationConfig
+Measurement	MeasurementManager	configfiles/GAD/MeasurementConfig
+LED		LEDManager		configfiles/GAD/LEDConfig
+Spectromener	Spectrometer		configfiles/GAD/SpectrometerConfig
+Analysis	Analysis		configfiles/GAD/AnalysisConfig
+Writing		Writing			configfiles/GAD/WritingConfig

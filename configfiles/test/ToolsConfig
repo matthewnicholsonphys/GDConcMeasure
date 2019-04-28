@@ -7,7 +7,7 @@ Scheduler	Scheduler		configfiles/test/SchedulerConfig
 #Pump		Pump			configfiles/test/PumpConfig
 Calibration	CalibrationManager	configfiles/test/CalibrationConfig
 Measurement	MeasurementManager	configfiles/test/MeasurementConfig
-#LED		LEDManager		configfiles/test/LEDConfig
+LED		LEDManager		configfiles/test/LEDConfig
 Spectrometer	FakeSpectrometer	NULL
-Analysis	Analysis		NULL
-Writer		Writer			NULL
+#Analysis	Analysis		NULL
+#Writer		Writer			NULL

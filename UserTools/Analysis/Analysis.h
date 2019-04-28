@@ -23,6 +23,12 @@ struct Sort
 	Sort(const std::vector<double> &vv, int PoD = 1) : vX(vv), peakORdeep(PoD) {}
 };
 
+enum Type
+{
+	undefined,
+	calibrate,
+	measure
+};
 
 class Analysis: public Tool
 {
@@ -54,7 +60,8 @@ class Analysis: public Tool
 		std::string m_configfile;
 		int verbose;
 
-		std::vector<double> darkTrace, pureTrace;
+		std::vector<double> darkTrace, pureTrace, avgTrace;
+		Type analysis;
 
 		bool mustComplete;
 };

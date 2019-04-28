@@ -1,0 +1,11 @@
+#MEASUREMENT
+#
+Scheduler	Scheduler		configfiles/measurement/SchedulerConfig
+Power		Power			configfiles/measurement/PowerConfig
+Pump		Pump			configfiles/measurement/PumpConfig
+Calibration	CalibrationManager	configfiles/measurement/CalibrationConfig
+Measurement	MeasurementManager	configfiles/measurement/MeasurementConfig
+LED		LEDManager		configfiles/measurement/LEDConfig
+Spectromener	Spectrometer		configfiles/measurement/SpectrometerConfig
+Analysis	Analysis		configfiles/measurement/AnalysisConfig
+Writing		Writing			configfiles/measurement/WritingConfig

@@ -18,6 +18,7 @@ bool Scheduler::Initialise(std::string configfile, DataModel &data)
 	m_variables.Get("power_up",	power_up_time);
 	m_variables.Get("power_down",	power_down_time);
 	m_variables.Get("change_water", change_water_time);
+	m_variables.Get("settle_water", settle_water_time);
 
 	last = boost::posix_time::second_clock::local_time();
 
@@ -30,10 +31,19 @@ bool Scheduler::Initialise(std::string configfile, DataModel &data)
 	stateName[state::measurement]           = "measurement";
 	stateName[state::measurement_done]      = "measurement_done";
 	stateName[state::finalise]              = "finalise";
-	stateName[state::turn_off_led]          = "turn_off_led";
+	stateName[state::turn_off_led]		= "turn_off_led";
+	stateName[state::take_spectrum]		= "take_spacetrum";
+	stateName[state::analyse]		= "analyse";
+	stateName[state::change_water]		= "change_water";
+	stateName[state::settle_water]		= "settle_water";
+	stateName[state::manual_on]		= "manual_on";
+	stateName[state::manual_off]		= "manual_off";
 
 	nextState = state::idle;
 	rest_time = 0;
+
+	m_data->isCalibrationTool = false;
+	m_data->isMeasurementTool = false;
 	
 	//HACK
 	//m_data->isCalibrated = true;
@@ -48,33 +58,57 @@ bool Scheduler::Execute()
 	switch (m_data->mode)
 	{
 		case state::idle:
-			last = Wait(rest_time);				//ToolDAQ is put to sleep until next measurement
-			m_data->mode = state::power_up;			//time to power up the PSU!	in power up, Power tool turns on PSU
+			last = Wait(rest_time);			//ToolDAQ is put to sleep until next measurement
+			m_data->mode = state::power_up;		//time to power up the PSU!	in power up, Power tool turns on PSU
 			break;
-		case state::power_up:					//PSU has been turned on
-			last = Wait(power_up_time);			//small wait to let PSU be stable
-			m_data->mode = state::init;			//init the other Tools (calibration, measurement, LED, spectrometer, analysis...)
+		case state::power_up:				//PSU has been turned on
+			last = Wait(power_up_time);		//small wait to let PSU be stable
+			m_data->mode = state::init;		//init the other Tools
 			break;
-		case state::init:					//ToolChain has been configured, and dark noise has been taken and saved
+		case state::init:				//ToolChain has been configured
 			last = Wait();
-			if (IsCalibrated())				//Check if calibration is present (was done by CalibrationManager during previous loop)
-				m_data->mode = state::measurement;	//if there is calibration, then scheduler skips to measurement
+			if (Calibrate() && Measure())
+			{
+				if (IsCalibrated())
+					m_data->mode = state::measurement;
+				else
+					m_data->mode = state::calibration;	//if there isn't, this one must be done first!
+			}
+			else if (Calibrate() && !Measure())
+			{
+				if (IsCalibrated())
+					m_data->mode = state::finalise;
+				else
+					m_data->mode = state::calibration;	//if there isn't, this one must be done first!
+			}
+			else if (!Calibrate() && !Measure())	//turn on LED?
+				m_data->mode = manual_on;
 			else
-				m_data->mode = state::calibration;	//if there isn't calibration, this one must be done first!
+			{
+				std::cout << "No Calibration tool, I have to quit" << std::endl;
+				m_data->mode = state::finalise;
+			}
 			break;
 		case state::calibration:
 			last = Wait();
-			if (IsCalibrationDone())				//check if calibration is completed
-				nextState = state::calibration_done;	//if so, it can be saved to disk
-			else
-				nextState = state::calibration;	//if not, repeat calibration loop
-			std::cout << "next state should be " << stateName[nextState] << std::endl;
 
-			if (IsLEDOn())	//check if LED is off before continuing
-				m_data->mode = state::turn_off_led;
+			if (ChangeWater())	//override cause water must be changed
+			{
+				nextState = state::take_spectrum;
+				m_data->mode = state::change_water;
+				break;
+			}
+
+			if (IsCalibrationDone())				//check if calibration is completed
+			{
+				nextState = state::calibration_done;	//if so, it can be saved to disk
+				m_data->mode = state::take_spectrum;	//turn LED on
+			}
 			else
-				m_data->mode = nextState;
-			std::cout << "so moving to " << stateName[m_data->mode] << std::endl;
+			{
+				nextState = state::calibration;	//if not, repeat calibration loop
+				m_data->mode = state::take_spectrum;	//turn LED on
+			}
 			break;
 		case state::calibration_done:
 			last = Wait();
@@ -83,26 +117,33 @@ bool Scheduler::Execute()
 		case state::measurement:
 			last = Wait();
 			if (IsMeasurementDone())			//check if calibration is completed
+			{
 				nextState = state::measurement_done;	//if so, it can be saved to disk
+				m_data->mode = state::take_spectrum;	//turn LED on
+			}
 			else
+			{
 				nextState = state::measurement;	//if not, repeat calibration loop
-
-			if (IsLEDOn())	//check if LED is off before continuing
-				m_data->mode = state::turn_off_led;
-			else
-				m_data->mode = nextState;
+				m_data->mode = state::take_spectrum;	//turn LED on
+			}
 			break;
 		case state::measurement_done:
 			last = Wait();
 			m_data->mode = state::finalise;			//measurement done, turn on pump and change water for next measurement and finalise
 			break;
-		case state::turn_off_led:
-			std::cout << "is led off?" << std::endl;
-			if (IsLEDOn())	//check if LED is off before continuing
-				m_data->mode = state::turn_off_led;
-			else
-				m_data->mode = nextState;
-			std::cout << "so moving to " << stateName[m_data->mode] << std::endl;
+		case state::take_spectrum:	//spectrum taken ->  turn off led, analyse data
+			m_data->mode = state::analyse;
+			break;
+		case state::analyse:	//go back to state (calibration or measurement)
+			m_data->mode = nextState;
+			break;
+		case state::change_water:
+			last = Wait(change_water_time);			//wait for pump to complete if needed
+			m_data->mode = settle_water;
+			break;
+		case state::settle_water:
+			last = Wait(settle_water_time);			//wait for pump to complete if needed
+			m_data->mode = nextState;
 			break;
 		case state::finalise:
 			last = Wait(change_water_time);			//wait for pump to complete if needed
@@ -112,6 +153,12 @@ bool Scheduler::Execute()
 			last = Wait(power_down_time);			//small wait to let PSU be down
 			rest_time = idle_time;
 			m_data->mode = state::idle;			//and move to idle
+			break;
+		case state::manual_on:
+			m_data->mode = state::manual_off;
+			break;
+		case state::manual_off:
+			m_data->mode = state::power_down;
 			break;
 	}
 
@@ -125,6 +172,16 @@ bool Scheduler::Finalise()
 	return true;
 }
 
+bool Scheduler::ChangeWater()
+{
+	return m_data->changeWater;
+}
+
+bool Scheduler::Calibrate()
+{
+	return m_data->isCalibrationTool;
+}
+
 bool Scheduler::IsCalibrated()
 {
 	return m_data->isCalibrated;
@@ -135,9 +192,9 @@ bool Scheduler::IsCalibrationDone()
 	return m_data->calibrationDone;
 }
 
-bool Scheduler::IsLEDOn()
+bool Scheduler::Measure()
 {
-	return m_data->isLEDon;
+	return m_data->isMeasurementTool;
 }
 
 bool Scheduler::IsMeasurementDone()
@@ -158,8 +215,6 @@ boost::posix_time::ptime Scheduler::Wait(double t)
 
 	if (!lapse.is_negative())			//if positive, wait!
 		usleep(lapse.total_microseconds());
-
-	std::cout << "done" << std::endl;
 
 	return boost::posix_time::second_clock::local_time();
 }

@@ -30,8 +30,14 @@ enum state
 	calibration_done,
 	measurement,
 	measurement_done,
-	finalise,
-	turn_off_led
+	take_spectrum,
+	turn_off_led,
+	analyse,
+	change_water,
+	settle_water,
+	manual_on,
+	manual_off,
+	finalise
 };
 
 class DataModel
@@ -60,6 +66,10 @@ class DataModel
 
 
 		state mode;	//state for scheduler
+
+		bool isCalibrationTool;
+		bool isMeasurementTool;
+		bool changeWater;
 
 		//Calibration manager
 		//created and destroyed in the class

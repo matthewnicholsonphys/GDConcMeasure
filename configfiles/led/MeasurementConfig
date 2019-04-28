@@ -1,8 +1,0 @@
-verbose 2
-
-#Configuration file for Measurement manager
-#
-
-measurement	configfiles/led/list	#file with list of calibration/measurement
-output		output/led3.root	#file in which measurement is saved
-base_name	measureTree		#base_name for measurement

@@ -70,9 +70,7 @@ bool FakeSpectrometer::Finalise()
 
 void FakeSpectrometer::Wait()
 {
-	sleep(5);
-	//std::cout << "Waiting for you to finish... \n";
-	//std::cin.get();
+	//sleep(5);
 }
 
 bool FakeSpectrometer::GetX()
