@@ -20,7 +20,8 @@ bool Pump::Initialise(std::string configfile, DataModel &data)
 	command<<"echo \"out\" > /sys/class/gpio/gpio"<<pumppin<<"/direction";
 	system(command.str().c_str());
 	
-	m_data->changeWater = false;
+	m_data->depleteWater = false;
+	m_data->circulateWater = false;
 
 	return true;
 }
@@ -31,10 +32,10 @@ bool Pump::Execute()
 	{
 		case state::change_water:
 		case state::finalise:
-			m_data->changeWater = false;
+			m_data->depleteWater = false;
+			m_data->circulateWater = false;
 			TurnOn();
 			break;
-		case state::power_down:
 		default:
 			TurnOff();
 			break;

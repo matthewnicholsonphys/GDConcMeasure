@@ -30,6 +30,7 @@ enum state
 	calibration_done,
 	measurement,
 	measurement_done,
+	take_dark,
 	take_spectrum,
 	turn_off_led,
 	analyse,
@@ -69,7 +70,8 @@ class DataModel
 
 		bool isCalibrationTool;
 		bool isMeasurementTool;
-		bool changeWater;
+		bool depleteWater;
+		bool circulateWater;
 
 		//Calibration manager
 		//created and destroyed in the class

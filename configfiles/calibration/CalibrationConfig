@@ -4,7 +4,7 @@ verbose 2
 #
 
 calibration	configfiles/calibration/list	#file with list of calibration/measurement
-output		output/Calibrate_1m.root	#file in which calibration is saved
+output		output/BadGdCalibrate_1m.root	#file in which calibration is saved
 base_name	calibTree		#base_name for calibation
 concfunction	concF			#name of concentration function
 statfunction	statF			#name of statistical error of function

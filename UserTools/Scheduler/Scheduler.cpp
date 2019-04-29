@@ -31,8 +31,8 @@ bool Scheduler::Initialise(std::string configfile, DataModel &data)
 	stateName[state::measurement]           = "measurement";
 	stateName[state::measurement_done]      = "measurement_done";
 	stateName[state::finalise]              = "finalise";
-	stateName[state::turn_off_led]		= "turn_off_led";
-	stateName[state::take_spectrum]		= "take_spacetrum";
+	stateName[state::take_dark]		= "take_dark";
+	stateName[state::take_spectrum]		= "take_spectrum";
 	stateName[state::analyse]		= "analyse";
 	stateName[state::change_water]		= "change_water";
 	stateName[state::settle_water]		= "settle_water";
@@ -40,6 +40,7 @@ bool Scheduler::Initialise(std::string configfile, DataModel &data)
 	stateName[state::manual_off]		= "manual_off";
 
 	nextState = state::idle;
+	lastState = state::idle;
 	rest_time = 0;
 
 	m_data->isCalibrationTool = false;
@@ -92,57 +93,71 @@ bool Scheduler::Execute()
 		case state::calibration:
 			last = Wait();
 
-			if (ChangeWater())	//override cause water must be changed
+			if (DepleteWater())	//override cause water must be removed
 			{
-				nextState = state::take_spectrum;
+				nextState = state::calibration;
 				m_data->mode = state::change_water;
 				break;
 			}
 
-			if (IsCalibrationDone())				//check if calibration is completed
+			if (CirculateWater())	//override cause water must be renewd
 			{
-				nextState = state::calibration_done;	//if so, it can be saved to disk
-				m_data->mode = state::take_spectrum;	//turn LED on
+				if (IsCalibrationDone())
+					lastState = state::calibration_done;
+				else
+					lastState = state::calibration;
+				nextState = state::take_dark;
+				m_data->mode = state::change_water;
 			}
-			else
+			else 
 			{
-				nextState = state::calibration;	//if not, repeat calibration loop
-				m_data->mode = state::take_spectrum;	//turn LED on
+				if (IsCalibrationDone())
+					lastState = state::calibration_done;
+				else
+					lastState = state::calibration;
+				m_data->mode = state::analyse;	//turn LED on
 			}
 			break;
 		case state::calibration_done:
 			last = Wait();
-			m_data->mode = state::measurement;		//calibration done and saved, start measurement
+			m_data->mode = state::finalise;	//calibration done and saved, finalise
 			break;
 		case state::measurement:
 			last = Wait();
 			if (IsMeasurementDone())			//check if calibration is completed
-			{
-				nextState = state::measurement_done;	//if so, it can be saved to disk
-				m_data->mode = state::take_spectrum;	//turn LED on
-			}
+				lastState = state::measurement_done;	//if so, it can be saved to disk
 			else
-			{
 				nextState = state::measurement;	//if not, repeat calibration loop
-				m_data->mode = state::take_spectrum;	//turn LED on
-			}
+			m_data->mode = state::take_dark;	//turn LED on
 			break;
 		case state::measurement_done:
 			last = Wait();
-			m_data->mode = state::finalise;			//measurement done, turn on pump and change water for next measurement and finalise
+			m_data->mode = state::finalise;	//measurement done, turn on pump and change water for next measurement and finalise
+			break;
+		//////////////////MINI LOOP FOR ANALYSIS	//////////
+		//take dark rate and save it
+		//take spectrum (LED is on) and average it
+		//analyse data collected
+		//return to current mode, stored in nextState
+		case state::take_dark:	//spectrum taken ->  turn off led, analyse data
+			m_data->mode = state::take_spectrum;
 			break;
 		case state::take_spectrum:	//spectrum taken ->  turn off led, analyse data
 			m_data->mode = state::analyse;
 			break;
 		case state::analyse:	//go back to state (calibration or measurement)
-			m_data->mode = nextState;
+			m_data->mode = lastState;
 			break;
-		case state::change_water:
+		////////////////END OF MINI LOOP
+		case state::change_water:			//only used for calibration
 			last = Wait(change_water_time);			//wait for pump to complete if needed
-			m_data->mode = settle_water;
+			if (DepleteWater())
+				m_data->mode = nextState;
+			else
+				m_data->mode = state::settle_water;
 			break;
 		case state::settle_water:
-			last = Wait(settle_water_time);			//wait for pump to complete if needed
+			last = Wait(settle_water_time);			//wait for water to settle if needed
 			m_data->mode = nextState;
 			break;
 		case state::finalise:
@@ -154,6 +169,7 @@ bool Scheduler::Execute()
 			rest_time = idle_time;
 			m_data->mode = state::idle;			//and move to idle
 			break;
+		/////special states for LED 
 		case state::manual_on:
 			m_data->mode = state::manual_off;
 			break;
@@ -172,9 +188,14 @@ bool Scheduler::Finalise()
 	return true;
 }
 
-bool Scheduler::ChangeWater()
+bool Scheduler::DepleteWater()
 {
-	return m_data->changeWater;
+	return m_data->depleteWater;
+}
+
+bool Scheduler::CirculateWater()
+{
+	return m_data->circulateWater;
 }
 
 bool Scheduler::Calibrate()

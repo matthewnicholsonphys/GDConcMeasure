@@ -18,7 +18,8 @@ class Scheduler: public Tool
 		bool Execute();
 		bool Finalise();
 
-		bool ChangeWater();
+		bool DepleteWater();
+		bool CirculateWater();
 		bool Calibrate();
 		bool IsCalibrated();
 		bool IsCalibrationDone();
@@ -41,7 +42,7 @@ class Scheduler: public Tool
 
 		int rest_time;
 
-		state nextState;
+		state nextState, lastState;
 
 		std::map<state, std::string> stateName;
 

@@ -77,7 +77,6 @@ class LEDManager: public Tool
 		//map between led name and its gpIO pin
 		std::map<std::string, double> mLED_duty;
 		std::map<std::string, double>::iterator iLduty;
-		
 };
 
 #endif

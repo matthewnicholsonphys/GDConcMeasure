@@ -32,10 +32,11 @@ bool Analysis::Execute()
 			break;
 		case state::calibration:	//taking dark current
 			analysis = Type::calibrate;
-			darkTrace = AverageTrace(0);
 			break;
 		case state::measurement:	//taking dark current
 			analysis = Type::measure;
+			break;
+		case state::take_dark:		//average data
 			darkTrace = AverageTrace(0);
 			break;
 		case state::take_spectrum:	//average data
@@ -54,8 +55,6 @@ bool Analysis::Execute()
 				pureTrace = PureTrace();
 				MeasurementTrace();
 			}
-			else
-				std::cout << "Skip" << std::endl;
 			break;
 		case state::calibration_done:
 			LinearFit();		//evaluate linear fit for concentration calibration
