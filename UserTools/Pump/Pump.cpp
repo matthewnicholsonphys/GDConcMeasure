@@ -32,8 +32,8 @@ bool Pump::Execute()
 	{
 		case state::change_water:
 		case state::finalise:
-			m_data->depleteWater = false;
-			m_data->circulateWater = false;
+			//m_data->depleteWater = false;
+			//m_data->circulateWater = false;
 			TurnOn();
 			break;
 		default:

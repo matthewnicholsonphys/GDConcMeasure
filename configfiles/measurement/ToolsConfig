@@ -8,4 +8,4 @@ Measurement	MeasurementManager	configfiles/measurement/MeasurementConfig
 LED		LEDManager		configfiles/measurement/LEDConfig
 Spectromener	Spectrometer		configfiles/measurement/SpectrometerConfig
 Analysis	Analysis		configfiles/measurement/AnalysisConfig
-Writing		Writing			configfiles/measurement/WritingConfig
+Writer		Writer			configfiles/measurement/WritingConfig

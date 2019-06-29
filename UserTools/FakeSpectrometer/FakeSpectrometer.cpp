@@ -36,19 +36,21 @@ bool FakeSpectrometer::Execute()
 		case state::init:	//wake up, connect spectrometer on USB
 			Initialise(m_configfile, *m_data);
 			GetX();
+			break;
+		case state::take_dark:
 			GetDark();	//measure dark noise on wake up
 			break;
-		case state::calibration:
+		case state::take_spectrum:
 			std::cout << "conc " << m_data->gdconc << std::endl;
 			if (m_data->gdconc > 0.0)
 				GetData(m_data->gdconc+Error());
 			else
 				GetPure();
-			Wait();
+			//Wait();
 			break;
 		case state::measurement:
-			GetData(conc+Error());
-			Wait();
+			//GetData(conc+Error());
+			//Wait();
 			break;
 		case state::finalise:
 			Finalise();

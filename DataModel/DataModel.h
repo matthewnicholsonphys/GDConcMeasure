@@ -80,7 +80,9 @@ class DataModel
 		std::string calibrationName;
 		bool isCalibrated;	//true if there is calibratio file!
 		bool calibrationDone;	//true if calibration is finished
-		bool calibrationComplete;	//true if calibration can be completed
+		//bool calibrationComplete;	//true if calibration can be completed
+
+		std::string calibrationTime;	//timestamp for calibration
 		//
 		//	used in Analysis
 		std::string concentrationName;	//name of tree for concentration measurmenet

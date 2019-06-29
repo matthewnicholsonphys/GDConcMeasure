@@ -1,4 +1,5 @@
-idle		0
-power_up	1
-power_down	0
-change_water	1
+idle		900	#take a measurement every 15 min
+power_up	1	#spectrometer takes 20 s to boot up
+power_down	1	#give 1 sec for condensers to discharge
+change_water	1	#activate pump for 2 min
+settle_water	1	#let water rest for 12 min

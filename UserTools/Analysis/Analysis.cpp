@@ -43,13 +43,8 @@ bool Analysis::Execute()
 			avgTrace = AverageTrace(1);
 			break;
 		case state::analyse:	//led off again, we can analyse
-			if (analysis == Type::calibrate)
-			{
-				if (!m_data->calibrationComplete || m_data->calibrationName != m_data->concentrationName)
-					CalibrationTrace(m_data->gdconc, m_data->gd_err);
-				else
-					CalibrationComplete();	//complete missing holes in calibration-concentration
-			}
+			if (analysis == Type::calibrate && m_data->gdconc >= 0)
+				CalibrationTrace(m_data->gdconc, m_data->gd_err);
 			else if (analysis == Type::measure)
 			{
 				pureTrace = PureTrace();
@@ -57,7 +52,11 @@ bool Analysis::Execute()
 			}
 			break;
 		case state::calibration_done:
-			LinearFit();		//evaluate linear fit for concentration calibration
+			if (m_data->calibrationName == m_data->concentrationName)
+			{
+				CalibrationComplete();	//complete missing holes in calibration-concentration
+				LinearFit();		//evaluate linear fit for concentration calibration
+			}
 			break;
 		case state::measurement_done:
 			break;
@@ -67,6 +66,18 @@ bool Analysis::Execute()
 		default:
 			break;
 	}
+
+	std::cout << "Content of " << m_data->calibrationName << std::endl;
+	GdTree *tree = m_data->GetGdTree(m_data->calibrationName);
+	if (tree)
+		for (int i = 0; i < tree->GetEntries(); ++i)
+		{
+			tree->GetEntry(i);
+			std::cout << i << " --- " << tree->GdConc << "\t";
+			std::cout << ": " << tree->Wavelength_1 << "\t";
+			std::cout << ": " << tree->Wavelength_2 << std::endl;
+		}
+	
 
 	return true;
 }
@@ -306,7 +317,7 @@ void Analysis::CalibrationComplete()
 		newTree->Second	= oldTree->Second;
 
 		//need both peak to complete calibration
-		if (oldTree->Wavelength_1 < 0 || oldTree->Wavelength_2 < 0)
+		if (oldTree->GdConc > 0 && (oldTree->Wavelength_1 < 0 || oldTree->Wavelength_2 < 0))
 		{
 			std::cout << "CC redoing absorbance" << std::endl;
 			int size = oldTree->Trace.size();
@@ -447,6 +458,7 @@ void Analysis::FillAbsorbance(GdTree *tree, std::vector<double> &abst,
 
 void Analysis::LinearFit()
 {
+	std::cout << "FITTING" << std::endl;
 	/* calibration tree will contain n entries,
 	 * where n-1 is the number of concentration probed
 	 * and 1 is the pure water reference
@@ -456,6 +468,7 @@ void Analysis::LinearFit()
 		return;
 
 	int n = tree->GetEntries();
+	std::cout << n << " entries in " << m_data->concentrationName << std::endl;
 
 	/* creating a graph with calibration points
 	 * to be fitted with a+b*x
@@ -465,8 +478,10 @@ void Analysis::LinearFit()
 	double absMax = -1e6, absMin = 1e6;
 	while (i < n)
 	{
-		++i;
 		tree->GetEntry(i);
+		std::cout << "GDconc " << tree->GdConc << "\t";
+		std::cout << ": " << tree->Wavelength_1 << "\t";
+		std::cout << ": " << tree->Wavelength_2 << std::endl;
 
 		if (tree->Absorb_Diff > absMax)
 			absMax = tree->Absorb_Diff;
@@ -482,6 +497,8 @@ void Analysis::LinearFit()
 		}
 		else
 			std::cout << "Not fitting point at concentration " << tree->GdConc << std::endl;
+
+		++i;
 	}
 
 	//extending range
@@ -573,7 +590,7 @@ void Analysis::FindPeakDeep(const std::vector<double> &vTrace, std::vector<int> 
 	}
 
 	perr -= posx*posx;
-	std::cout << "got " << perr << " +/- " << sqrt(perr) << std::endl;
+	std::cout << "got " << posx << " +/- " << sqrt(perr) << std::endl;
 
 	iA = static_cast<int>(floor(posx - 3*sqrt(perr)));
 	iB = static_cast<int>(ceil (posx + 3*sqrt(perr)));
@@ -583,7 +600,7 @@ void Analysis::FindPeakDeep(const std::vector<double> &vTrace, std::vector<int> 
 
 	if (iA < 0 || iA > size)
 		iA = 0;
-	if (iB < 0 || iB > size)
+	if (iB < 1 || iB > size)
 		iB = size-1;
 
 	double fMax = vTrace.at(iA), fMin = fMax;

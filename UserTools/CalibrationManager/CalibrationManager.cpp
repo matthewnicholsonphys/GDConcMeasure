@@ -27,15 +27,22 @@ bool CalibrationManager::Initialise(std::string configfile, DataModel &data)
 	m_variables.Get("systfunction",	systFuncName);	//name of uncertainity function
 	m_variables.Get("fit_function",	m_data->fitFuncName);	//name of uncertainity function
 	m_variables.Get("skip_calibration",	skip);	//force to use this calibration
+	std::cout << " skip :" << skip << "." << std::endl;
 
 	if (skip)
 		skipCalib = true;
 	else
 		skipCalib = false;
 
+	if (skip)
+		std::cout << "Calibration will be skipped" << std::endl;
+	else
+		std::cout << "Calibration will not be skipped" << std::endl;
+
 	m_data->concentrationFunction = 0;
 	m_data->concentrationFuncStat = 0;
 	m_data->concentrationFuncSyst = 0;
+	m_data->calibrationTime = "";
 
 	m_data->gdconc = 0;
 	m_data->gd_err = 0;
@@ -189,14 +196,16 @@ std::vector<std::string> CalibrationManager::LoadCalibration(std::vector<std::st
 	std::vector<std::string> uList;
 	cList = CalibrationList();
 
+	std::cout << "loaded " << cList.size() << std::endl;
 	//open read only calibration file
 	TFile f(m_data->calibrationFile.c_str(), "OPEN");
 	if (f.IsZombie())
 	{
-		std::cout << "No calibration file found" << std::endl;
+		std::cout << "No calibration file found at " << m_data->calibrationFile << std::endl;
 		if (!skipCalib)
 			uList = cList;
 
+		std::cout << cList.size() << "\t" << uList.size() << std::endl;
 		for (ic = uList.begin(); ic != uList.end(); )
 		{
 			std::string cal;
@@ -250,8 +259,12 @@ std::vector<std::string> CalibrationManager::LoadCalibration(std::vector<std::st
 				{
 					type = *ic;	//store type, needed to fast forward loop
 
+
 					if (IsUpdate(dir, timeUpdate[type]) || skipCalib)	//calibration is ok
+					{
+						std::cout << "Calibration of " << type << " up to date!\n";
 						Load(f, dir, type);
+					}
 					else
 					{
 						std::string cal;
@@ -267,7 +280,8 @@ std::vector<std::string> CalibrationManager::LoadCalibration(std::vector<std::st
 
 						if (cal[0] == 'y')
 						{
-							Create(type);
+							//Create(type);
+							Load(f, dir, type);
 							uList.push_back(type);
 						}
 						else if (cal[0] == 'n' || skipCalib)
@@ -367,6 +381,17 @@ void CalibrationManager::Create(std::string type)
 		m_data->concentrationFuncSyst = new TF1(systFuncName.c_str(),
 				"((x - [0])/[1])^2 * ( ([2]/(x - [0]))^2 + ([3]/[1])^2 + 2*[4] / (x - [0]) / [1] )", 0, 1);
 	}
+
+	std::cout << "time " << m_data->calibrationTime << std::endl;
+	if (m_data->calibrationTime.empty())
+	{
+		//	    012345678901234
+		//format is YYYYMMDDTHHMMSS (there shouldn't be fractional seconds
+		boost::posix_time::ptime current(boost::posix_time::second_clock::local_time());
+		std::string tc = boost::posix_time::to_iso_string(current);
+		m_data->calibrationTime = tc.substr(0, tc.find_first_of('T'));
+		std::cout << "time " << m_data->calibrationTime << std::endl;
+	}
 }
 
 //directory names are "calibname_timestamp"
@@ -374,6 +399,8 @@ void CalibrationManager::Create(std::string type)
 bool CalibrationManager::IsUpdate(std::string name, int timeUpdate)
 {
 	std::string ts = name.substr(name.find_last_of('_') + 1);
+	ts += "T000000";
+	std::cout << "calibtraion found " << ts << std::endl;
 
 	//get current time
 	boost::posix_time::ptime last(boost::posix_time::from_iso_string(ts));
@@ -390,6 +417,8 @@ bool CalibrationManager::IsUpdate(std::string name, int timeUpdate)
 //calibrate is like a measurement
 bool CalibrationManager::Calibrate()
 {
+	m_data->depleteWater = false;
+	m_data->circulateWater = false;
 	m_data->calibrationName = m_data->calibrationBase + "_" + *ic;
 	m_data->turnOnLED = *ic;
 
@@ -442,7 +471,7 @@ bool CalibrationManager::Calibrate()
 				gde = std::strtod(input.c_str(), NULL);
 
 				m_data->gd_err = gde*gde;
-				m_data->calibrationComplete = false;
+				//m_data->calibrationComplete = false;
 
 				--ic;
 
@@ -453,7 +482,7 @@ bool CalibrationManager::Calibrate()
 			}
 			else
 			{
-				m_data->calibrationComplete = true;
+				//m_data->calibrationComplete = true;
 				m_data->gd_err = 0.0;;
 
 				m_data->depleteWater = false;

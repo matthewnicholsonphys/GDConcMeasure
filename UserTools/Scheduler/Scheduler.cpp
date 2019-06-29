@@ -20,6 +20,9 @@ bool Scheduler::Initialise(std::string configfile, DataModel &data)
 	m_variables.Get("change_water", change_water_time);
 	m_variables.Get("settle_water", settle_water_time);
 
+	if (idle_time < settle_water_time)
+		idle_time = settle_water_time;
+
 	last = boost::posix_time::second_clock::local_time();
 
 	stateName[state::idle]			= "idle";
@@ -46,6 +49,9 @@ bool Scheduler::Initialise(std::string configfile, DataModel &data)
 	m_data->isCalibrationTool = false;
 	m_data->isMeasurementTool = false;
 	
+	std::cout << "Size GdTree " << m_data->SizeGdTree() << std::endl;
+	m_data->m_gdtrees.clear();
+	std::cout << "Size GdTree " << m_data->SizeGdTree() << std::endl;
 	//HACK
 	//m_data->isCalibrated = true;
 
@@ -127,7 +133,7 @@ bool Scheduler::Execute()
 			if (IsMeasurementDone())			//check if calibration is completed
 				lastState = state::measurement_done;	//if so, it can be saved to disk
 			else
-				nextState = state::measurement;	//if not, repeat calibration loop
+				lastState = state::measurement;	//if not, repeat calibration loop
 			m_data->mode = state::take_dark;	//turn LED on
 			break;
 		case state::measurement_done:
@@ -169,7 +175,8 @@ bool Scheduler::Execute()
 			rest_time = idle_time;
 			m_data->mode = state::idle;			//and move to idle
 			break;
-		/////special states for LED 
+			//////////
+			/////special states for LED 
 		case state::manual_on:
 			m_data->mode = state::manual_off;
 			break;

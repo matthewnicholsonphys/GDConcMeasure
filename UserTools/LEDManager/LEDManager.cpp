@@ -57,7 +57,7 @@ bool LEDManager::Execute()
 			EstablishI2C();	//it is true if connections is ok!
 			break;
 		case state::take_spectrum:
-			TurnOn();
+			m_data->isLEDon = TurnOn();
 			usleep(200);
 			break;
 		case state::calibration:
@@ -65,7 +65,7 @@ bool LEDManager::Execute()
 		case state::calibration_done:
 		case state::measurement_done:
 		case state::analyse:		//turn off led for good measure (cit.)
-			if (m_data->isLEDon)
+			//if (m_data->isLEDon)
 				m_data->isLEDon = TurnOff();
 			break;
 		case state::manual_on:
@@ -89,6 +89,8 @@ bool LEDManager::Execute()
 			if (m_data->isLEDon)
 				m_data->isLEDon = TurnOffAndSleep();
 			break;
+		default:
+			m_data->isLEDon = TurnOff();
 	}
 
 	return true;

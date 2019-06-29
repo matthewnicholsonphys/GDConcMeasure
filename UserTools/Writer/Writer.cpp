@@ -22,6 +22,7 @@ bool Writer::Execute()
 	{
 		case state::init:
 			break;
+		case state::analyse:
 		case state::calibration_done:
 			WriteCalibration();
 			break;
@@ -49,11 +50,14 @@ bool Writer::Finalise()
  */
 void Writer::WriteCalibration()
 {
+	/*
 	//	    012345678901234
 	//format is YYYYMMDDTHHMMSS (there shouldn't be fractional seconds
 	boost::posix_time::ptime current(boost::posix_time::second_clock::local_time());
 	std::string tc = boost::posix_time::to_iso_string(current);
+	*/
 
+	std::cout << "OPENING " << m_data->calibrationFile << std::endl;
 	TFile file(m_data->calibrationFile.c_str(), "UPDATE");
 
 	std::map<std::string, GdTree*>::iterator it = m_data->m_gdtrees.begin();
@@ -64,7 +68,7 @@ void Writer::WriteCalibration()
 
 		std::string dirname = it->first;
 		dirname.replace(0, m_data->calibrationBase.length(), "d");
-		dirname += "_" + tc;
+		dirname += "_" + m_data->calibrationTime;
 
 		if (!file.GetDirectory(dirname.c_str()))	//no sub-dir with this name
 			file.mkdir(dirname.c_str());
@@ -76,16 +80,19 @@ void Writer::WriteCalibration()
 		//it->second->Write();
 		it->second->Write(m_data->calibrationBase);
 
+		int stat = m_data->concentrationFit;
 		//if concentration, write also functions
 		if ((it->first == m_data->concentrationName) &&
-				m_data->concentrationFunction &&
-				m_data->concentrationFuncStat &&
-				m_data->concentrationFuncSyst)
+				stat >= 0)
+				//m_data->concentrationFunction &&
+				//m_data->concentrationFuncStat &&
+				//m_data->concentrationFuncSyst &&
+				//stat >= 0)
 		{
-			m_data->concentrationFunction->Write();
-			m_data->concentrationFuncStat->Write();
-			m_data->concentrationFuncSyst->Write();
-			m_data->concentrationFit->Write(m_data->fitFuncName.c_str());
+			m_data->concentrationFunction->Write("", TObject::kWriteDelete);
+			m_data->concentrationFuncStat->Write("", TObject::kWriteDelete);
+			m_data->concentrationFuncSyst->Write("", TObject::kWriteDelete);
+			m_data->concentrationFit->Write(m_data->fitFuncName.c_str(), TObject::kWriteDelete);
 		}
 
 		//if (it->first.find(m_data->calibrationBase) == 0)
@@ -145,14 +152,15 @@ void Writer::WriteMeasurement()
 
 void Writer::Loop()
 {
-	std::cout << "WRITER: Currently in GdTree map: " << m_data->m_gdtrees.size() << std::endl;
+	std::cout << "WRITER -- size GdTree " << m_data->SizeGdTree() << std::endl;
 	std::map<std::string, GdTree*>::iterator it = m_data->m_gdtrees.begin();
 	for (; it != m_data->m_gdtrees.end(); ++it)
 	{
 		std::cout << "  ---   " << it->first << ",\t" << it->second;
-		if (it->second)
-			std::cout << ":\t" << it->second->GetEntries() << std::endl;
-		else
-			std::cout << std::endl;
+		std::cout << std::endl;
+		//if (it->second)
+		//	std::cout << ":\t" << it->second->GetEntries() << std::endl;
+		//else
+		//	std::cout << std::endl;
 	}
 }
