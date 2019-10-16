@@ -87,32 +87,6 @@ bool Analysis::Finalise()
 	return true;
 }
 
-//obtain puretrace from existing calibration
-std::vector<double> Analysis::PureTrace()
-{
-	GdTree *calib = m_data->GetGdTree(m_data->calibrationName);
-	if (!calib)
-	{
-		std::cout << "Calibration not found/set" << std::endl;
-		return std::vector<double>();
-	}
-
-	//std::cout << "ENTRIES " << calib->GetEntries() << std::endl;
-	std::vector<double> trace;
-	for (int i = 0; i < calib->GetEntries(); ++i)
-	{
-		calib->GetEntry(i);
-		if (calib->GdConc == 0)
-		{
-			trace = calib->Trace;
-			trace.insert(trace.end(), calib->T_Err.begin(), calib->T_Err.end());
-			break;
-		}
-	}
-
-	return trace;
-}
-
 void Analysis::DefineRegion(const std::vector<double> &trace)
 {
 	//if there is no pure trace or if region already defined, skip
@@ -153,6 +127,32 @@ void Analysis::DefineRegion(const std::vector<double> &trace)
 	std::cout << "Region is 3-sigma defined in: "
 		  << reg_posx - 3 * reg_perr << " -> " << reg_posx
 		  << " <- " << reg_pos + 3 * reg_perr << std::endl;
+}
+
+//obtain puretrace from existing calibration
+std::vector<double> Analysis::PureTrace()
+{
+	GdTree *calib = m_data->GetGdTree(m_data->calibrationName);
+	if (!calib)
+	{
+		std::cout << "Calibration not found/set" << std::endl;
+		return std::vector<double>();
+	}
+
+	//std::cout << "ENTRIES " << calib->GetEntries() << std::endl;
+	std::vector<double> trace;
+	for (int i = 0; i < calib->GetEntries(); ++i)
+	{
+		calib->GetEntry(i);
+		if (calib->GdConc == 0)
+		{
+			trace = calib->Trace;
+			trace.insert(trace.end(), calib->T_Err.begin(), calib->T_Err.end());
+			break;
+		}
+	}
+
+	return trace;
 }
 
 std::vector<double> Analysis::AverageTrace(bool darkRemove)
@@ -755,6 +755,27 @@ void Analysis::FindPeakDeep(const std::vector<double> &trace, std::vector<int> &
 	std::sort(iDeep.begin(), iDeep.end(), Sort(trace, -1));
 }
 
+ULong64_t Analysis::TimeStamp(int &Y, int &M, int &D, int &h, int &m, int &s)
+{
+	boost::posix_time::ptime current(boost::posix_time::second_clock::local_time());
+
+	//format is YYYYMMDDTHHMMSS (there shouldn't be fractional seconds
+	//	    012345678901234
+	std::string tc = boost::posix_time::to_iso_string(current);
+	//std::string date = tc.substr(0, tc.find_first_of('T'));
+	//std::string time = tc.substr(tc.find_first_of('T')+1);
+
+	Y = std::strtol(tc.substr(0,  4).c_str(), NULL, 10);
+	M = std::strtol(tc.substr(4,  2).c_str(), NULL, 10);
+	D = std::strtol(tc.substr(6,  2).c_str(), NULL, 10);
+	h = std::strtol(tc.substr(9,  2).c_str(), NULL, 10);
+	m = std::strtol(tc.substr(11, 2).c_str(), NULL, 10);
+	s = std::strtol(tc.substr(13, 2).c_str(), NULL, 10);
+
+	boost::posix_time::ptime epoch(boost::gregorian::date(1970,1,1));
+	return (current - epoch).total_seconds();
+}
+
 void Analysis::BinarySearch(std::vector<int, int> &nSigma, double x, double e)
 {
 	std::map<int, int>::iterator is = nSigma.begin();
@@ -781,23 +802,3 @@ void Analysis::BinarySearch(std::vector<int, int> &nSigma, double x, double e)
 	}
 }
 
-ULong64_t Analysis::TimeStamp(int &Y, int &M, int &D, int &h, int &m, int &s)
-{
-	boost::posix_time::ptime current(boost::posix_time::second_clock::local_time());
-
-	//format is YYYYMMDDTHHMMSS (there shouldn't be fractional seconds
-	//	    012345678901234
-	std::string tc = boost::posix_time::to_iso_string(current);
-	//std::string date = tc.substr(0, tc.find_first_of('T'));
-	//std::string time = tc.substr(tc.find_first_of('T')+1);
-
-	Y = std::strtol(tc.substr(0,  4).c_str(), NULL, 10);
-	M = std::strtol(tc.substr(4,  2).c_str(), NULL, 10);
-	D = std::strtol(tc.substr(6,  2).c_str(), NULL, 10);
-	h = std::strtol(tc.substr(9,  2).c_str(), NULL, 10);
-	m = std::strtol(tc.substr(11, 2).c_str(), NULL, 10);
-	s = std::strtol(tc.substr(13, 2).c_str(), NULL, 10);
-
-	boost::posix_time::ptime epoch(boost::gregorian::date(1970,1,1));
-	return (current - epoch).total_seconds();
-}
