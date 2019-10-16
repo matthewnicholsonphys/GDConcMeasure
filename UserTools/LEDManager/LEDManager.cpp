@@ -53,23 +53,20 @@ bool LEDManager::Execute()
 	{
 		case state::init:	//about to make measurement, check LED mapping
 			Initialise(m_configfile, *m_data);
-			TurnOff();
-			m_data->isLEDon = false;
+			m_data->isLEDon = TurnOff();
 			EstablishI2C();	//it is true if connections is ok!
 			break;
 		case state::take_spectrum:
-			TurnOn();
+			m_data->isLEDon = TurnOn();
 			usleep(200);
-			m_data->isLEDon = true;
 			break;
 		case state::calibration:
 		case state::measurement:
 		case state::calibration_done:
 		case state::measurement_done:
 		case state::analyse:		//turn off led for good measure (cit.)
-			TurnOff();
-			usleep(200);		//stabilises LED
-			m_data->isLEDon = false;
+			//if (m_data->isLEDon)
+				m_data->isLEDon = TurnOff();
 			break;
 		case state::manual_on:
 			std::cout << "LED recognised and loaded:" << std::endl;
@@ -77,20 +74,23 @@ bool LEDManager::Execute()
 				std::cout << "\t-  " << iLname->first << std::endl; 
 			std::cout << "\nEnter LED name to turn on" << std::endl;
 			std::getline(std::cin, m_data->turnOnLED);
-			m_data->isLEDon = false;
-			TurnOn();
-			usleep(200);
+
+			if (!m_data->isLEDon)
+				m_data->isLEDon = TurnOn();
 			break;
 		case state::manual_off:
 			std::cout << "Waiting for you to finish...(press Enter)" << std::endl;
 			std::cin.ignore();
-			TurnOff();
-			usleep(200);		//stabilises LED
-			m_data->isLEDon = false;
+
+			if (m_data->isLEDon)
+				m_data->isLEDon = TurnOff();
 			break;
 		case state::finalise:		//turn off in any other state
-			TurnOffAndSleep();
+			if (m_data->isLEDon)
+				m_data->isLEDon = TurnOffAndSleep();
 			break;
+		default:
+			m_data->isLEDon = TurnOff();
 	}
 
 	return true;
@@ -150,7 +150,7 @@ void LEDManager::MapLED()
 //
 bool LEDManager::EstablishI2C()
 {
-	std::cout << "establishing connection" << std::endl;
+	std::cout << "Establishing I2C connection" << std::endl;
 	system("i2cdetect -y 1 > .led_wiring");
 	std::ifstream inWiring(".led_wiring");
 	std::string line;
@@ -206,13 +206,7 @@ bool LEDManager::TurnOn()
 	//std::cout << "decoding " << ssl.str() << std::endl;
 	std::string led;
 	while (std::getline(ssl, led, '_'))
-	{
-		std::cout << "found " << led << std::endl;
 		ledON = ledON | mLED_name[led];
-
-	}
-
-	std::cout << "ledON " << std::hex << ledON << std::endl;
 
 	if (ledON != ledONstate)
 	{
@@ -232,11 +226,9 @@ bool LEDManager::TurnOff()
 			TurnLEDArray(0);
 			ledONstate = 0;
 		}
-
-		return true;
 	}
-	else
-		return true;
+
+	return false;
 }
 
 bool LEDManager::TurnOffAndSleep()
@@ -249,10 +241,10 @@ bool LEDManager::TurnOffAndSleep()
 			ledONstate = 0;
 		}
 
-		return SleepDriver();
+		SleepDriver();
 	}
-	else
-		return true;
+
+	return false;
 }
 
 bool LEDManager::IsSleeping()
@@ -324,6 +316,9 @@ bool LEDManager::TurnLEDArray(unsigned int ledON)
 		else
 			TurnLEDoff(iLname->first);
 	}
+
+	usleep(200);		//stabilises LED
+	return true;
 }
 
 //set registers on PCA9685
@@ -370,13 +365,9 @@ bool LEDManager::TurnLEDon(std::string ledName)
 
 	int data;
 	Read(reg_LED, data);
-	std::cout << "LED_ON_L " << data << std::endl;
 	Read(reg_LED+1, data);
-	std::cout << "LED_ON_H " << data << std::endl;
 	Read(reg_LED+2, data);
-	std::cout << "LED_OFF_L " << data << std::endl;
 	Read(reg_LED+3, data);
-	std::cout << "LED_OFF_H " << data << std::endl;
 
 	return akg;
 	//use wiringPI function to write to correct register

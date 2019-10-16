@@ -6,6 +6,7 @@ Pump		Pump			configfiles/calibration/PumpConfig
 Calibration	CalibrationManager	configfiles/calibration/CalibrationConfig
 #measurement	MeasurementManager	configfiles/calibration/MeasurementConfig
 LED		LEDManager		configfiles/calibration/LEDConfig
-Spectromener	Spectrometer		configfiles/calibration/SpectrometerConfig
+Spectrometer	Spectrometer		configfiles/calibration/SpectrometerConfig
+#Spectrometer	FakeSpectrometer	configfiles/calibration/SpectrometerConfig
 Analysis	Analysis		configfiles/calibration/AnalysisConfig
-Writing		Writing			configfiles/calibration/WritingConfig
+Writer		Writer			configfiles/calibration/WriterConfig

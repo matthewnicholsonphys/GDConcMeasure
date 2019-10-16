@@ -39,6 +39,8 @@ bool Spectrometer::Execute()
 			//break;
 		case state::calibration:	//take dark cause LED is off
 		case state::measurement:
+			break;
+		case state::take_dark:
 		case state::take_spectrum:
 			GetData();
 			break;

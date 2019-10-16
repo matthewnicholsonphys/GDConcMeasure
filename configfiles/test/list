@@ -7,7 +7,7 @@
 #this example says that 5 measurements are to be made
 #and so 5 calibration are expected. If DAQ can't find those calibration, it will request them
 #the timeNUM gives the number of days a calibration is considered valid
-led00, time10000000
+*led275j, time0
 #led01, led02, led4	time100
 #led03	time 123
 #led04, time 1000

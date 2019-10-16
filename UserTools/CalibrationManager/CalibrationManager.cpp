@@ -14,6 +14,9 @@ bool CalibrationManager::Initialise(std::string configfile, DataModel &data)
 
 	m_data = &data;
 
+
+	double skip;
+
 	m_variables.Get("verbose", verbose);
 
 	m_variables.Get("calibration",	calibFile);	//file with list of calibration/measurement
@@ -23,16 +26,23 @@ bool CalibrationManager::Initialise(std::string configfile, DataModel &data)
 	m_variables.Get("statfunction",	statFuncName);	//name of uncertainity function
 	m_variables.Get("systfunction",	systFuncName);	//name of uncertainity function
 	m_variables.Get("fit_function",	m_data->fitFuncName);	//name of uncertainity function
-	m_variables.Get("force",	force);	//force to use this calibration
+	m_variables.Get("skip_calibration",	skip);	//force to use this calibration
+	std::cout << " skip :" << skip << "." << std::endl;
 
-	if (force == "yes")
-		forceCalib = true;
+	if (skip)
+		skipCalib = true;
 	else
-		forceCalib = false;
+		skipCalib = false;
+
+	if (skip)
+		std::cout << "Calibration will be skipped" << std::endl;
+	else
+		std::cout << "Calibration will not be skipped" << std::endl;
 
 	m_data->concentrationFunction = 0;
 	m_data->concentrationFuncStat = 0;
 	m_data->concentrationFuncSyst = 0;
+	m_data->calibrationTime = "";
 
 	m_data->gdconc = 0;
 	m_data->gd_err = 0;
@@ -186,29 +196,38 @@ std::vector<std::string> CalibrationManager::LoadCalibration(std::vector<std::st
 	std::vector<std::string> uList;
 	cList = CalibrationList();
 
+	std::cout << "loaded " << cList.size() << std::endl;
 	//open read only calibration file
 	TFile f(m_data->calibrationFile.c_str(), "OPEN");
 	if (f.IsZombie())
 	{
-		std::cout << "No calibration file found" << std::endl;
-		if (!forceCalib)
+		std::cout << "No calibration file found at " << m_data->calibrationFile << std::endl;
+		if (!skipCalib)
 			uList = cList;
-		for (ic = uList.begin(); ic != uList.end(); ++ic)
-		{
-			char cal;
-			std::cout << "Do you want to calibrate " << *ic << "? (y/n)" << std::endl;
-			std::cin >> cal;
 
-			while (cal != 'y' && cal != 'n')
+		std::cout << cList.size() << "\t" << uList.size() << std::endl;
+		for (ic = uList.begin(); ic != uList.end(); )
+		{
+			std::string cal;
+			std::cout << "Do you want to calibrate " << *ic << "? [y/n]" << std::endl;
+			std::getline(std::cin, cal);
+
+			while (cal[0] != 'y' && cal[0] != 'n')
 			{
-				std::cout << "Reply 'y' or 'n'" << std::endl;
-				std::cin >> cal;
+				std::cout << "Reply 'yes' or 'no'" << std::endl;
+				std::getline(std::cin, cal);
 			}
 
-			if (cal == 'y')
+			if (cal[0] == 'y')
+			{
 				Create(*ic);
-			else if (cal == 'n')
+				++ic;
+			}
+			else if (cal[0] == 'n')
+			{
+				ic = uList.erase(ic);
 				std::cout << "Not calibrating" << std::endl;
+			}
 		}
 	}
 	else
@@ -240,27 +259,32 @@ std::vector<std::string> CalibrationManager::LoadCalibration(std::vector<std::st
 				{
 					type = *ic;	//store type, needed to fast forward loop
 
-					if (IsUpdate(dir, timeUpdate[type]) || forceCalib)	//calibration is ok
+
+					if (IsUpdate(dir, timeUpdate[type]) || skipCalib)	//calibration is ok
+					{
+						std::cout << "Calibration of " << type << " up to date!\n";
 						Load(f, dir, type);
+					}
 					else
 					{
-						char cal;
+						std::string cal;
 						std::cout << "Calibration of " << type << " out of date!\n";
-						std::cout << "Do you want to calibrate it? (y/n)" << std::endl;
-						std::cin >> cal;
+						std::cout << "Do you want to calibrate it? [y/n]" << std::endl;
+						std::getline(std::cin, cal);
 
-						while (cal != 'y' && cal != 'n')
+						while (cal[0] != 'y' && cal[0] != 'n')
 						{
-							std::cout << "Reply 'y' or 'n'" << std::endl;
-							std::cin >> cal;
+							std::cout << "Reply 'yes' or 'no'" << std::endl;
+							std::getline(std::cin, cal);
 						}
 
-						if (cal == 'y')
+						if (cal[0] == 'y')
 						{
-							Create(type);
+							//Create(type);
+							Load(f, dir, type);
 							uList.push_back(type);
 						}
-						else if (cal == 'n' || forceCalib)
+						else if (cal[0] == 'n' || skipCalib)
 						{
 							std::cout << "Forcing old calibration" << std::endl;
 							Load(f, dir, type);
@@ -286,25 +310,25 @@ std::vector<std::string> CalibrationManager::LoadCalibration(std::vector<std::st
 					break;
 				}
 
-			if (notFound && !forceCalib)
+			if (notFound && !skipCalib)
 			{
-				char cal;
+				std::string cal;
 				std::cout << "Calibration of " << *ic << " not found\n";
 				std::cout << "Do you want to calibrate it? (y/n)" << std::endl;
-				std::cin >> cal;
+				std::getline(std::cin, cal);
 
-				while (cal != 'y' && cal != 'n')
+				while (cal[0] != 'y' && cal[0] != 'n')
 				{
-					std::cout << "Reply 'y' or 'n'" << std::endl;
-					std::cin >> cal;
+					std::cout << "Reply 'yes' or 'no'" << std::endl;
+					std::getline(std::cin, cal);
 				}
 
-				if (cal == 'y')
+				if (cal[0] == 'y')
 				{
 					Create(type);
 					uList.push_back(type);
 				}
-				else if (cal == 'n')
+				else if (cal[0] == 'n')
 					std::cout << "not calibrating" << std::endl;
 			}
 		}
@@ -357,6 +381,17 @@ void CalibrationManager::Create(std::string type)
 		m_data->concentrationFuncSyst = new TF1(systFuncName.c_str(),
 				"((x - [0])/[1])^2 * ( ([2]/(x - [0]))^2 + ([3]/[1])^2 + 2*[4] / (x - [0]) / [1] )", 0, 1);
 	}
+
+	std::cout << "time " << m_data->calibrationTime << std::endl;
+	if (m_data->calibrationTime.empty())
+	{
+		//	    012345678901234
+		//format is YYYYMMDDTHHMMSS (there shouldn't be fractional seconds
+		boost::posix_time::ptime current(boost::posix_time::second_clock::local_time());
+		std::string tc = boost::posix_time::to_iso_string(current);
+		m_data->calibrationTime = tc.substr(0, tc.find_first_of('T'));
+		std::cout << "time " << m_data->calibrationTime << std::endl;
+	}
 }
 
 //directory names are "calibname_timestamp"
@@ -364,6 +399,8 @@ void CalibrationManager::Create(std::string type)
 bool CalibrationManager::IsUpdate(std::string name, int timeUpdate)
 {
 	std::string ts = name.substr(name.find_last_of('_') + 1);
+	ts += "T000000";
+	std::cout << "calibtraion found " << ts << std::endl;
 
 	//get current time
 	boost::posix_time::ptime last(boost::posix_time::from_iso_string(ts));
@@ -380,49 +417,78 @@ bool CalibrationManager::IsUpdate(std::string name, int timeUpdate)
 //calibrate is like a measurement
 bool CalibrationManager::Calibrate()
 {
+	m_data->depleteWater = false;
+	m_data->circulateWater = false;
 	m_data->calibrationName = m_data->calibrationBase + "_" + *ic;
 	m_data->turnOnLED = *ic;
 
 	std::string input;
 	double gdc, gde;
-	if (*ic != concTreeName)
-	{
-		std::cout << "Calibrating " << *ic << std::endl;
-		std::cout << "Have you put pure water? Enter to continue...\n";
-		std::cin.ignore();
+	std::cout << "Calibrating " << *ic << std::endl;
 
-		m_data->gdconc = 0.0;
-		m_data->gd_err = 0.0;
-		m_data->calibrationComplete = true;
+	std::string cal;
+	std::cout << "\nDo you need to change water? [y/n]" << std::endl;
+	std::getline(std::cin, cal);
+
+	while (cal[0] != 'y' && cal[0] != 'n')
+	{
+		std::cout << "Reply 'yes' or 'no'" << std::endl;
+		std::getline(std::cin, cal);
 	}
-	else
+
+	if (cal[0] == 'y')
 	{
-		std::cout << "Calibrating " << *ic << std::endl;
-		std::cout << "Enter concentration loaded in cell now (-1 to quit, 0.0 for pure water).";
-		std::cout << " Last concentration: " << m_data->gdconc << std::endl;
-		std::getline(std::cin, input);
-		gdc = std::strtod(input.c_str(), NULL);
-		if (!(gdc < 0))	//not finished, repeat this step
+		m_data->depleteWater = true;
+		m_data->circulateWater = false;
+		--ic;
+
+		return true;
+	}
+	else if (cal[0] == 'n')
+	{
+		if (*ic != concTreeName)
 		{
-			//std::cout << "Enter concentration error (0.0 is a fine value)\n";
+			m_data->depleteWater = false;
+			m_data->circulateWater = true;
 
-			std::getline(std::cin, input);
-			gde = std::strtod(input.c_str(), NULL);
+			std::cout << "Loading water in system." << std::endl;
 
-			m_data->gd_err = gde*gde;
-			//m_data->gd_err = 0.0;
-			m_data->calibrationComplete = false;
-
-			--ic;
+			m_data->gdconc = 0.0;
+			m_data->gd_err = 0.0;
+			//m_data->calibrationComplete = true;
 		}
 		else
 		{
-			m_data->calibrationComplete = true;
-			m_data->gd_err = 0.0;;
-		}
+			std::cout << "Enter next concentration (-1 to quit, 0.0 for pure water).";
+			std::cout << " Last concentration: " << m_data->gdconc << std::endl;
+			std::getline(std::cin, input);
+			gdc = std::strtod(input.c_str(), NULL);
+			m_data->gdconc = gdc;
+			if (!(gdc < 0))	//not finished, repeat this step
+			{
+				std::cout << "Enter concentration error (0.0 is a fine value)\n";
+				std::getline(std::cin, input);
+				gde = std::strtod(input.c_str(), NULL);
 
-		m_data->gdconc = gdc;
-		m_data->changeWater = true;
+				m_data->gd_err = gde*gde;
+				//m_data->calibrationComplete = false;
+
+				--ic;
+
+				m_data->depleteWater = false;
+				m_data->circulateWater = true;
+
+				std::cout << "Loading water in system." << std::endl;
+			}
+			else
+			{
+				//m_data->calibrationComplete = true;
+				m_data->gd_err = 0.0;;
+
+				m_data->depleteWater = false;
+				m_data->circulateWater = false;
+			}
+		}
 	}
 
 	return true;

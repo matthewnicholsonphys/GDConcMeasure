@@ -1,13 +1,12 @@
-#test1 DummyTool configfiles/DummyToolConfig
-#test2 DummyTool configfiles/DummyToolConfig
-#Scheduler Scheduler Null
-#StateTest StateTest Null
+#CALIBRATION
+#
 Scheduler	Scheduler		configfiles/test/SchedulerConfig
-#Power		Power			configfiles/test/PowerConfig
+Power		Power			configfiles/test/PowerConfig
 #Pump		Pump			configfiles/test/PumpConfig
 Calibration	CalibrationManager	configfiles/test/CalibrationConfig
-Measurement	MeasurementManager	configfiles/test/MeasurementConfig
-LED		LEDManager		configfiles/test/LEDConfig
-Spectrometer	FakeSpectrometer	NULL
-#Analysis	Analysis		NULL
-#Writer		Writer			NULL
+#measurement	MeasurementManager	configfiles/test/MeasurementConfig
+#LED		LEDManager		configfiles/test/LEDConfig
+#Spectrometer	Spectrometer		configfiles/test/SpectrometerConfig
+Spectrometer	FakeSpectrometer	configfiles/test/FSConfig
+Analysis	Analysis		configfiles/test/AnalysisConfig
+Writer		Writer			configfiles/test/WriterConfig
