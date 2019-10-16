@@ -16,6 +16,9 @@ bool Analysis::Initialise(std::string configfile, DataModel &data)
 	m_data = &data;
 	analysis = Type::undefined;
 
+	//get the order of the fitting polynomial for baseline removal
+	m_variables.Get("order", polyOrder);
+
 	return true;
 }
 
@@ -27,6 +30,7 @@ bool Analysis::Execute()
 	switch (m_data->mode)
 	{
 		case state::init:
+			iA = iB = -1;	//reset region definition
 			pureTrace.clear();
 			//darkTrace = AverageTrace(0);
 			break;
@@ -56,6 +60,8 @@ bool Analysis::Execute()
 			}
 			else
 				std::cout << "Skip" << std::endl;
+
+			DefineRegion(pureTrace);
 			break;
 		case state::calibration_done:
 			LinearFit();		//evaluate linear fit for concentration calibration
@@ -107,6 +113,48 @@ std::vector<double> Analysis::PureTrace()
 	return trace;
 }
 
+void Analysis::DefineRegion(const std::vector<double> &trace)
+{
+	//if there is no pure trace or if region already defined, skip
+	if (!trace.size() || reg_posx < 0)
+		return;
+
+	int size = trace.size() / 2;
+	double posx = 0, perr = 0, weig = 0;
+	for (int i = 1; i < size; ++i)
+	{
+		weig += pow(trace[i], 2);
+		posx += pow(trace[i], 2) * m_data->wavelength[i];
+		perr += pow(trace[i] * m_data->wavelength[i], 2);
+	}
+
+	if (weig > 0)
+	{
+		posx /= weig;
+		perr /= weig;
+	}
+
+	perr -= posx*posx;
+	std::cout << "got " << perr << " +/- " << sqrt(perr) << std::endl;
+
+	reg_posx = posx;
+	reg_perr = std::sqrt(perr);
+
+	/*
+	iA = static_cast<int>(floor(posx - 3*sqrt(perr)));
+	iB = static_cast<int>(ceil (posx + 3*sqrt(perr)));
+
+	if (iA < 0)
+		iA = 0;
+	if (iB > size)
+		iB = size;
+	*/
+
+	std::cout << "Region is 3-sigma defined in: "
+		  << reg_posx - 3 * reg_perr << " -> " << reg_posx
+		  << " <- " << reg_pos + 3 * reg_perr << std::endl;
+}
+
 std::vector<double> Analysis::AverageTrace(bool darkRemove)
 {
 	int size = m_data->traceCollect.front().size();
@@ -154,6 +202,17 @@ std::vector<double> Analysis::AbsorbTrace(const std::vector<double> &avgTrace)
 
 	int size = avgTrace.size() / 2;
 	std::vector<double> absTrace(2 * size);
+	std::vector<double> xAxis(size), toFit(size);
+
+	//intervals for background fitting
+	//adding this sigma values to the map, the value is updated by BinarySearch
+	std::map<int, int> iX;
+	iX[-4];
+	iX[-2];
+	iX[+2];
+	iX[+4];
+
+	iX = BinarySearch(iX, reg_posx, reg_perr);
 
 	if (pureTrace.size())
 	{
@@ -174,7 +233,20 @@ std::vector<double> Analysis::AbsorbTrace(const std::vector<double> &avgTrace)
 
 			if (!std::isfinite(absTrace[i]))
 				absTrace[i] = 0.0;
+
+			if ((i >= iX[-4] && i <= iX[-2]) || (i >= iX[2] && i <= iX[4]))
+			{
+				xAxis.push_back(m_data->wavelength[i] - reg_posx);
+				toFit.push_back(absTrace[i]);
+			}
 		}
+
+		PolyFit pf(xAxis, toFit, polyOrder);
+		std::vector<double> beta = pf.Solve();
+
+		//correct absorbance trace removing baseline
+		for (int i = 0; i < size; ++i)
+			absTrace[i] -= pf.ff(m_data->wavelength[i] - reg_posx);
 	}
 
 	return absTrace;
@@ -548,16 +620,15 @@ void Analysis::LinearFit()
  * it is not robust and stable
  * but it works quite ok for now
  */
-void Analysis::FindPeakDeep(const std::vector<double> &vTrace, std::vector<int> &iPeak, std::vector<int> &iDeep)
+void Analysis::FindPeakDeep(const std::vector<double> &trace, std::vector<int> &iPeak, std::vector<int> &iDeep)
 {
 	/* Find maximum (and min) value and position
 	 * this is needed to find the peaks of a trace
 	 */
 
-	int iA = -1, iB = -1;
-
 	//std::vector<double> vx = m_data->wavelength;
 
+	/*
 	int size = pureTrace.size() / 2;
 	double posx = 0, perr = 0, weig = 0;
 	for (int i = 1; i < size; ++i)
@@ -578,28 +649,44 @@ void Analysis::FindPeakDeep(const std::vector<double> &vTrace, std::vector<int> 
 
 	iA = static_cast<int>(floor(posx - 3*sqrt(perr)));
 	iB = static_cast<int>(ceil (posx + 3*sqrt(perr)));
+
 	std::cout << "region is defined in " << iA << " -> " << posx << " <- " << iB << std::endl;
 
-	size = vTrace.size() / 2;
 
 	if (iA < 0 || iA > size)
 		iA = 0;
 	if (iB < 0 || iB > size)
 		iB = size-1;
+	*/
 
-	double fMax = vTrace.at(iA), fMin = fMax;
+	if (reg_psx < 0)
+		return;
+
+	int size = trace.size() / 2;
+	std::map<int, int> iX;
+	iX[-3];
+	iX[+3];
+
+	iX = BinarySearch(iX, reg_posx, reg_perr);
+
+	int iA = iX[0];
+	int iB = iX[1];
+
+	//searching max and min between iA and iB
+	double fMax = trace[iA], fMin = trace[iA];
 	int iMax = iA, iMin = iA;
 
 	for (int i = iA+1; i < iB+1; ++i)
 	{
-		if (vTrace[i] > fMax)
+		if (fMax < 0 || fMax < trace[i])
 		{
-			fMax = vTrace[i];
+			fMax = trace[i];
 			iMax = i;
 		}
-		if (vTrace[i] < fMin)
+
+		if (fMin < 0 || fMin > trace[i])
 		{
-			fMin = vTrace[i];
+			fMin = trace[i];
 			iMin = i;
 		}
 	}
@@ -627,24 +714,24 @@ void Analysis::FindPeakDeep(const std::vector<double> &vTrace, std::vector<int> 
 		 * the the algorithm searches for a deep
 		 * and viceversa
 		 */
-		while (iD > iA-1 && iD < iB+1)
+		while (iD >= iA && iD < iB)
 		{
 			int Sign = 2*PoV - 1;	//-1 looking for Deep, +1 looking for Peak
-			if ( Sign*(vTrace[iD] - fS) > thr)
+			if ( Sign*(trace[iD] - fS) > thr)
 			{
 				iS = iD;
-				fS = vTrace[iD];
+				fS = trace[iD];
 			}
 
-			if (-Sign*(vTrace[iD] - fS) > thr)
+			if (-Sign*(trace[iD] - fS) > thr)
 			{
 				double fZ = -Sign*fMax;
 				int    iZ = -1;
 				for (int j = iD; Dir*(iS-j) < 1 && j > -1 && j < size; j -= Dir)
 				{
-					if (Sign*(vTrace[j] - fZ) > 0)
+					if (Sign*(trace[j] - fZ) > 0)
 					{
-						fZ = vTrace[j];
+						fZ = trace[j];
 						iZ = j;
 					}
 				}
@@ -664,8 +751,34 @@ void Analysis::FindPeakDeep(const std::vector<double> &vTrace, std::vector<int> 
 		}
 	}
 
-	std::sort(iPeak.begin(), iPeak.end(), Sort(vTrace,  1));
-	std::sort(iDeep.begin(), iDeep.end(), Sort(vTrace, -1));
+	std::sort(iPeak.begin(), iPeak.end(), Sort(trace,  1));
+	std::sort(iDeep.begin(), iDeep.end(), Sort(trace, -1));
+}
+
+void Analysis::BinarySearch(std::vector<int, int> &nSigma, double x, double e)
+{
+	std::map<int, int>::iterator is = nSigma.begin();
+	for ( ; is != nSigma.end(); ++is)
+	{
+		int jL = 0, jH = m_data->wavelength.size() - 1, iN = 0;
+
+		while (std::abs(jL - jH) <= 1)
+		{
+			if (is->first <= 0)
+				iN = int((jL + jH) / 2);
+			else
+				iN = int((jL + jH + 1) / 2);
+
+			if (m_data->wavelength[jL] < reg_posx + is->first * reg_perr &&
+			    reg_posx + is->first * reg_perr < m_data->wavelength[iN])
+				jH = iN;
+			else if (m_data->wavelength[iN] < reg_posx + is->first * reg_perr &&
+				 reg_posx + is->first * reg_perr < m_data->wavelength[jH])
+				jL = iN;
+		}
+
+		is->second = iN;
+	}
 }
 
 ULong64_t Analysis::TimeStamp(int &Y, int &M, int &D, int &h, int &m, int &s)

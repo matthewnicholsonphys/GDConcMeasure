@@ -64,6 +64,11 @@ class Analysis: public Tool
 		Type analysis;
 
 		bool mustComplete;
+
+		int polyOrder;
+
+		int iA, iB;
+		double reg_posx, reg_perr;
 };
 
 
