@@ -6,8 +6,8 @@ LEDR		13	2.0
 LEDG		14	2.0		
 LEDB		15	2.0		
 LED385L		8	3.5		
-LED260J		11	3.3		
-LED275J		7	3.3
+LED260J		7	3.3		
+LED275J		11	3.3
 #led07		7	12.0		
 #led08		8	8.0		
 #led09		9	5.0

@@ -1,26 +1,29 @@
 #include "DataModel.h"
 
-DataModel::DataModel(){}
+DataModel::DataModel(): CStore(false,0) {}
+
+
+TTree* DataModel::GetTTree(std::string name){
+  
+  if(m_trees.count(name)>0) return m_trees[name];
+  else return 0;
+  
+}
+
+
+void DataModel::AddTTree(std::string name,TTree *tree){
+  
+  m_trees[name]=tree;
+
+}
+
+
+void DataModel::DeleteTTree(std::string name){
+  
+  m_trees.erase(name);
+}
 
 /*
-TTree* DataModel::GetTTree(std::string name)
-{
-	return m_trees[name];
-}
-
-
-void DataModel::AddTTree(std::string name,TTree *tree)
-{
-	m_trees[name]=tree;
-}
-
-
-void DataModel::DeleteTTree(std::string name)
-{
-	m_trees.erase(name);
-}
-*/
-
 GdTree* DataModel::GetGdTree(std::string name)
 {
 //	std::cout << "map size " << m_gdtrees.size() << std::endl;
@@ -53,3 +56,4 @@ int DataModel::SizeGdTree()
 {
 	return m_gdtrees.size();
 }
+*/

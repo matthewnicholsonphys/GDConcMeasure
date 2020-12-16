@@ -3,3 +3,4 @@ power_up	1	#spectrometer takes 20 s to boot up
 power_down	1	#give 1 sec for condensers to discharge
 change_water	1	#activate pump for 2 min
 settle_water	1	#let water rest for 12 min
+wait 10

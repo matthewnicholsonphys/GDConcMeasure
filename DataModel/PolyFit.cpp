@@ -52,6 +52,7 @@ double PolyFit::Root(double x0, double y)
 	{
 		x1 = x0 - ff(x0)/fd(x0);
 	}
+	return x1;
 }
 
 Eigen::VectorXd PolyFit::Value()	//vector of residual

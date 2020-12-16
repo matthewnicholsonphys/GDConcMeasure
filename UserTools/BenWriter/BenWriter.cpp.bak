@@ -1,0 +1,139 @@
+#include "BenWriter.h"
+
+BenWriter::BenWriter():Tool(){}
+
+
+bool BenWriter::Initialise(std::string configfile, DataModel &data){
+  
+  if(configfile!="")  m_variables.Initialise(configfile);
+  //m_variables.Print();
+  
+  m_data= &data;
+  
+  //  file = new TFile("date","RECREATE");
+  
+  boost::posix_time::ptime current(boost::posix_time::second_clock::local_time());
+  tm mytm=to_tm(current);
+  m_month=mytm.tm_mon;
+  
+  std::stringstream filename;
+  filename<<"DataY"<<(mytm.tm_year + 1900)<<"M"<<(mytm.tm_mon +1)<<".root";
+  file = new TFile(filename.str().c_str(),"READ");
+  
+  for(State tmp=Dark; tmp<=All; tmp++){    
+    std::stringstream name;
+    name<<tmp;
+    TTree* tree;
+    if(file->IsOpen()){
+      tree =(TTree*)file->Get(name.str().c_str());
+      tree->SetDirectory(0);
+    }
+    else{
+      tree= new TTree(name.str().c_str(),name.str().c_str());   
+      InitTTree(tree);      
+    }
+    m_data->AddTTree(name.str(),tree);
+  }
+  
+  if(file->IsOpen()) file->Close();
+  file=0;
+  
+  return true;
+}
+
+
+bool BenWriter::Execute(){
+  
+  if( m_data->state==ReplaceWater){
+    tm mytm=to_tm(m_data->measurment_time);
+    
+    if(m_month != mytm.tm_mon){
+      
+      m_month=mytm.tm_mon;
+      
+      for( std::map<std::string,TTree*>::iterator it=m_data->m_trees.begin(); it!=m_data->m_trees.end(); it++){
+	
+	delete it->second;
+	it->second=new TTree(it->first.c_str(),it->first.c_str());
+	InitTTree(it->second);
+      }
+    }
+  }
+  
+  else if( m_data->state==Analyse){
+    
+    tm mytm=to_tm(m_data->measurment_time);
+    std::stringstream filename;
+    filename<<"DataY"<<(mytm.tm_year + 1900)<<"M"<<(mytm.tm_mon +1)<<".root";
+    
+    
+    std::cout<<"d1 "<<m_data->measurment_time<<std::endl;
+    
+    std::cout<<" output file = "<<filename.str()<<std::endl;
+    
+    file = new TFile(filename.str().c_str(),"RECREATE");
+    
+    for( std::map<std::string,TTree*>::iterator it=m_data->m_trees.begin(); it!=m_data->m_trees.end(); it++){
+
+      it->second->SetDirectory(file);
+      it->second->Write();  
+      
+    }
+    
+    file->Save();
+    
+ for( std::map<std::string,TTree*>::iterator it=m_data->m_trees.begin(); it!=m_data->m_trees.end(); it++) it->second->SetDirectory(0);
+
+ 
+    file->Close();
+    file=0;
+    
+    std::cout<<"filepointer = "<<file<<std::endl;
+  }
+  
+  
+  return true;
+}
+
+
+bool BenWriter::Finalise(){
+  
+  if (file!=0) file->Close();
+  
+  
+    for( std::map<std::string,TTree*>::iterator it=m_data->m_trees.begin(); it!=m_data->m_trees.end(); it++){
+
+      delete it->second;
+      it->second=0;
+    }
+
+    
+    m_data->m_trees.clear();
+    
+  
+  return true;
+}
+
+ void BenWriter::InitTTree(TTree* tree){
+
+    std::vector<double> value;
+    std::vector<double> error;   
+    std::vector<double> wavelength;
+   
+    short year;
+    short month;
+    short day;
+    short hour; 
+    short min;
+    
+    tree->Branch("value", &value);
+    tree->Branch("error", &error);
+    tree->Branch("wavelength", &wavelength);
+    tree->Branch("year", &year, "year/S");
+    tree->Branch("month", &month, "month/S");
+    tree->Branch("day", &day, "day/S");
+    tree->Branch("hour", &hour, "hour/S");
+    tree->Branch("min", &min, "min/S");
+
+    
+ }

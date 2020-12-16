@@ -24,6 +24,7 @@ class PolyFit
 		double ff(double x);
 		double fe(double x);
 		double fd(double x);
+  double Root(double x0, double y);
 		Eigen::VectorXd Residual();
 		Eigen::VectorXd Value();
 		Eigen::MatrixXd Weight();

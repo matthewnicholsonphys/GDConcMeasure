@@ -8,11 +8,11 @@ RootInclude = `root-config --cflags`
 BoostLib= -L $(ToolDAQPath)/boost_1_66_0/install/lib -lboost_date_time -lboost_serialization -lboost_iostreams
 BoostInclude= -I $(ToolDAQPath)/boost_1_66_0/install/include
 
-DataModelInclude= $(RootInclude)
+DataModelInclude= $(RootInclude) -I  ToolDAQ/eigen-3.3.7/
 DataModelLib=  $(RootLib)
 
-MyToolsInclude= $(RootInclude) -I  /home/pi/seabreeze-3.0.11/SeaBreeze/include/
-MyToolsLib= $(RootLib) -lwiringPi -L/usr/lib/arm-linux-gnueabihf/ -lusb -L /home/pi/seabreeze-3.0.11/SeaBreeze/lib/ -lseabreeze
+MyToolsInclude= $(RootInclude) -I  ToolDAQ/seabreeze-3.0.11/SeaBreeze/include/
+MyToolsLib= $(RootLib) -lwiringPi -L/usr/lib/arm-linux-gnueabihf/ -lusb -L ToolDAQ/seabreeze-3.0.11/SeaBreeze/lib/ -lseabreeze
 
 all: lib/libStore.so lib/libLogging.so lib/libDataModel.so include/Tool.h lib/libMyTools.so lib/libServiceDiscovery.so lib/libToolChain.so main RemoteControl  NodeDaemon
 
@@ -36,7 +36,7 @@ include/Tool.h:  $(ToolDAQPath)/ToolDAQFramework/src/Tool/Tool.h
 
 lib/libToolChain.so: $(ToolDAQPath)/ToolDAQFramework/src/ToolChain/* | lib/libLogging.so lib/libStore.so lib/libMyTools.so lib/libServiceDiscovery.so lib/libLogging.so lib/libDataModel.so
 	@echo -e "\n*************** Making " $@ "****************"
-	cp $(ToolDAQPath)/ToolDAQFramework/UserTools/Factory/*.h include/
+	#cp $(ToolDAQPath)/ToolDAQFramework/UserTools/Factory/*.h include/
 	cp $(ToolDAQPath)/ToolDAQFramework/src/ToolChain/*.h include/
 	g++ -g -fPIC -shared $(ToolDAQPath)/ToolDAQFramework/src/ToolChain/ToolChain.cpp -I include -lpthread -L lib -lStore -lDataModel -lServiceDiscovery -lLogging -lMyTools -o lib/libToolChain.so $(DataModelInclude) $(DataModelib) $(ZMQLib) $(ZMQInclude) $(MyToolsInclude)  $(BoostLib) $(BoostInclude)
 
