@@ -5,6 +5,6 @@ WebScheduler WebScheduler NULL
 BenPower BenPower configfiles/WebComs/PowerConfig
 #Valve Valve configfiles/WebComs/ValveConfig
 BenLED          BenLED                  configfiles/WebComs/LEDConfig
-BenSpectrometer BenSpectrometer         configfiles/test/SpectrometerConfig
+BenSpectrometer BenSpectrometer         configfiles/WebComs/SpectrometerConfig
 TraceAverage    TraceAverage            NULL
 SaveTraces SaveTraces NULL

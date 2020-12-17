@@ -31,7 +31,8 @@ if (tool=="BenWriter") ret=new BenWriter;
 if (tool=="BenAnalysis") ret=new BenAnalysis;
 if (tool=="webcoms") ret=new webcoms;
 if (tool=="WebScheduler") ret=new WebScheduler;
-  if (tool=="SaveTraces") ret=new SaveTraces;
+if (tool=="SaveTraces") ret=new SaveTraces;
+  if (tool=="InteractiveScheduler") ret=new InteractiveScheduler;
 return ret;
 }
 

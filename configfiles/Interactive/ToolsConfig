@@ -1,0 +1,9 @@
+#test1 DummyTool configfiles/DummyToolConfig
+#test2 DummyTool configfiles/DummyToolConfig
+InteractiveScheduler InteractiveScheduler configfiles/Interactive/InteractiveSchedulerConfig
+BenPower BenPower configfiles/Interactive/PowerConfig
+Valve Valve configfiles/Interactive/ValveConfig
+BenLED          BenLED                  configfiles/Interactive/LEDConfig
+BenSpectrometer BenSpectrometer         configfiles/Interactive/SpectrometerConfig
+TraceAverage    TraceAverage            NULL
+SaveTraces SaveTraces NULL

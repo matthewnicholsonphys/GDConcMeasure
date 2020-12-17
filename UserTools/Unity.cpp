@@ -25,3 +25,4 @@
 #include "webcoms/webcoms.cpp"
 #include "WebScheduler/WebScheduler.cpp"
 #include "SaveTraces/SaveTraces.cpp"
+#include "InteractiveScheduler/InteractiveScheduler.cpp"
