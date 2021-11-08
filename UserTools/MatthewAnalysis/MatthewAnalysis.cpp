@@ -16,8 +16,16 @@ bool MatthewAnalysis::Initialise(std::string configfile, DataModel &data){
   //m_variables.Print();
   m_data= &data;
 
-  bool success = (RetrieveDarkSubPure() && RetrieveCalibrationCurve());
-  return success;
+  RetrieveCalibrationCurve();
+
+  try {
+    RetrieveDarkSubPure();
+  } catch (std::exception &ex){
+    std::cout << ex.what() << '\n';
+    return false;
+  }
+    
+  return true;
 }
 
 bool MatthewAnalysis::Execute(){

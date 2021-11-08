@@ -25,6 +25,11 @@ class Valve: public Tool {
   void ValveOpen();
   void ValveClose();
 
+  int verbosity=1;
+  int v_error=0;
+  int v_warning=1;
+  int v_message=2;
+  int v_debug=3;
 
 };
 

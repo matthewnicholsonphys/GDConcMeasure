@@ -29,7 +29,6 @@ public:
 private:
   
   std::string m_configfile;
-  int verbose;
   long*  device_ids;
   long* spectrometer_ids;
   int error;
@@ -37,6 +36,12 @@ private:
   int intTime;
   int nTraces;
   std::string power;
+  
+  int verbosity=1;
+  int v_error=0;
+  int v_warning=1;
+  int v_message=2;
+  int v_debug=3;
 };
 
 

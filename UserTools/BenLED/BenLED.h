@@ -30,7 +30,7 @@ public:
   bool Initialise(std::string configfile,DataModel &data);
   bool Execute();
   bool Finalise();
-
+  
   bool TurnOnAll();
   bool TurnOffAll();
   
@@ -58,8 +58,6 @@ public:
   
 private:
   std::string m_configfile;
-  //verbosity
-  int verbose;
   //set up by configure
   std::string wiringLED, configLED;
   unsigned int resolution;
@@ -81,8 +79,14 @@ private:
   //map between led name and its gpIO pin
   std::map<std::string, double> mLED_duty;
   std::map<std::string, double>::iterator iLduty;
-
+  
   std::string power;
+  
+  int verbosity=1;
+  int v_error=0;
+  int v_warning=1;
+  int v_message=2;
+  int v_debug=3;
   
 };
 
