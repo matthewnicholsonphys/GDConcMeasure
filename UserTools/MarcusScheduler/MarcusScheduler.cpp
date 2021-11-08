@@ -509,7 +509,7 @@ void MarcusScheduler::DoSave(std::string the_command){
 	
 	// queue up the save action
 	std::string json_string = "{\"Save\":\"Save\",\"Filename\":\""+output_file
-		+",\"Overwrite\",\""+std::to_string(overwrite_saves)+"\"}";
+		+"\",\"Overwrite\",\""+std::to_string(overwrite_saves)+"\"}";
 	Log(std::string("Queuing action: ")+json_string,v_debug,verbosity);
 	m_data->CStore.JsonParser(json_string);
 	

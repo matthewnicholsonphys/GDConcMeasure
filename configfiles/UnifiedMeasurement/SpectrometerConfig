@@ -1,5 +1,5 @@
 #configuration for spectrometer
-
+verbosity 2
 traces		2000	#number of traces to take each measurement
 #traces         200
 integration	25000	#integration time in microseconds
