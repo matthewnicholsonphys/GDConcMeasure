@@ -28,6 +28,7 @@ bool TraceAverage::Execute(){
     short day=mytm.tm_mday;
     short hour=mytm.tm_hour;
     short min=mytm.tm_min;
+    short sec=mytm.tm_sec;
     std::string date=to_simple_string(m_data->measurment_time);
     
     std::string name="";
@@ -53,6 +54,7 @@ bool TraceAverage::Execute(){
     tree->SetBranchAddress("day", &day);
     tree->SetBranchAddress("hour", &hour);
     tree->SetBranchAddress("min", &min);
+    tree->SetBranchAddress("sec", &sec);
     
     for(int i=0;i<m_data->wavelength.size(); i++){
       double valsum=0;
@@ -108,6 +110,7 @@ void TraceAverage::InitTTree(TTree* tree){
   short day;
   short hour;
   short min;
+  short sec;
   
   tree->Branch("value", &value);
   tree->Branch("error", &error);
@@ -117,5 +120,5 @@ void TraceAverage::InitTTree(TTree* tree){
   tree->Branch("day", &day, "day/S");
   tree->Branch("hour", &hour, "hour/S");
   tree->Branch("min", &min, "min/S");
-  
+  tree->Branch("sec", &sec, "sec/S");
 }
