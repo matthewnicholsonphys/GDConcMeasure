@@ -38,6 +38,7 @@ if (tool=="GracefulStop") ret=new GracefulStop;
 if (tool=="MatthewAnalysis") ret=new MatthewAnalysis;
 if (tool=="LivePlotter") ret=new LivePlotter;
 if (tool=="SaveToDB") ret=new SaveToDB;
+if (tool=="PGTool") ret=new PGTool;
 return ret;
 }
 

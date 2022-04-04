@@ -63,12 +63,6 @@ class Postgres {
 	bool Promote(int wait_seconds=60, std::string* err=nullptr);
 	bool Demote(int wait_seconds=60, std::string* err=nullptr);
 	
-	// results will be put into m_data, and into input args if given.
-	bool GetCurrentRun(int& runnum, int* runconfig=nullptr, std::string* err=nullptr);
-	bool GetRunConfig(int& runconfig_in, int* runnum_in=nullptr, std::string* err=nullptr);
-	bool GetToolsConfig(std::string& toolsconfig, int* runnum=nullptr, int* runconfig_in=nullptr, std::string* err=nullptr);
-	bool GetToolConfig(std::string toolname, std::string& toolconfig, int* versionnum=nullptr, int* runconfig=nullptr, int* runnum=nullptr, std::string* err=nullptr);
-	
 	private:
 	int verbosity=1;
 	int v_error=0;
@@ -246,6 +240,7 @@ class Postgres {
 			}
 			break;   // if not explicitly 'continued', break.
 		} // end tries
+		return false;
 	}
 	// end helper function
 	////////

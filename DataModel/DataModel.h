@@ -19,6 +19,9 @@
 #include "TFitResult.h"
 #include "TFitResultPtr.h"
 
+#include "Postgres.h"
+#include "PGHelper.h"
+
 #include <zmq.hpp>
 
 enum State {
@@ -55,33 +58,7 @@ inline State& operator++(State& eDOW, int)  // <--- note -- must be a reference
 }
 
 //enumeration types (both scoped and unscoped) can have overloaded operators
-std::ostream& operator<<(std::ostream& os, State s){
-  
-  switch(s){
-  case ReplaceWater    :os << "ReplaceWater";    break;
-  case Sleep    :os << "Sleep";    break;
-  case PowerUP    :os << "PowerUP";    break;
-  case Dark    :os << "Dark";    break;
-    //case LEDW    :os << "LEDW";    break;//
-    //case LED385L    :os << "LED385L";    break;//
-  case DLED260J    :os << "DLED260J";    break;
-  case LED260J    :os << "LED260J";    break;
-  case DLED275J    :os << "DLED275J";    break;
-  case LED275J    :os << "LED275J";    break;
-    //case LEDR    :os << "LEDR";    break;//
-    //case LEDG    :os << "LEDG";    break;//
-    //case LEDB    :os << "LEDB";    break;//
-    //case Dark1    :os << "Dark1";    break;  
-    //case Dark2    :os << "Dark2";    break;  
-    //case Dark3    :os << "Dark3";    break;  
-  case DAll    :os << "DAll";    break;
-  case All    :os << "All";    break;
-  case Analyse     :os << "Analyse";    break;
-    
-  }
-  return os;
-}
-
+std::ostream& operator<<(std::ostream& os, State s);
 /*enum state
 {
 	idle,
@@ -202,7 +179,11 @@ public:
     std::map<std::string, GdTree*> m_gdtrees; 
   */    
     
-  std::map<std::string, TTree*> m_trees; 
+  std::map<std::string, TTree*> m_trees;
+  
+  // database manager
+  Postgres postgres;        // manages interface with the database
+  PGHelper postgres_helper; // provides user methods to perform routine database operations
   
 private:
   

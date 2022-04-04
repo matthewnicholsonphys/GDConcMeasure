@@ -1,6 +1,6 @@
 #include "DataModel.h"
 
-DataModel::DataModel(): CStore(false,0) {}
+DataModel::DataModel(): CStore(false,0), postgres_helper(this) {}
 
 
 TTree* DataModel::GetTTree(std::string name){
@@ -22,6 +22,33 @@ void DataModel::DeleteTTree(std::string name){
   
   m_trees.erase(name);
 }
+
+std::ostream& operator<<(std::ostream& os, State s){
+  switch(s){
+  case ReplaceWater    :os << "ReplaceWater";    break;
+  case Sleep    :os << "Sleep";    break;
+  case PowerUP    :os << "PowerUP";    break;
+  case Dark    :os << "Dark";    break;
+    //case LEDW    :os << "LEDW";    break;//
+    //case LED385L    :os << "LED385L";    break;//
+  case DLED260J    :os << "DLED260J";    break;
+  case LED260J    :os << "LED260J";    break;
+  case DLED275J    :os << "DLED275J";    break;
+  case LED275J    :os << "LED275J";    break;
+    //case LEDR    :os << "LEDR";    break;//
+    //case LEDG    :os << "LEDG";    break;//
+    //case LEDB    :os << "LEDB";    break;//
+    //case Dark1    :os << "Dark1";    break;  
+    //case Dark2    :os << "Dark2";    break;  
+    //case Dark3    :os << "Dark3";    break;  
+  case DAll    :os << "DAll";    break;
+  case All    :os << "All";    break;
+  case Analyse     :os << "Analyse";    break;
+    
+  }
+  return os;
+}
+
 
 /*
 GdTree* DataModel::GetGdTree(std::string name)
