@@ -1,6 +1,6 @@
 ToolDAQPath=ToolDAQ
-ZMQLib= -L $(ToolDAQPath)/zeromq-4.0.7/lib -lzmq 
-ZMQInclude= -I $(ToolDAQPath)/zeromq-4.0.7/include/ 
+ZMQLib= -L $(ToolDAQPath)/zeromq-4.0.7/lib -lzmq
+ZMQInclude= -I $(ToolDAQPath)/zeromq-4.0.7/include/
 
 RootLib = `root-config --libs`
 RootInclude = `root-config --cflags`
@@ -8,11 +8,15 @@ RootInclude = `root-config --cflags`
 BoostLib= -L $(ToolDAQPath)/boost_1_66_0/install/lib -lboost_date_time -lboost_serialization -lboost_iostreams
 BoostInclude= -I $(ToolDAQPath)/boost_1_66_0/install/include
 
+# need to check postgres install path - /usr/pgsql-12/lib...?
+PostgresLib= -L $(ToolDAQPath)/libpqxx-6.4.7/install/lib -lpqxx -lpq
+PostgresInclude= -I $(ToolDAQPath)/libpqxx-6.4.7/install/include
+
 DataModelInclude= $(RootInclude) -I  ToolDAQ/eigen-3.3.7/
 DataModelLib=  $(RootLib)
 
-MyToolsInclude= $(RootInclude) -I  ToolDAQ/seabreeze-3.0.11/SeaBreeze/include/
-MyToolsLib= $(RootLib) -lwiringPi -L/usr/lib/arm-linux-gnueabihf/ -lusb -L ToolDAQ/seabreeze-3.0.11/SeaBreeze/lib/ -lseabreeze
+MyToolsInclude= $(RootInclude) -isystem ToolDAQ/seabreeze-3.0.11/SeaBreeze/include/ $(PostgresInclude)
+MyToolsLib= $(RootLib) -lwiringPi -L/usr/lib/arm-linux-gnueabihf/ -lusb -L ToolDAQ/seabreeze-3.0.11/SeaBreeze/lib/ -lseabreeze $(PostgresLib)
 
 all: lib/libStore.so lib/libLogging.so lib/libDataModel.so include/Tool.h lib/libMyTools.so lib/libServiceDiscovery.so lib/libToolChain.so main RemoteControl  NodeDaemon
 
@@ -41,7 +45,7 @@ lib/libToolChain.so: $(ToolDAQPath)/ToolDAQFramework/src/ToolChain/* | lib/libLo
 	g++ -g -fPIC -shared $(ToolDAQPath)/ToolDAQFramework/src/ToolChain/ToolChain.cpp -I include -lpthread -L lib -lStore -lDataModel -lServiceDiscovery -lLogging -lMyTools -o lib/libToolChain.so $(DataModelInclude) $(DataModelib) $(ZMQLib) $(ZMQInclude) $(MyToolsInclude)  $(BoostLib) $(BoostInclude)
 
 
-clean: 
+clean:
 	@echo -e "\n*************** Cleaning up ****************"
 	rm -f include/*.h
 	rm -f lib/*.so
@@ -52,7 +56,7 @@ clean:
 lib/libDataModel.so: DataModel/* lib/libLogging.so | lib/libStore.so
 	@echo -e "\n*************** Making " $@ "****************"
 	cp DataModel/*.h include/
-	g++ -g -fPIC -shared DataModel/*.cpp -I include -L lib -lStore  -lLogging  -o lib/libDataModel.so $(DataModelInclude) $(DataModelLib) $(ZMQLib) $(ZMQInclude)  $(BoostLib) $(BoostInclude)
+	g++ -g -fPIC -shared DataModel/*.cpp -I include -L lib -lStore  -lLogging  -o lib/libDataModel.so $(DataModelInclude) $(DataModelLib) $(ZMQLib) $(ZMQInclude)  $(BoostLib) $(BoostInclude) $(PostgresInclude) $(PostgresLib)
 
 lib/libMyTools.so: UserTools/*/* UserTools/* | include/Tool.h lib/libDataModel.so lib/libLogging.so lib/libStore.so
 	@echo -e "\n*************** Making " $@ "****************"
@@ -65,7 +69,7 @@ RemoteControl:
 	@echo -e "\n*************** Copying " $@ "****************"
 	cp $(ToolDAQPath)/ToolDAQFramework/RemoteControl ./
 
-NodeDaemon: 
+NodeDaemon:
 	cd $(ToolDAQPath)/ToolDAQFramework/ && make NodeDaemon
 	@echo -e "\n*************** Copying " $@ "****************"
 	cp $(ToolDAQPath)/ToolDAQFramework/NodeDaemon ./
