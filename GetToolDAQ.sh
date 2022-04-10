@@ -6,6 +6,9 @@ boostflag=1
 zmq=1
 final=1
 rootflag=0
+eigen=1
+seabreeze=1
+libpqxx=1
 
 while [ ! $# -eq 0 ]
 do
@@ -113,6 +116,31 @@ then
     cd ../
 fi
 
+if [ $eigen -eq 1 ]
+then
+    wget https://gitlab.com/libeigen/eigen/-/archive/3.3.7/eigen-3.3.7.tar.gz
+    tar -zxf eigen-3.3.7.tar.gz
+    rm eigen-3.3.7.tar.gz
+fi
+
+if [ $seabreeze -eq 1 ]
+then
+    ### TODO
+fi
+
+if [ $libpqxx -eq 1 ]
+then
+    wget https://github.com/jtv/libpqxx/archive/refs/tags/6.4.7.tar.gz
+    tar -xzf 6.4.7.tar.gz
+    rm 6.4.7.tar.gz
+    cd libpqxx-6.4.7
+    mkdir install
+    ./configure --disable-documentation --enable-shared --prefix=$PWD/install
+    make
+    make install
+    cd ..
+fi
+
 if [ $boostflag -eq 1 ]
 then
     
@@ -137,16 +165,18 @@ fi
 if [ $rootflag -eq 1 ]
 then
     
-    wget https://root.cern.ch/download/root_v5.34.34.source.tar.gz
-    tar zxvf root_v5.34.34.source.tar.gz
-    rm -rf root_v5.34.34.source.tar.gz
-    cd root
-    
-    ./configure --enable-rpath
-    make -j8
+    wget https://root.cern.ch/download/root_v6.14.06.source.tar.gz
+    tar zxf root_v6.14.06.source.tar.gz
+    rm -rf root_v6.14.06.source.tar.gz
+    cd root-6.14.06
+    mkdir install
+    cd install
+    cmake ../ -Dcxx14=OFF -Dcxx11=ON -Dxml=ON -Dmt=ON -Dmathmore=ON -Dx11=ON -Dimt=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo -Dbuiltin_gsl=ON -Dfftw3=ON -DCMAKE_SHARED_LINKER_FLAGS='-latomic'
+    # note latomic flag required by gcc8!
+    # https://root-forum.cern.ch/t/root-6-18-04-fails-to-compile-on-raspbian-10-with-solution/36514
+    make -j4
     make install
-    
-    source ./bin/thisroot.sh
+    source bin/thisroot.sh
     
     cd ../
     

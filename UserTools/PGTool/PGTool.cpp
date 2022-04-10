@@ -315,6 +315,8 @@ bool PGTool::Execute(){
 		// postgres has a field format specifically for json data, which ensures syntatic validity
 		// on record entry, and allows direct access to elements within stored json fields.
 		// ( see https://www.postgresql.org/docs/current/datatype-json.html for details)
+		// note strings, numbers, booleans and json 'null' will be converted to their
+		// equivalent postres type (table 8.23 above), but e.g. timestamps will not.
 		jsoncontents = "{ \"bar\":\"baz\", \"balance\":7.77, \"active\":false }";
 		// we saw this used for inserting data above.
 		
@@ -363,7 +365,7 @@ bool PGTool::Execute(){
 		// https://devhints.io/postgresql-json
 		
 		// n.b. while json allows arrays and objects to be nested arbitrarily as shown below,
-		// but this is not supported by the Store::JsonParser at this time, so please avoid this!
+		// this is not supported by the Store::JsonParser at this time, so please avoid this!
 		jsoncontents = "{ \"foo\": [true, \"bar\"], \"tags\": {\"a\": 1, \"b\": null} }";
 		// Get the first index of a JSON array
 		//query_string = "SELECT params->foo->0 FROM events";  // should return 'true'
