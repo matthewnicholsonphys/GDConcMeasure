@@ -1,4 +1,5 @@
 #include "BenPower.h"
+#include "Algorithms.h"
 
 BenPower::BenPower() : Tool(){}
 
@@ -21,61 +22,88 @@ bool BenPower::Initialise(std::string configfile, DataModel &data){
   
   std::stringstream command;
   command<<"echo \""<<m_powerpin<<"\" > /sys/class/gpio/export";
-  system(command.str().c_str());
+  std::string errmsg;
+  int ok = SystemCall(command.str(), errmsg);
+  if(ok!=0){
+    Log("BenPower::Initialise "+errmsg,0,0);
+    return false;
+  }
   
   command.str("");
   command<<"echo \"out\" > /sys/class/gpio/gpio"<<m_powerpin<<"/direction";
-  system(command.str().c_str());
-   
-  TurnOff();
-   
-  return true;
+  ok = SystemCall(command.str(), errmsg);
+  if(ok!=0){
+    Log("BenPower::Initialise "+errmsg,0,0);
+    return false;
+  }
+  
+  ok = TurnOff();
+  
+  return ok;
   
 }
 
 bool BenPower::Execute(){
   
   std::string Power="";
+  int ok = true;
   
   if(m_data->CStore.Get("Power",Power) && Power!=power){
     
-    if(Power=="ON") TurnOn();
-    else if (Power=="OFF") TurnOff();
+    if(Power=="ON") ok = TurnOn();
+    else if (Power=="OFF") ok = TurnOff();
     
   }
   
-  return true;
+  return ok;
 }
 
 
 bool BenPower::Finalise(){
   
-  TurnOff();
+  bool ok = TurnOff();
   
-  return true;
+  return ok;
 }
 
-void BenPower::TurnOn(){
+bool BenPower::TurnOn(){
   
   //write to GPIO
   Log("power on",v_message,verbosity);
   std::stringstream command;
   command<<"echo \"0\" > /sys/class/gpio/gpio"<<m_powerpin<<"/value";
-  system(command.str().c_str());
+  
+  std::string errmsg;
+  int retval=SystemCall(command.str(), errmsg);
+  if(retval!=0){
+    Log("BenPower::TurnOn "+errmsg,0,0);
+    return false;
+  }
   
   sleep(4);
   power ="ON";
+  
+  return true;
+  
 }
 
-void BenPower::TurnOff(){
+bool BenPower::TurnOff(){
   
   //write to GPIO
   Log("power off",v_message,verbosity);
   std::stringstream command;
   command<<"echo \"1\" > /sys/class/gpio/gpio"<<m_powerpin<<"/value";
-  system(command.str().c_str());
+  
+  std::string errmsg;
+  int retval = SystemCall(command.str(),errmsg);
+  if(retval!=0){
+    Log("BenPower::TurnOff "+errmsg,0,0);
+    return false;
+  }
   
   sleep(4);
   power="OFF";
+  
+  return true;
   
 }

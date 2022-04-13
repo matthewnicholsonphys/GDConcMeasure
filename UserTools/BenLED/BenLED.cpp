@@ -1,4 +1,5 @@
 #include "BenLED.h"
+#include "Algorithms.h"
 
 BenLED::BenLED():Tool(){}
 
@@ -37,36 +38,58 @@ bool BenLED::Initialise(std::string configfile, DataModel &data){
   //if it hasn't been changed since last time, don't do anyhting
   if (newTime != lastTime)
   */
- MapLED();
   
- //lastTime = newTime;
- power="OFF";
- 
+  // read LED pin mapping from config file
+  MapLED();
+  
+  //lastTime = newTime;
+  power="OFF";
+  
   return true;
 }
 
 bool BenLED::Execute(){
   
+  bool ok = true;
   std::string Power="";
   
+  // check for a flag in the DataModel indicating we are powering up or down
   if(m_data->CStore.Get("Power",Power) && Power!=power){
     
     if(Power=="ON"){
-      EstablishI2C();
-      TurnOffAll();
+      
+      // on powerup, establish comms with the PWM board embedded in the detector end cap
+      // this also sets the PWM modulation frequency
+      ok = EstablishI2C();
+      if(not ok) return ok;
+      
+      // initialise all LEDs to off
       power=Power;
+      ok = TurnOffAll();
+      if(not ok){
+        Log("BenLED::Execute error Initializing LED states to off!",0,0);
+        return false;
+      }
     }
     
   }
   
   std::string LED;
   if(m_data->CStore.Get("LED",LED)){
-    
-    if(LED=="Off All"){
-      TurnOffAll();
-      Log("all led off",v_message,verbosity);
-    }
-    else if(LED=="Change"){
+    if(!file_descript){
+      // not gonna get anywhere without a device handle
+      Log("BenLED::Execute LED change called with null file_descriptor!",0,0);
+      ok = false;
+      
+    } else if(LED=="Off All"){
+      ok = TurnOffAll();
+      if(ok){
+        Log("all leds off",v_message,verbosity);
+      } else {
+        Log("BenLED::Execute error calling TurnOffAll!!! LEDs may not be off!",0,0);
+      }
+      
+    } else if(LED=="Change"){
       
       //m_data->CStore.Print();
       short R=0;
@@ -85,32 +108,32 @@ bool BenLED::Execute(){
       m_data->CStore.Get("275",UV275);
       
       if( R || G || B ){
-        TurnLEDon("LEDRGBAnnode");
-        TurnLEDon("LEDR");
-        TurnLEDon("LEDG");
-        TurnLEDon("LEDB");
+        ok &= TurnLEDon("LEDRGBAnnode");
+        ok &= TurnLEDon("LEDR");
+        ok &= TurnLEDon("LEDG");
+        ok &= TurnLEDon("LEDB");
       }
       else{
-        TurnLEDoff("LEDRGBAnnode");
-        TurnLEDoff("LEDR");
-        TurnLEDoff("LEDG");
-        TurnLEDoff("LEDB");
+        ok &= TurnLEDoff("LEDRGBAnnode");
+        ok &= TurnLEDoff("LEDR");
+        ok &= TurnLEDoff("LEDG");
+        ok &= TurnLEDoff("LEDB");
       
       }
       
-      if(R)  TurnLEDoff("LEDR");
-      if(G)  TurnLEDoff("LEDG");
-      if(B)  TurnLEDoff("LEDB");
+      if(R)  ok &= TurnLEDoff("LEDR");
+      if(G)  ok &= TurnLEDoff("LEDG");
+      if(B)  ok &= TurnLEDoff("LEDB");
       
       
-      if(White) TurnLEDon("LEDW");
-      else TurnLEDoff("LEDW");
-      if(B385) TurnLEDon("LED385L");
-      else TurnLEDoff("LED385L");
-      if(UV260) TurnLEDon("LED260J");
-      else TurnLEDoff("LED260J");
-      if(UV275) TurnLEDon("LED275J");
-      else TurnLEDoff("LED275J");
+      if(White) ok &= TurnLEDon("LEDW");
+      else ok &= TurnLEDoff("LEDW");
+      if(B385) ok &= TurnLEDon("LED385L");
+      else ok &= TurnLEDoff("LED385L");
+      if(UV260) ok &= TurnLEDon("LED260J");
+      else ok &= TurnLEDoff("LED260J");
+      if(UV275) ok &= TurnLEDon("LED275J");
+      else ok &= TurnLEDoff("LED275J");
       //delete entries after maybe??
     }
     m_data->CStore.Remove("LED");
@@ -118,50 +141,68 @@ bool BenLED::Execute(){
   }
   
   
-  return true;
+  return ok;
 }
 
 bool BenLED::TurnOnAll(){
   
-  if (IsSleeping() && !WakeUpDriver()) return false;
-  
-  TurnLEDon("LEDRGBAnnode");
-  
-  for (std::map<std::string, unsigned int>::iterator it =  mLED_name.begin(); it != mLED_name.end(); ++it){
-    
-    TurnLEDon(it->first);
+  if (IsSleeping() && !WakeUpDriver()){
+    Log("BenLED::TurnOnAll unable to wake driver!",0,0);
+    return false;
   }
   
-  return true;
+  bool ok = TurnLEDon("LEDRGBAnnode");
+  if(not ok){
+    Log("BenLED::TurnOnAll failed trying to turn on RGB Anode!",0,0);
+    // return false;   XXX ?? should we continue?
+  }
+  
+  // try to turn on all other LEDs
+  for (std::map<std::string, unsigned int>::iterator it =  mLED_name.begin(); it != mLED_name.end(); ++it){
+    ok &= TurnLEDon(it->first);
+  }
+  if(not ok){
+    Log("BenLED::TurnOnAll failed to turn on all LEDs!",0,0);
+  }
+  
+  return ok;
 }
 
 bool BenLED::TurnOffAll(){
+  // turn all LEDs off
+  bool all_ok = true;
   
-  if (IsSleeping() && !WakeUpDriver()) return false;
-  
-  for (std::map<std::string, unsigned int>::iterator it =  mLED_name.begin(); it != mLED_name.end(); ++it){
-    
-    if(it->first != "LEDRGBAnnode") TurnLEDoff(it->first);
+  // lazy &&, check if sleeping and wake up driver if so
+  // return false if unable to wake driver.
+  if (IsSleeping() && !WakeUpDriver()){
+    Log("BenLED::TurnOffAll unable to wake driver!",0,0);
+    return false;
   }
-   TurnLEDoff("LEDRGBAnnode");
   
-  return true;
+  // loop over LEDS and turn them off
+  for (std::map<std::string, unsigned int>::iterator it =  mLED_name.begin(); it != mLED_name.end(); ++it){
+    // special case; skip RGB LED - we don't turn the cathodes off, just the collective anode.
+    if(it->first != "LEDRGBAnnode") all_ok &= TurnLEDoff(it->first);
+  }
+  // turn off RGB LED
+  all_ok &= TurnLEDoff("LEDRGBAnnode");
+  if(not all_ok){
+    Log("BenLED::TurnOffAll failed to turn off all LEDs!!!",0,0);
+  }
+  
+  return all_ok;
 }
 
 
 bool BenLED::Finalise(){
   
-  TurnOffAndSleep();        //0 will turn off all LEDs
-  return true;
+  return TurnOffAndSleep();        // 0 will turn off all LEDs
 }
-
-//configure the class reading from configfile
-void BenLED::Configure(){}
 
 
 void BenLED::MapLED(){
-  
-  Log("Remapping LED wiring",v_message,verbosity);
+  // build maps of LED name to pin, voltage, and bit within a bitmap.
+  Log("Reading LED pin mapping",v_message,verbosity);
   
   mLED_name.clear();
   mLED_chan.clear();
@@ -183,14 +224,15 @@ void BenLED::MapLED(){
     double volt;
     if (ssl >> key >> pin >> volt){
       
-      //name of LED is mapped to an incremental bit value
-      mLED_name[key] = static_cast<unsigned int>(pow(2, mLED_name.size()-1));
-      //name of LED is mapped to the pin it is connected to
+      // make an entry for this LED in 3 maps, using the LED name as key:
+      // 1) pin the LED is connected to
       mLED_chan[key] = pin;
-      //name of LED is mapped to its operative voltage
-      //this must be later divided by input voltage to find duty cycle
+      // 2) LED target voltage; this is divided by the PWM supply voltage to convert to PWM duty cycle
+      // quick sanity check that the requested voltage is not greater than the supply voltage
       if (volt > fVin)        Log("BenLED: WARNING\tvoltage of " + key + " set higher than Vin", 1, verbosity);
       else mLED_duty[key] = volt / fVin;
+      // 3) map this LED to the next free bit in a bitmap. Allows all LED states to be specified by one int
+      mLED_name[key] = static_cast<unsigned int>(pow(2, mLED_name.size()-1));
     
     }
   }
@@ -200,83 +242,117 @@ void BenLED::MapLED(){
 //in I2C mapping by i2cdetect program
 //
 bool BenLED::EstablishI2C(){
-  
   Log("Establishing I2C connection",v_message,verbosity);
-  system("i2cdetect -y 1 > .led_wiring");
+  
+  // scan i2c for devices and write result into a temporary file
+  std::string errmsg;
+  int ok = SystemCall("i2cdetect -y 1 > .led_wiring", errmsg);
+  if(ok!=0){
+    Log("BenLED::EstablishI2C "+errmsg,0,0);
+    return false;
+  }
+  
   std::ifstream inWiring(".led_wiring");
   std::string line;
   int addr;
+  bool address_found=false;
+  
+  // scan lines describing i2c devices found
+  // i2cdetect returns a table of possible addresses, spanning 0-128, or in hex [0-7][0-F].
+  // In the returned table rows are the most significant nibble, columns the least significant nibble.
+  // e.g. address 0x73 would be row 7 column 3.
+  // Addresses where no device responded contain '--', while ones where a device responded contain
+  // the corresponding address (i.e. row 7 column 3 will contain '73').
+  // We assume that we only have one i2c device on bus 1 (from i2cdetect -y 1)
+  // and scan through the table, dropping the first row and column,
+  // and reading until we find an entry that isn't '--'.
   while (std::getline(inWiring, line)){
     
+    // skip header line (does not contain ':' character)
     int pos = line.find_first_of(':');
-    if (pos != std::string::npos){
+    if(pos == std::string::npos) continue;
+    
+    // drop first column (up to and including ':')
+    line.erase(0, pos+1);
+    
+    // parse the remaining fields
+    std::stringstream ssl(line);
+    while (ssl >> line){
+      // skip '--' fields - no device responded
+      if(line == "--") continue;
       
-      line.erase(0, pos+1);
-      std::stringstream ssl(line);
-      while (ssl >> line){
-        
-        if (line != "--")  {
-          
-          addr = std::strtol(line.c_str(), NULL, 16);
-          goto address_found;
-        }
-      }
+      // other entries represent addresses at which a device responded.
+      // read the address in base 16 (hex), and assume this is our PWM board.
+      addr = std::strtol(line.c_str(), NULL, 16);
+      address_found = true;
+      break;
     }
+    
+    // break once we found something
+    if(address_found) break;
   }
   
- address_found:
+  if(!address_found){
+    Log("BenLED::EstablishI2C failed to find any devices with i2cdetect!",0,0);
+    return false;
+  }
+  
+  // if we found a device,try to establish comms
   Log("BenLED: making I2C connection to address " + addr, 1, verbosity);
   
   file_descript = wiringPiI2CSetup(addr);
+  if(file_descript<0){
+    std::string errorstr = std::strerror(errno);  // errno is a macro #defined by <errno.h>
+    Log("BenLED::EstablishI2C error invoking wiringPiI2CSetup: '"+errorstr+"'",0,0);
+    return false;
+  }
+  
+  // set PWM modulation frequency
   return SetPWMfreq(frequencyPWM);
 }
 
 bool BenLED::SetPWMfreq(double freq){
   
-  if (freq < 24.0) freq = 24.0;
-  else if (freq > 1526.0) freq = 1526.0;
+  // coerce to within limits of the PWM board
+  if (freq < 24.0){
+    Log("BenLED::SetPWMfreq coercing PWM modulation frequency from "+std::to_string(freq)
+        +" to 24Hz (minimum)",1,0);
+    freq = 24.0;
+  } else if (freq > 1526.0){
+    Log("BenLED::SetPWMfreq coercing PWM modulation frequency from "+std::to_string(freq)
+        +" to 1526Hz (maximum)",1,0);
+    freq = 1526.0;
+  }
   
   int prescale = std::round(25.0e6 / resolution / freq) - 1;
   //std::cout << "setting " << freq << " to " << std::hex << prescale << std::endl;
   
-  //this address is is where the prescaler of the PWM frequency is stored
+  // 0xfe is the address where the prescaler of the PWM frequency is stored
   return Write(0xfe, prescale);
-}
-
-bool BenLED::TurnOn(){
-  
-  return true;       //continue measuring
-  
-}
-
-bool BenLED::TurnOff(){
-  
-  if (!IsSleeping()){
-    
-    if (0 != ledONstate){
-      
-      TurnLEDArray(0);
-      ledONstate = 0;
-    }
-  }
-  
-  return false;
 }
 
 bool BenLED::TurnOffAndSleep(){
   
   if (!IsSleeping()){
     
-    if (0 != ledONstate){
+    if (ledONstate != 0){
       
-      TurnLEDArray(0);
+      bool ok = TurnLEDArray(0);
+      if(not ok){
+        Log("BenLED::TurnOffAndSleep failed to turn off all LEDs!!!",0,0);
+        return false;
+      }
       ledONstate = 0;
     }
     
-    SleepDriver();
+    bool ok = SleepDriver();
+    if(not ok){
+      Log("BenLED::TurnOffAndSleep failed to SleepDriver!",0,0);
+      return false;
+    }
   }
   
-  return false;
+  return true;
 }
 
 bool BenLED::IsSleeping(){
@@ -290,16 +366,16 @@ bool BenLED::IsSleeping(){
 
 bool BenLED::WakeUpDriver(){
   
-  //write MODE1 register to wake up device from sleep
-  //read frist MODE1 register
-  //if sleep == 1 then set sleep to 0. Sleep bit is 0x10
-  //wait 500us
-  //write 1 to restart and other bits
-  //Auto Increment == 1
-  //if Driver was put to sleep without turning off outputs,
-  //the RESTART bit (7bit of MODE1) must be cleared by writing 1
+  // to wake up device from sleep, write MODE1 register
+  // first, read MODE1 register
+  // if sleep == 1 then set sleep to 0. Sleep bit is 0x10
+  // wait 500us
+  // write 1 to restart and other bits
+  // Auto Increment == 1
+  // if Driver was put to sleep without turning off outputs,
+  // the RESTART bit (7bit of MODE1) must be cleared by writing 1
   
-  //reade MODE1 first
+  //read MODE1 first
   int mode1;
   bool ret = Read(0x00, mode1);
   if (!ret)  return false;
@@ -337,21 +413,25 @@ bool BenLED::SleepDriver(){
  */
 bool BenLED::TurnLEDArray(unsigned int ledON){
   
+  bool all_ok = true;
   for (iLname = mLED_name.begin(); iLname != mLED_name.end(); ++iLname){
     
-    if (ledON & iLname->second) TurnLEDon(iLname->first);
-    else TurnLEDoff(iLname->first);
+    if (ledON & iLname->second) all_ok &= TurnLEDon(iLname->first);
+    else all_ok &= TurnLEDoff(iLname->first);
   }
   
   usleep(200);                //stabilises LED
-  return true;
+  return all_ok;
   
 }
 
 //set registers on PCA9685
 bool BenLED::TurnLEDon(std::string ledName){
   
-  if (IsSleeping() && !WakeUpDriver()) return false;
+  if (IsSleeping() && !WakeUpDriver()){
+    Log("BenLED::TurnLEDon failed to wake up driver!",0,0);
+    return false;
+  }
   
   Log("Turning on "+ledName,v_message,verbosity);
   //std::cout << "turning on " << ledName << std::endl;
@@ -436,9 +516,11 @@ bool BenLED::Read(int reg, int &data){
     if (data < 0) return false;
     else return true;
   
+  } else {
+    Log("BenLED::Read called with null i2c address!",0,0);
   }
   
-  else return false;
+  return false;
 }
 
 //standard 8bit write
@@ -456,8 +538,8 @@ bool BenLED::Write(int reg, int data){
 }
 
 //uses the autoincrement option to read to sequential registers faster
-//
 bool BenLED::ReadAI(int reg, int num_reg, std::vector<int> &block){
+  // unused function
   
   block.clear();
   if (file_descript){
@@ -484,8 +566,8 @@ bool BenLED::ReadAI(int reg, int num_reg, std::vector<int> &block){
 }
 
 //uses the autoincrement option to write to sequential registers faster
-//
 bool BenLED::WriteAI(int reg, const std::vector<int> &block){
+  // unused function
   
   if (file_descript){
     

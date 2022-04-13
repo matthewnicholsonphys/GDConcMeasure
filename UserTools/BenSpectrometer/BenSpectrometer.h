@@ -29,6 +29,9 @@ public:
 private:
   
   std::string m_configfile;
+  std::string SpectrometerModel="Blaze";
+  std::string SpectrometerIP="192.168.50.4";
+  int SpectrometerPort=57357;
   long*  device_ids;
   long* spectrometer_ids;
   int error;

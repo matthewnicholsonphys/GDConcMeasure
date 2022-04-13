@@ -17,8 +17,8 @@ public:
   bool Execute();
   bool Finalise();
   
-  void TurnOn();
-  void TurnOff();
+  bool TurnOn();
+  bool TurnOff();
   
 private:
   

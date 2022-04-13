@@ -130,12 +130,13 @@ public:
   std::string mode;
   std::vector<std::vector<double> > traceCollect;
   std::vector<double> wavelength;	//can be retrieved from seabreeze
- boost::posix_time::ptime measurment_time;
+  boost::posix_time::ptime measurment_time;
 
   TGraphErrors* dark_sub_pure;
   TF1* pure_fct;
   TF1* calib_curve;
-  
+
+  std::vector<std::pair<double,double>> concs_and_peakdiffs;
   /*
     state mode;	//state for scheduler
     

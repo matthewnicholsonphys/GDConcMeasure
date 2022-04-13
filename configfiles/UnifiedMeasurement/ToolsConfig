@@ -6,4 +6,5 @@ BenLED              BenLED                  configfiles/UnifiedMeasurement/LEDCo
 BenSpectrometer     BenSpectrometer         configfiles/UnifiedMeasurement/SpectrometerConfig
 TraceAverage        TraceAverage            configfiles/UnifiedMeasurement/TraceAverageConfig
 myMatthewAnalysis   MatthewAnalysis         configfiles/UnifiedMeasurement/MatthewAnalysisConfig
+myLivePlotter       LivePlotter             configfiles/UnifiedMeasurement/LivePlotterConfig
 SaveTraces          SaveTraces              configfiles/UnifiedMeasurement/SaveTracesConfig

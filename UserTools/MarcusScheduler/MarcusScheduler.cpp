@@ -13,7 +13,7 @@ bool MarcusScheduler::Initialise(std::string configfile, DataModel &data){
 	
 	// check we have an input file specifying the sequence of commands to be run
 	if(!m_variables.Get("command_file",command_file)){
-		Log("no command_file specified in config file!",v_error,verbosity);
+		Log("MarcusScheduler::Initialise - no command_file specified in config file!",v_error,verbosity);
 		return false;
 	}
 	break_loop_flagfile_name = "UserTools/MarcusScheduler/breakloop";
@@ -58,7 +58,7 @@ bool MarcusScheduler::Execute(){
 		
 		// if we've performed all the automation steps, return to the main menu
 		else if(current_command==commands.size()){
-			Log("Reached end of command list, returning to main menu",v_error,verbosity);
+			Log("Reached end of command list, returning to main menu",v_message,verbosity);
 			PutSystemInSafeState();
 			current_command=-1;
 		}
@@ -92,13 +92,14 @@ bool MarcusScheduler::Execute(){
 	}
 	catch(std::exception& e){
 		// print warning
-		Log(std::string("MarcusScheduler caught exception ")+e.what()+" during command "
-			 +std::to_string(current_command)+" of "+std::to_string(commands.size())
-			 +" at step "+std::to_string(command_step),v_error,verbosity);
+		std::string logmessage = std::string("MarcusScheduler::Execute - caught exception ")
+		    +e.what()+" during command "+std::to_string(current_command)+" of "
+		    +std::to_string(commands.size())+" at step "+std::to_string(command_step);
 		if(current_command<commands.size()){
-			Log(std::string("Corresponding command is: ")+commands.at(current_command),v_error,verbosity);
+			logmessage += "Corresponding command is: "+commands.at(current_command);
 		}
-		Log("Aborting this command!",v_error,verbosity);
+		Log(logmessage,v_error,verbosity);
+		std::cerr<<"Aborting this command!"<<std::endl;
 		
 		// ensure system is in a safe state - turn off all LEDs, close the pump valves
 		PutSystemInSafeState();
@@ -141,7 +142,7 @@ void MarcusScheduler::ReadCommandFile(){
 		}
 		myfile.close();
 	} else {
-		Log(std::string("Unable to open file: ")+command_file,v_error,verbosity);
+		Log("MarcusScheduler::ReadCommandFile - Unable to open file: "+command_file,v_error,verbosity);
 	}
 }
 
@@ -150,7 +151,7 @@ void MarcusScheduler::ReadCommandFile(){
 void MarcusScheduler::MainMenu(){
 	// Main Menu - propt user for action
 	std::string command;
-	Log("Type Start to power up, Stop to power down, or anything else to begin automation: ",v_error,verbosity);
+	std::cout<<"Type Start to power up, Stop to power down, or anything else to begin automation: "<<std::endl;
 	
 	// read input from user
 	std::cin>>command;
@@ -250,7 +251,7 @@ bool MarcusScheduler::check_break_loop(std::string& the_command){
 				} else {
 					// if we scanned to the end of the command list
 					// but didn't find a 'loop' command, just ignore the flag file
-					Log("Did not find a 'loop' command, ignoring break loop",v_warning,verbosity);
+					Log("MarcusScheduler::check_break_loop - Did not find a 'loop' command, ignoring break loop",v_warning,verbosity);
 					std::string syscmd="rm -f "+break_loop_flagfile_name;
 					system(syscmd.c_str());
 					
@@ -360,7 +361,7 @@ void MarcusScheduler::ProcessCommand(std::string& the_command){
 		
 	} else {
 		// unrecognised command string
-		Log(std::string("ERROR: Unknown command action: ")+the_command,v_error,verbosity);
+		Log("MarcusScheduler::ProcessCommand - Unknown command action: "+the_command,v_error,verbosity);
 		++current_command;
 	}
 	
@@ -393,7 +394,7 @@ void MarcusScheduler::SimpleWaitForDuration(std::string wait_string){
 		wait_seconds = std::stoi(wait_string);
 	} catch(...){
 		// bad parsing.
-		Log(std::string("Failed to parse wait time of ")+wait_string,v_error,verbosity);
+		Log("MarcusScheduler::SimpleWaitForDuration - Failed to parse wait time of "+wait_string,v_error,verbosity);
 		return;
 	}
 	
@@ -474,7 +475,7 @@ void MarcusScheduler::DoAnalyse(std::string the_command){
 	
 	// check it's a valid LED name
 	if(LED_states.count(ledToAnalyse)==0){
-		Log(std::string("ERROR: unknown LED name ")+ledToAnalyse+" given to Analyse command",v_error,verbosity);
+		Log("MarcusScheduler::DoAnalyse - unknown LED name "+ledToAnalyse+" given to Analyse command",v_error,verbosity);
 	}
 	
 	// otherwise qeueue up the analyse action
@@ -536,7 +537,7 @@ void MarcusScheduler::DoValves(std::string the_command){
 	} else if(open_or_close=="close"){
 		json_string="{\"Valve\":\"CLOSE\"}";
 	} else {
-		Log(std::string("Unknown valve state: '")+open_or_close+"'",v_error,verbosity);
+		Log("MarcusScheduler::DoValves - Unknown valve state: '"+open_or_close+"'",v_error,verbosity);
 	}
 	
 	// queue up the action
@@ -673,7 +674,7 @@ void MarcusScheduler::DoMeasure(std::string the_command){
 				if(LED_states.count(next_led_name)){
 					LED_states.at(next_led_name) = 1; // enable this LED
 				} else if(next_led_name!="Dark" && next_led_name!="None"){
-					Log(std::string("Unknown LED ")+next_led_name,v_error,verbosity);
+					Log("MarcusScheduler::DoMeasure - Unknown LED "+next_led_name,v_error,verbosity);
 				}
 				if(next_space!=std::string::npos){
 					last_space = led_list.find_first_not_of(' ',next_space+1);
@@ -716,7 +717,7 @@ void MarcusScheduler::DoMeasure(std::string the_command){
 			}
 			
 		default:
-			Log(std::string("measurement process step ")+std::to_string(command_step)
+			Log("MarcusScheduler::DoMeasure - measurement process step "+std::to_string(command_step)
 				+" unknown! How did we get here?!",v_error,verbosity);
 		
 	}  // end switch over command_step

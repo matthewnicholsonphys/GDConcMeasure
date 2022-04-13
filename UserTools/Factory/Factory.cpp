@@ -36,6 +36,8 @@ if (tool=="InteractiveScheduler") ret=new InteractiveScheduler;
 if (tool=="MarcusScheduler") ret=new MarcusScheduler;
 if (tool=="GracefulStop") ret=new GracefulStop;
 if (tool=="MatthewAnalysis") ret=new MatthewAnalysis;
+if (tool=="LivePlotter") ret=new LivePlotter;
+if (tool=="SaveToDB") ret=new SaveToDB;
 return ret;
 }
 

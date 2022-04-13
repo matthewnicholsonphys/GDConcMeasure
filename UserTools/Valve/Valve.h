@@ -22,8 +22,8 @@ class Valve: public Tool {
   int m_valve_pin;
   std::string valve;
   
-  void ValveOpen();
-  void ValveClose();
+  bool ValveOpen();
+  bool ValveClose();
 
   int verbosity=1;
   int v_error=0;

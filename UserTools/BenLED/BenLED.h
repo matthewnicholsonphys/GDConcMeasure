@@ -34,13 +34,10 @@ public:
   bool TurnOnAll();
   bool TurnOffAll();
   
-  void Configure();
   bool EstablishI2C();
   void MapLED();
   bool SetPWMfreq(double freq);
   
-  bool TurnOn();
-  bool TurnOff();
   bool TurnOffAndSleep();
   bool IsSleeping();
   bool WakeUpDriver();

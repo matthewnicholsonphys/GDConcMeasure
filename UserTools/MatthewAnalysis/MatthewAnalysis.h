@@ -19,7 +19,7 @@ class MatthewAnalysis: public Tool {
   bool Finalise();
 
  private:
-  
+  void MakeLivePlot();
   bool RetrieveDarkSubPure();
   bool RetrieveCalibrationCurve();
   bool ReadyToAnalyse();

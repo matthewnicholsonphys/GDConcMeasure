@@ -1,4 +1,5 @@
 #include "Valve.h"
+#include "Algorithms.h"
 
 Valve::Valve():Tool(){}
 
@@ -20,13 +21,23 @@ bool Valve::Initialise(std::string configfile, DataModel &data){
   
   std::stringstream command;
   command<<"echo \""<<m_valve_pin<<"\" > /sys/class/gpio/export";
-  system(command.str().c_str());
+  std::string errmsg;
+  int ok = SystemCall(command.str(), errmsg);
+  if(ok!=0){
+    Log("Valve::Initialise "+errmsg,0,0);
+    return false;
+  }
   
   command.str("");
   command<<"echo \"out\" > /sys/class/gpio/gpio"<<m_valve_pin<<"/direction";
-  system(command.str().c_str());
+  ok = SystemCall(command.str(),errmsg);
+  if(ok!=0){
+    Log("Valve::Initialise "+errmsg,0,0);
+    return false;
+  }
   
-  ValveClose();
+  ok = ValveClose();
+  if(not ok) return ok;
   
   return true;
 }
@@ -35,43 +46,55 @@ bool Valve::Initialise(std::string configfile, DataModel &data){
 bool Valve::Execute(){
   
   std::string Valve="";
+  bool ok = true;
   
   if(m_data->CStore.Get("Valve",Valve) && Valve!=valve){
     if(Valve=="OPEN"){
-      ValveOpen();
+      ok = ValveOpen();
     }
     if(Valve=="CLOSE"){
-      ValveClose();
+      ok = ValveClose();
     }
-      
   }
   
-  return true;
+  return ok;
 }
 
 
 bool Valve::Finalise(){
   
-  ValveClose();
+  bool ok = ValveClose();
   
-  return true;
+  return ok;
 }
 
 
-void Valve::ValveOpen(){
+bool Valve::ValveOpen(){
   
   Log("valve open",v_message,verbosity);
   std::stringstream command;
   command<<"echo \"1\" > /sys/class/gpio/gpio"<<m_valve_pin<<"/value";
-  system(command.str().c_str());
+  std::string errmsg;
+  int ok = SystemCall(command.str(), errmsg);
+  if(ok!=0){
+    Log("Valve::ValveOpen "+errmsg,0,0);
+    return false;
+  }
   valve="OPEN";
+  return true;
 }
 
-void Valve::ValveClose(){
+bool Valve::ValveClose(){
   
   Log("valve close",v_message,verbosity);
   std::stringstream command;
   command<<"echo \"0\" > /sys/class/gpio/gpio"<<m_valve_pin<<"/value";
-  system(command.str().c_str());
+  std::string errmsg;
+  int ok = SystemCall(command.str(), errmsg);
+  if(ok!=0){
+    Log("Valve::ValveClose "+errmsg,0,0);
+    return false;
+  }
   valve="CLOSE";
+  return true;
 }

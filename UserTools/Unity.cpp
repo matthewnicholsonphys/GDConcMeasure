@@ -29,3 +29,5 @@
 #include "MarcusScheduler/MarcusScheduler.cpp"
 #include "GracefulStop/GracefulStop.cpp"
 #include "MatthewAnalysis/MatthewAnalysis.cpp"
+#include "LivePlotter/LivePlotter.cpp"
+#include "SaveToDB/SaveToDB.cpp"

@@ -26,7 +26,7 @@ class TraceAverage: public Tool {
 
  private:
 
-  void InitTTree(TTree* tree);
+  bool InitTTree(TTree* tree);
 
 
 
