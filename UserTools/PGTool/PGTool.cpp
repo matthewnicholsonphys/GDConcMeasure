@@ -42,7 +42,9 @@ bool PGTool::Initialise(std::string configfile, DataModel &data){
 	// Retrieve varibles from the postgres database
 	std::cout<<toolName<<": Getting config"<<std::endl;
 	m_data->postgres.SetVerbosity(10);
-	std::string json_data = m_data->postgres.GetToolConfig(toolName);
+	std::string json_data;
+	get_ok = m_data->postgres_helper.GetToolConfig(toolName, json_data);
+	
 	std::cout<<"JSON version of Tool config was: "<<json_data<<std::endl;
 	if(json_data==""){
 		Log(toolName+" Error! Failed to get Tool config from database!",v_error,verbosity);
@@ -173,7 +175,7 @@ bool PGTool::Execute(){
 		// c++ type.
 		// config files are stored as a jsonb datatype, but they may be transparently
 		// converted to string
-		std::string json_data = row[0].as<string>();
+		std::string json_data = row[0].as<std::string>();
 		std::cout<<"json data was "<<json_data<<std::endl;
 		
 		// for queries that return no value, such as `UPDATE` or `INSERT` commands, we can use
@@ -215,7 +217,7 @@ bool PGTool::Execute(){
 			// we can also directly access fields by name...
 			std::cout<<"creationdate was "<<row["created"].c_str()<<std::endl;
 			// ... or by index. we can parse directly into the correct type by field.as<type>()
-			std::cout<<"created by user "<<row[6].as<string>()<<std::endl;
+			std::cout<<"created by user "<<row[6].as<std::string>()<<std::endl;
 			// ... or use the result to directly set the value of an object by field.to(destination_object);
 			std::cout<<"returned columns and their properties are:"<<std::endl;
 			// n.b. we can of course also use iterators...
@@ -296,7 +298,7 @@ bool PGTool::Execute(){
 		// n.b. the .str() method appends a trailing '\0' to the data, which is necessary to form a properly
 		// terminated std::string, so be sure to use this and not '.get()' unless you also use '.length()'!
 		std::string unscrambled = my_bytea_fielddata.str();
-		std::cout <<"scrambled description is "<< byteafield.as<string>() <<std::endl;
+		std::cout <<"scrambled description is "<< byteafield.as<std::string>() <<std::endl;
 		std::cout <<"unscrambled description is '"<< unscrambled <<"'"<<std::endl;
 		
 		/*
@@ -456,7 +458,7 @@ bool PGTool::Execute(){
 		// check we can get it back out
 		query_string = "SELECT name FROM configfiles WHERE version = 5";
 		results = myTransaction.exec(query_string);
-		std::cout<<"queried name was "<<results[0][0].as<string>()<<std::endl;
+		std::cout<<"queried name was "<<results[0][0].as<std::string>()<<std::endl;
 		
 		std::cout<<"ok done, ending"<<std::endl;
 	}catch (const pqxx::sql_error &e){

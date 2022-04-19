@@ -125,7 +125,7 @@ fi
 
 if [ $seabreeze -eq 1 ]
 then
-    ### TODO
+    echo "please unpack seabreeze sourcefiles into ToolDAQ folder" # TODO add to git repo
 fi
 
 if [ $libpqxx -eq 1 ]

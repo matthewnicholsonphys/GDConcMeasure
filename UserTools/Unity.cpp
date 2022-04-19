@@ -31,4 +31,4 @@
 #include "MatthewAnalysis/MatthewAnalysis.cpp"
 #include "LivePlotter/LivePlotter.cpp"
 #include "SaveToDB/SaveToDB.cpp"
-#include "PGTool/PGTool.h"
+#include "PGTool/PGTool.cpp"

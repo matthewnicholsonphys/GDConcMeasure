@@ -9,7 +9,6 @@ class DataModel;
 class PGHelper{
 	public:
 	PGHelper(DataModel* m_data_in=nullptr);
-	~PGHelper();
 	void SetDataModel(DataModel* m_data_in);
 	void SetVerbosity(int verb);
 	

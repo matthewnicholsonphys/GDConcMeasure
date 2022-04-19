@@ -95,6 +95,16 @@ class Postgres {
 //		// XXX
 //	}
 	
+	// specialization for a query with no returns (e.g. DELETE entry)
+	bool ExecuteQuery(std::string query_string){
+		// run an SQL query and try to pass the results
+		// into a parameter pack. the passed arguments
+		// must be compatible with the returned columns
+		pqxx::row local_row;
+		bool success = Query(query_string, 1, nullptr, &local_row);
+		return success;
+	}
+	
 	template <typename... Ts>
 	bool ExecuteQuery(std::string query_string, Ts&&... rets){
 		// run an SQL query and try to pass the results
@@ -143,6 +153,7 @@ class Postgres {
 				         //<<type_name<decltype(last)>()<<std::endl;
 				return false;
 			}
+			return ok;
 		}
 	};
 	
@@ -221,7 +232,92 @@ class Postgres {
 					delete conn; conn=nullptr;
 					continue;
 				} else {
-					std::cerr<<"Postgres::Query error - broken connection, failed to re-establish it"<<std::endl;
+					std::cerr<<"Postgres::Insert error - broken connection, failed to re-establish it"<<std::endl;
+					if(err) *err=e.what();
+				}
+			}
+			catch (const pqxx::sql_error &e){
+				std::string msg = e.what();
+					        msg += "When executing query: " + e.query();
+				if(e.sqlstate()!=""){
+					msg += ", with SQLSTATE error code: " + e.sqlstate();
+				}
+				std::cerr<<msg<<std::endl;
+				if(err) *err = msg;
+			}
+			catch (std::exception const &e){
+				std::cerr << e.what() << std::endl;
+				if(err) *err = e.what();
+			}
+			break;   // if not explicitly 'continued', break.
+		} // end tries
+		return false;
+	}
+	// end helper function
+	////////
+	
+	////////
+	// helper function for updates
+	template <typename... Rest>
+	// note; variadic parameter pack should contain 1 value for each field being updated,
+	// followed by 1 value for each crtierion being applied.
+	bool Update(std::string tablename, std::vector<std::string> &fields, std::vector<std::string> &criterions, std::vector<char> &comparators, std::string* err, Rest... args){
+		// sanity check; each condition ('RunNumber > 2000') requires a field (RunNumber),
+		// a comparator ('>') and a value (10).
+		if(comparators.size()!=comparators.size()){
+			std::string errmsg = "Postgres::Update called with criterions.size() != comparators.size()";
+			if(err) *err = errmsg;
+			std::cerr<<errmsg<<std::endl;
+			return false;
+		}
+		// TODO calculate number of parameters in parameter pack and make sure it
+		// adds up to fields.size() + comparators.size() 
+		
+		// maybe this is redundant since OpenConnection will check is_open (against recommendations)
+		for(int tries=0; tries<2; ++tries){
+			// ensure we have a connection to work with
+			if(OpenConnection(err)==nullptr){
+				// no connection to batabase -> abort
+				return false;
+			}
+			try{
+				// open a transaction to interact with the database
+				//pqxx::work(*conn);
+				pqxx::nontransaction txn(*conn);
+				
+				// form the query
+				std::string query_string = "UPDATE " + tablename + " SET ";
+				for(int i=0; i<fields.size(); ++i){
+					std::string afield = fields.at(i);
+					query_string += afield +"=$"+std::to_string(i+1);
+					if(i<(fields.size()-1)) query_string+= ", ";
+				}
+				if(criterions.size()){
+					query_string += " WHERE ";
+					for(int i=0; i<criterions.size(); ++i){
+						query_string += criterions.at(i)+comparators.at(i)+"$"
+						             +  std::to_string(fields.size()+i);
+						if(i<(criterions.size()-1)) query_string+= ", AND ";
+					}
+				}
+				query_string += ";";
+				
+				// try to run it
+				txn.exec_params(query_string, args...);
+				
+				// don't expect (or handle) a return.
+				// if we haven't thrown an exception, we're done.
+				return true;
+			}
+			catch (const pqxx::broken_connection &e){
+				// if our connection is broken after all, disconnect, reconnect and retry
+				if(tries==0){
+					CloseConnection();
+					delete conn; conn=nullptr;
+					continue;
+				} else {
+					std::cerr<<"Postgres::Update error - broken connection, "
+					           "failed to re-establish it"<<std::endl;
 					if(err) *err=e.what();
 				}
 			}

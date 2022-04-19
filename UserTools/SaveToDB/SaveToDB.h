@@ -16,8 +16,34 @@ class SaveToDB: public Tool {
 	bool Finalise();
 	
 	private:
+	int max_webpage_records=5;
 	
+	// one method per Tool to put that Tool's results into the DB
+	bool MatthewAnalysis();
+	bool BenPower();
+	bool Valve();
+	bool BenLED();
+	bool BenSpectrometer();
+	bool TraceAverage();
+	bool SaveTraces();
+	bool MarcusScheduler();
+	bool RoutineCalibration();  // placeholder, Tool TODO
 	
+	// helper functions for converting data into json arrays / objects to store in DB
+	std::string BuildJson(TGraphErrors* gr, std::pair<double, double> range, bool inside_data);
+	std::string BuildJson(TGraphErrors* gr);
+	std::string BuildJson(TGraph* gr);
+	std::string BuildJson(double* arr, double* err, int n);
+	std::string BuildJson(double* arr, int n);
+	std::string BuildJson(int* arr, int n);
+	std::string BuildJson(std::vector<std::string> arr);
+	std::string BuildJson(TFitResultPtr& fitresptr);
+	
+	std::vector<std::string> field_names;
+	std::vector<std::string> criterions;
+	std::vector<char> comparators;
+	std::string error_ret;
+	std::string query_string;
 };
 
 

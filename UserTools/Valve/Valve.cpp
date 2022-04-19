@@ -14,7 +14,6 @@ bool Valve::Initialise(std::string configfile, DataModel &data){
   m_variables.Get("verbosity",verbosity);
   
   if (!m_variables.Get("valve_pin",m_valve_pin)){
-    
     Log("Valve pin not set",v_error,verbosity);
     return false;
   }

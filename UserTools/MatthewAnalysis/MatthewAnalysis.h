@@ -3,11 +3,14 @@
 
 #include <string>
 #include <iostream>
+#include <utility>
 
 #include "Tool.h"
 
 #include "TGraphErrors.h"
-#include "TTree.h"
+#include "TFitResultPtr.h"
+class TTree;
+class TF1;
 
 class MatthewAnalysis: public Tool {
 
@@ -22,15 +25,26 @@ class MatthewAnalysis: public Tool {
   void MakeLivePlot();
   bool RetrieveDarkSubPure();
   bool RetrieveCalibrationCurve();
+  bool RetrieveCalibrationCurveDB();
   bool ReadyToAnalyse();
   std::pair<TTree*, TTree*> FindDarkAndLEDTrees(); 
   double* FunctionalFit(TGraphErrors&);
   TGraphErrors RemoveRegion(TGraphErrors&);
-  TGraphErrors PerformDarkSubtraction(TTree*,  TTree*);
+  TGraphErrors PerformDarkSubtraction(TTree*, TTree*);
   TGraphErrors Scale(TGraphErrors&, const double*, const double*);
-  TGraphErrors CalculateAbsorbance( TGraphErrors&, TGraphErrors&);
-  std::vector<double> FindPeakDifference(TGraphErrors&);
-  std::vector<double> CalculateConcentration(const std::vector<double>);
+  TGraphErrors CalculateAbsorbance(TGraphErrors&, TGraphErrors&);
+  std::pair<double,double> FindPeakDifference(TGraphErrors&);
+  std::pair<double,double> CalculateConcentration(const std::pair<double,double>&);
+  void ReInit();
+  
+  TGraphErrors dark_subtracted_gd;
+  TGraphErrors pure_scaled;
+  TGraphErrors absorbance;
+  TFitResultPtr fitresptr;
+  
+  TFitResultPtr lpf, rpf;
+  TF1* left_peak = nullptr;
+  TF1* right_peak = nullptr;
   
 };
 

@@ -8,3 +8,4 @@ TraceAverage        TraceAverage            configfiles/UnifiedMeasurement/Trace
 myMatthewAnalysis   MatthewAnalysis         configfiles/UnifiedMeasurement/MatthewAnalysisConfig
 myLivePlotter       LivePlotter             configfiles/UnifiedMeasurement/LivePlotterConfig
 SaveTraces          SaveTraces              configfiles/UnifiedMeasurement/SaveTracesConfig
+mySaveToDB          SaveToDB                configfiles/UnifiedMeasurement/SaveToDBConfig

@@ -31,6 +31,9 @@ bool BenSpectrometer::Execute(){
   std::string Power="";
   if(m_data->CStore.Get("Power",Power) && Power!=power){
     
+    // update our internal variable so that we know to re-connect when its turned back on
+    power=Power;
+    
     if(Power=="ON"){
       // if we've just powered up, establish a connection
       Log("spectrometer on",v_message,verbosity);
@@ -46,13 +49,12 @@ bool BenSpectrometer::Execute(){
         }
         sleep(1);
       }
-      power=Power;
       
-    } else if(Power=="OFF"){
-      
-      // if turning off, just update our internal variable
-      // so that we know we'll need to re-connect when its turned back on
-      Power=power;
+      // update connection status in DataModel for display on website
+      m_data->CStore.Set("SpectrometerConnected",true);
+    } else {
+      // we'll need to reconnect on power-up
+      m_data->CStore.Set("SpectrometerConnected",false);
     }
   
   }

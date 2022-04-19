@@ -139,7 +139,7 @@ bool PGHelper::GetToolConfig(std::string toolname, std::string& toolconfig, int*
 			                     +std::to_string(*versionnum);
 			std::cerr<<errmsg<<std::endl;
 			if(err) *err=errmsg;
-			return "";
+			return false;
 		}
 	} // otherwise we were given a version number
 	

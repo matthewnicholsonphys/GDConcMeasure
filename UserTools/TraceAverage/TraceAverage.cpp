@@ -45,7 +45,7 @@ bool TraceAverage::Execute(){
       tree=new TTree(name.c_str(),name.c_str());
       m_data->AddTTree(name,tree);
       bool ok = InitTTree(tree);
-      // don't return, is it better that we at least make a graph for the website...?
+      //if(!ok) return false;  // XXX is it better that we at least make a graph for the website...?
     }
     
     // make local variables to hold measurement data
@@ -105,7 +105,10 @@ bool TraceAverage::Execute(){
     //gr.Write(tmp.str().c_str(),TObject::kOverwrite);
     
     m_data->CStore.Remove("Measure");
+    m_data->CStore.Set("NewData",true);  // flag for downstream tools
     
+  } else {
+    m_data->CStore.Set("NewData",false);
   }
   
   

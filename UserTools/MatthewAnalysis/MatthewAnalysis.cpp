@@ -6,8 +6,11 @@
 #include "TGraphErrors.h"
 #include "TTree.h"
 #include "TF1.h"
+#include "TH1.h"
 
 #include <map>
+#include <limits>
+
 MatthewAnalysis::MatthewAnalysis():Tool(){}
 
 bool MatthewAnalysis::Initialise(std::string configfile, DataModel &data){
@@ -26,6 +29,9 @@ bool MatthewAnalysis::Execute(){
   // is available for fitting
   if (ReadyToAnalyse()){
     
+    // reinit analysis results to prevent accidental carry-over
+    ReInit();
+    
     // get the TTrees containing LED-on and LED-off traces
     std::pair<TTree*, TTree*> dark_and_led_trees = FindDarkAndLEDTrees();
     TTree* dark_tree = dark_and_led_trees.first, *led_tree = dark_and_led_trees.second;
@@ -38,14 +44,14 @@ bool MatthewAnalysis::Execute(){
     }
     
     // pull LED-on and LED-off traces from TTrees and produce TGraph of dark-subtracted trace
-    TGraphErrors dark_subtracted_gd = PerformDarkSubtraction(led_tree, dark_tree);
+    dark_subtracted_gd = PerformDarkSubtraction(led_tree, dark_tree);
     if(dark_subtracted_gd.GetN()==0){
       return false;  // failed to get data from TTrees
     }
     
     // Remove points in the absorption region 270-280nm TODO make this range configurable
     TGraphErrors dark_sub_gd_w_abs_region_removed = RemoveRegion(dark_subtracted_gd);
-
+    
     // taking the reference pure water trace as a function, fit this function, scaled
     // and with a linear background added, to the measured trace with the absorption region removed.
     // The fit paramters represent the scaling and linear background added.
@@ -58,33 +64,46 @@ bool MatthewAnalysis::Execute(){
     // scale pure water trace by fit function parameters to obtain a version of the pure water
     // spectrum that should match the LED-on spectrum in the lobes of the LED peak
     TGraphErrors dark_subtracted_pure = *(m_data->dark_sub_pure);
-    TGraphErrors pure_scaled = Scale(dark_subtracted_pure, fitting_parameters, fitting_errors);
+    pure_scaled = Scale(dark_subtracted_pure, fitting_parameters, fitting_errors);
     
     // use the difference between the scaled pure water trace and the current LED-on trace
     // in the gd absorption-peak region to determine the amount of absorbance due to Gd.
     // absorbance is defined as the log_10(received/transmitted light)
-    TGraphErrors absorbance = CalculateAbsorbance(pure_scaled, dark_subtracted_gd);
+    absorbance = CalculateAbsorbance(pure_scaled, dark_subtracted_gd);
     
     // fit the two main absorption peaks at 273 and 276 nm with gaussians,
     // then take difference in their amplitudes. As with the amplitudes of each peak,
     // this should be related to concentration.
-    std::vector<double> peaksdiff_w_error = FindPeakDifference(absorbance);
+    std::pair<double,double> peaksdiff_w_error = FindPeakDifference(absorbance);
     //std::vector<double> peaksdiff_w_error = {0.02 * m_data->concs_and_peakdiffs.size() + 0.005, 0};
-    if(peaksdiff_w_error==std::vector<double>{0,0}){
+    if(peaksdiff_w_error==std::pair<double,double>{0,0}){
       return false;   // failure fitting gaussians to the two absorbance peaks
     }
     
     // use calibration curve to map difference in height of the two main absorbance peaks to gd concentration
-    std::vector<double> concentration_w_error = CalculateConcentration(peaksdiff_w_error);
-    m_data->concs_and_peakdiffs.push_back(std::make_pair(concentration_w_error.at(0), peaksdiff_w_error.at(0)));
+    std::pair<double,double> concentration_w_error = CalculateConcentration(peaksdiff_w_error);
     
     // Inform downstream tools that a new measurement is available
     // maybe we could use the value to indicate if the data is good?
     m_data->CStore.Set("NewMeasurement",true);
     
     // debug prints
-    std::cout << "Peak difference from " << "ledName" << " is: " << peaksdiff_w_error.at(0) << " +/- " << peaksdiff_w_error.at(1) << '\n';
-    std::cout << "Concentration from " << "ledName" << " is: " << concentration_w_error.at(0) << " +/- " << concentration_w_error.at(1) << '\n';
+    std::cout << "Peak difference from " << "ledName" << " is: " << peaksdiff_w_error.first
+              << " +/- " << peaksdiff_w_error.second << '\n';
+    std::cout << "Concentration from " << "ledName" << " is: " << concentration_w_error.first
+              << " +/- " << concentration_w_error.second << '\n';
+    
+    // update datamodel
+    m_data->vars.Set("dark_subtracted_gd",reinterpret_cast<intptr_t>(&dark_subtracted_gd));
+    m_data->vars.Set("data_fitresptr",reinterpret_cast<intptr_t>(&fitresptr));
+    m_data->vars.Set("pure_scaled",reinterpret_cast<intptr_t>(&pure_scaled));
+    m_data->vars.Set("absorbance",reinterpret_cast<intptr_t>(&absorbance));
+    m_data->vars.Set("LeftPeakFitFunc",reinterpret_cast<intptr_t>(left_peak));
+    m_data->vars.Set("RightPeakFitFunc",reinterpret_cast<intptr_t>(right_peak));
+    m_data->vars.Set("LeftPeakFitResult",reinterpret_cast<intptr_t>(&lpf));
+    m_data->vars.Set("RightPeakFitResult",reinterpret_cast<intptr_t>(&rpf));
+    m_data->concs_and_errs.push_back(concentration_w_error);
+    m_data->peakdiffs_and_errs.push_back(peaksdiff_w_error);
     
   } else {
     // else no data to Analyse
@@ -101,6 +120,26 @@ bool MatthewAnalysis::Finalise(){
   delete m_data->calib_curve;
   
   return true;
+}
+
+void MatthewAnalysis::ReInit(){
+  // Reinitialize measurement outputs, so we don't carry over
+  // results from a previous fit if we bail early
+  
+  // clear TGraphs
+  pure_scaled.Set(0);
+  dark_subtracted_gd.Set(0);
+  absorbance.Set(0);
+  
+  // remake TFitResultPtrs
+  fitresptr = TFitResultPtr();
+  lpf = TFitResultPtr();
+  rpf = TFitResultPtr();
+  
+  // TF1s are owned by gROOT so to ensure deletion (for reinitialization) we create them on the heap
+  if(left_peak) delete left_peak;
+  if(right_peak) delete right_peak;
+  
 }
 
 bool MatthewAnalysis::RetrieveCalibrationCurve(){
@@ -125,6 +164,84 @@ bool MatthewAnalysis::RetrieveCalibrationCurve(){
   // construct 6th order polynomial to convert intensity into concentration
   TF1* calib_curve = new TF1("calib", "pol 6", 0, 0.4);
   calib_curve->SetParameters(calib_coefficients);
+  
+  if(!calib_curve->IsValid()){
+    Log("MatthewAnalysis::RetrieveCalibrationCurve calibration curve is not valid!",0,0);
+    return false;
+  }
+  m_data->calib_curve = calib_curve;
+  
+  return success;
+}
+
+bool MatthewAnalysis::RetrieveCalibrationCurveDB(){
+  // pull calibration version from config file
+  
+  // new calibration curve can be inserted with e.g.:
+  // psql -U postgres -d "rundb" -c "INSERT INTO data (timestamp, run, tool, name, values) VALUES ('now()', '0', 'MatthewAnalysis', 'calibration_curve', '{\"version\":0, \"formula\":\"pol6\", \"params\":[0.0079581671, 2.7415760, -31.591756, 478.69924, 18682.891, -29982.759] }' );"
+  
+  int calib_version;
+  bool get_ok = m_variables.Get("calib_version",calib_version);
+  if(not get_ok){
+    Log("MatthewAnalysis::RetrieveCalibrationCurve failed to find calibration curve "
+        "version number in config file",0,0);
+    return false;
+  }
+  
+  // put in datamodel for website
+  m_data->CStore.Set("calib_version",calib_version);
+  
+  // use version number to lookup formula from database
+  std::string formula_str;
+  std::string query_string = "SELECT values->'formula' FROM data WHERE name='calibration_curve' "
+                             "AND values->'version'=" + std::to_string(calib_version);
+  bool success = m_data->postgres.ExecuteQuery(query_string, formula_str);
+  
+  // another query for the curve parameters
+  query_string = "SELECT values->'params' FROM data WHERE name='calibration_curve' "
+                 "AND values->'version'=" + std::to_string(calib_version);
+  std::string params_str;
+  success &= m_data->postgres.ExecuteQuery(query_string, params_str);
+  
+  // check for errors
+  if(!success){
+    Log("MatthewAnalysis::RetrieveCalibrationCurve failed to retrieve calibration curve "
+        "or parameters for version "+std::to_string(calib_version),0,0);
+    return false;
+  }
+  
+  // the params string is a json array; i.e. '[val1, val2, val3...]'
+  // strip the '[' and ']'
+  params_str = params_str.substr(1,params_str.length()-2);
+  // parse it
+  std::stringstream ss(params_str);
+  std::string tmp;
+  std::vector<double> calib_coefficients;
+  while(std::getline(ss,tmp,',')){
+    char* endptr = &tmp[0];
+    double nextval = strtod(tmp.c_str(),&endptr);
+    if(endptr==&tmp[0]){
+      Log("MatthewAnalysis::RetrieveCalibrationCurveDB failed to parse calibration parameters from string '"
+          +params_str+"' for calibration curve version "+std::to_string(calib_version),0,0);
+      return false;
+    }
+    calib_coefficients.push_back(nextval);
+  }
+  if(calib_coefficients.size()==0){
+    Log("MatthewAnalysis::RetrieveCalibrationCurve parsed no parameters from string '"
+        +params_str+" for calibration curve version "+std::to_string(calib_version),0,0);
+    return false;
+  }
+  
+  // construct a TF1 to convert intensity into concentration
+  TF1* calib_curve = new TF1("calib", formula_str.c_str(), 0, 0.4);
+  calib_curve->SetParameters(calib_coefficients.data());
+  if(!calib_curve->IsValid()){
+    Log("MatthewAnalysis::RetrieveCalibrationCurve calibration curve constructed from formula '"
+        +formula_str+"' and parameters '"+params_str+"' is not valid!",0,0);
+    return false;
+  }
+  
   m_data->calib_curve = calib_curve;
   
   return success;
@@ -136,6 +253,9 @@ bool MatthewAnalysis::RetrieveDarkSubPure(){
   // pull the filename of the pure water reference trace from the config file
   std::string pure_filename;
   m_variables.Get("pure_filename", pure_filename);
+  // put pure water reference filename into CStore for recording in db.
+  // TODO should the pure water reference data be stored in the database, rather than a file?
+  m_data->CStore.Set("pure_filename", pure_filename);
   
   // open the reference file
   TFile pure_file(pure_filename.c_str(), "READ");
@@ -151,6 +271,11 @@ bool MatthewAnalysis::RetrieveDarkSubPure(){
         +pure_filename+"'",0,0);
     return false;
   }
+  
+  // minor optimization; if the data in the TGraph is sorted by x value
+  //(which it should be for us), then setting the following option can speed up Eval() calls
+  dark_subtracted_pure->SetBit(TGraph::kIsSortedX);
+  
   m_data->dark_sub_pure = dark_subtracted_pure;
   
   // construct functional fit. We'll scale the reference pure water, dark subtracted intensity
@@ -209,7 +334,7 @@ TGraphErrors MatthewAnalysis::PerformDarkSubtraction(TTree* ledTree, TTree* dark
   
   // retrieve data from TTrees
   std::vector<double> *led_values= nullptr, *led_wavelengths = nullptr, *led_errors = nullptr;
-  std::vector<double>* dark_values = nullptr, *dark_wavelengths = nullptr, *dark_errors = nullptr; 
+  std::vector<double>* dark_values = nullptr, *dark_wavelengths = nullptr, *dark_errors = nullptr;
    
   ledTree->SetBranchAddress("value", &led_values);
   darkTree->SetBranchAddress("value", &dark_values);
@@ -235,10 +360,46 @@ TGraphErrors MatthewAnalysis::PerformDarkSubtraction(TTree* ledTree, TTree* dark
   
   // construct a TGraphErrors of dark-subtracted data
   TGraphErrors result(number_of_points);
-  for (auto i = 0; i < number_of_points; ++i){
+  for (int i = 0; i < number_of_points; ++i){
     result.SetPoint(i, led_wavelengths->at(i), led_values->at(i) - dark_values->at(i));
     result.SetPointError(i, 0, sqrt(pow(led_errors->at(i), 2) + pow(dark_errors->at(i),2)));
   }
+  
+  // for stability monitoring we'll record some characteristic information about the raw data
+  // in the database. The dark trace should be pretty flat, so we'll histogram it,
+  // fit it with a gaussian, and record the mean and sigma.
+  TH1D* tmphist = new TH1D("tmphist","title",100,*std::min_element(dark_values->begin(), dark_values->end()),
+                                                 *std::max_element(dark_values->begin(), dark_values->end()));
+  for(int i=0; i<number_of_points; ++i){
+    tmphist->Fill(dark_values->at(i));
+  }
+  tmphist->Fit("gaus");
+  double dark_mean = tmphist->GetFunction("gaus")->GetParameter(1);
+  double dark_sigma = tmphist->GetFunction("gaus")->GetParameter(2);
+  m_data->CStore.Set("dark_mean",dark_mean);
+  m_data->CStore.Set("dark_sigma",dark_sigma);
+  // for the raw LED-on trace we'll record the maximum and minimum value of the trace
+  // within the absorption region of 270-280nm.
+  double led_on_max = 0;
+  double led_on_min = std::numeric_limits<double>::max();
+  for(int i=0; i<number_of_points; ++i){
+    if(led_wavelengths->at(i) > 270 && led_wavelengths->at(i) < 280){
+      if(led_values->at(i) > led_on_max) led_on_max = led_values->at(i);
+      if(led_values->at(i) < led_on_min) led_on_min = led_values->at(i);
+    }
+  }
+  m_data->CStore.Set("raw_absregion_max",led_on_max);
+  m_data->CStore.Set("raw_absregion_min",led_on_min);
+  
+  // cleanup
+  delete tmphist;
+  delete led_values;
+  delete led_wavelengths;
+  delete led_errors;
+  delete dark_values;
+  delete dark_wavelengths;
+  delete dark_errors;
+  
   return result;
 }
 
@@ -246,6 +407,7 @@ TGraphErrors MatthewAnalysis::RemoveRegion(TGraphErrors& trace){
   // Returns a copy of the input trace with datapoints in the absorption region removed.
   
   const auto lower_bound = 270, upper_bound = 280;
+  m_data->CStore.Set("gd_fit_range",std::pair<double,double>{lower_bound,upper_bound});
   double temp_x, temp_y, temp_err_x, temp_err_y; 
   
   TGraphErrors result(trace.GetN());
@@ -274,8 +436,8 @@ double* MatthewAnalysis::FunctionalFit(TGraphErrors& trace){
   }
   
   // do the fit
-  TFitResultPtr res = trace.Fit("pure_fct", "RS");
-  if(res->IsEmpty() || !res->IsValid() || int(res)!=0){
+  fitresptr = trace.Fit("pure_fct", "RS");
+  if(fitresptr->IsEmpty() || !fitresptr->IsValid() || fitresptr->Status()!=0){
     Log("MatthewAnalysis::FunctionalFit fit status indicates fit failed!",0,0);
     // see https://root.cern.ch/doc/master/classTH1.html#a7e7d34c91d5ebab4fc9bba3ca47dabdd
     // status section for an interpretation of int(res) values
@@ -326,44 +488,47 @@ TGraphErrors MatthewAnalysis::CalculateAbsorbance(TGraphErrors& transmitted, TGr
   return result;
 }
 
-std::vector<double> MatthewAnalysis::FindPeakDifference(TGraphErrors& absorbance){
+std::pair<double,double> MatthewAnalysis::FindPeakDifference(TGraphErrors& absorbance_g){
   // Fit Gaussians to the two largest peaks in absorbance and calculate the difference in their heights
   // Since the height of both peaks are linearly related, taking their difference shares the same
   // relation to concentration as peak height, while helping to remove any remaining baseline offset
   
   // fit twin peaks  TODO make fit ranges / functions configurable
-  TF1 left_peak = TF1("leftPeak", "gaus", 272, 274), right_peak = TF1("rightPeak", "gaus", 275, 277);
-  TFitResultPtr lpf = absorbance.Fit("leftPeak", "0RS");
-  TFitResultPtr rpf = absorbance.Fit("rightPeak", "0RS");
+  // re-create the fit functions (probably overkill but ensures they're reset)
+  left_peak  = new TF1("leftPeak",  "gaus", 272, 274);
+  right_peak = new TF1("rightPeak", "gaus", 275, 277);
+  
+  lpf = absorbance_g.Fit("leftPeak", "0RS");
+  rpf = absorbance_g.Fit("rightPeak", "0RS");
   if(lpf->IsEmpty() || !lpf->IsValid() || int(lpf)!=0 ||
      rpf->IsEmpty() || !rpf->IsValid() || int(rpf)!=0){
     Log("MatthewAnalysis::FindPeakDifference fit to absorption peaks failed!",0,0);
-    return std::vector<double>{0,0};
+    return std::pair<double,double>{0,0};
   }
   
   // calculate difference and error
-  std::vector<double> result;
-  result.push_back(left_peak.GetParameter(0) - right_peak.GetParameter(0));
-  result.push_back(sqrt(pow(left_peak.GetParError(0),2) + pow(right_peak.GetParError(0),2)));
+  std::pair<double,double> result;
+  result.first = (left_peak->GetParameter(0) - right_peak->GetParameter(0));
+  result.second = (sqrt(pow(left_peak->GetParError(0),2) + pow(right_peak->GetParError(0),2)));
   
   return result;
 }
 
-std::vector<double> MatthewAnalysis::CalculateConcentration(const std::vector<double> peaks_info){
+std::pair<double,double> MatthewAnalysis::CalculateConcentration(const std::pair<double,double>& peaks_info){
   // Uses the calibration curve to calculate the concentration corresponding to the measured peak difference
   
   // get calibration curve
   TF1* calib_curve = m_data->calib_curve;
   
-  std::vector<double> result;
+  std::pair<double,double> result;
   
   // solve for concentration (x) from absorbance (y), with 0.01 < x < 0.21
-  result.push_back(calib_curve->GetX(peaks_info.at(0), 0.01, 0.21));
+  result.first= calib_curve->GetX(peaks_info.first, 0.01, 0.21);
   
   // estimate the error on measured concentration as the difference in concentrations
   // corresponding to measured absorbance +- the error on absorbance.
-  result.push_back(calib_curve->GetX(peaks_info.at(0) + peaks_info.at(1), 0.01, 0.21) -
-                   calib_curve->GetX(peaks_info.at(0) - peaks_info.at(1), 0.01, 0.21));
+  result.second = (calib_curve->GetX(peaks_info.first + peaks_info.second, 0.01, 0.21) -
+                   calib_curve->GetX(peaks_info.first - peaks_info.second, 0.01, 0.21));
   
   return result;
 }

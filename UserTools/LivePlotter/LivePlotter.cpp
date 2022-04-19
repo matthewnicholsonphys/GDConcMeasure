@@ -27,21 +27,19 @@ bool LivePlotter::Execute(){
   if(get_ok && new_measurement){
     
     // can only make a meaningful graph when we have more than one datapoint, really
-    int num_of_meas = m_data->concs_and_peakdiffs.size();
+    int num_of_meas = m_data->concs_and_errs.size();
     if (num_of_meas > 1){
       
       // concentration vs difference in amplitudes of main absorbance peaks
       // the points on this graph show the sampled range of our calibration plot
-      TGraph live_plot(num_of_meas);
+      TGraphErrors live_plot(num_of_meas);
       live_plot.SetTitle("Concentration vs Peak Diff;Gd Concentration [%];"
                          "(Absorbance at 273nm) - (Absorbance at 276nm) [no units]");
       
       // fill data
       for (int i = 0; i < num_of_meas; ++i){
-        live_plot.SetPoint(i, m_data->concs_and_peakdiffs.at(i).first, m_data->concs_and_peakdiffs.at(i).second);
-        // TODO errors are not currently exported by MatthewAnalysis to the datamodel...
-        // std::cout << "points: (" << m_data->concs_and_peakdiffs.at(i).first 
-        //           << ", " << m_data->concs_and_peakdiffs.at(i).second << ") \n";
+        live_plot.SetPoint(i, m_data->concs_and_errs.at(i).first, m_data->peakdiffs_and_errs.at(i).first);
+        live_plot.SetPointError(i, m_data->concs_and_errs.at(i).second, m_data->peakdiffs_and_errs.at(i).second);
       }
       
       // draw and save

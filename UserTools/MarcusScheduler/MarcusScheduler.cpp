@@ -21,6 +21,8 @@ bool MarcusScheduler::Initialise(std::string configfile, DataModel &data){
 	
 	// read command file and transfer to internal vector of commands
 	ReadCommandFile();
+	// put set of commands into DataModel for display on website by later tool
+	m_data->CStore.Set("MarcusSchedulerCommands",commands);
 	
 	// if looping, do we want to overwrite each iteration's output file,
 	// or append the iteration number to create a unique filename for each iteration?
@@ -44,6 +46,13 @@ bool MarcusScheduler::Initialise(std::string configfile, DataModel &data){
 // ««-------------- ≪ °◇◆◇° ≫ --------------»»
 
 bool MarcusScheduler::Execute(){
+	
+	// update current commandfile line number in datamodel for display on website
+	m_data->CStore.Set("MarcusSchedulerCurrentCommand",current_command);
+	m_data->CStore.Set("MarcusSchedulerCommandStep",command_step);
+	// also note the current execution status of any ongoing loops
+	m_data->CStore.Set("MarcusSchedulerLoopStarts",loop_starts);
+	m_data->CStore.Set("MarcusSchedulerLoopCounts",loop_counts);
 	
 	// everything in a try-catch loop. Mostly for debugging, but helps
 	// catch situations such as running off the end of vectors,
@@ -559,10 +568,10 @@ void MarcusScheduler::StartLoop(std::string the_command){
 	
 	// see if this has a fixed number of loops to perform
 	size_t iterations;
-	std::string iteration_string;
 	try{
 		// strip off the 'start_loop' prefix
-		iteration_string = iteration_string.substr(iteration_string.find_first_not_of(' '),std::string::npos);
+		std::string iteration_string = 
+		    iteration_string.substr(iteration_string.find_first_not_of(' '),std::string::npos);
 		
 		// try to convert to an integer loop count
 		iterations = std::stoi(iteration_string);

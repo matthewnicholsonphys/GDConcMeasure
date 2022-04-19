@@ -56,6 +56,9 @@ bool BenLED::Execute(){
   // check for a flag in the DataModel indicating we are powering up or down
   if(m_data->CStore.Get("Power",Power) && Power!=power){
     
+    // udpate internal state variable so we can track changes
+    power=Power;
+    
     if(Power=="ON"){
       
       // on powerup, establish comms with the PWM board embedded in the detector end cap
@@ -63,8 +66,10 @@ bool BenLED::Execute(){
       ok = EstablishI2C();
       if(not ok) return ok;
       
+      // note in CStore that we've established comms to the PWM board for indication on website
+      m_data->CStore.Set("PWMBoardHandle",file_descript);
+      
       // initialise all LEDs to off
-      power=Power;
       ok = TurnOffAll();
       if(not ok){
         Log("BenLED::Execute error Initializing LED states to off!",0,0);
@@ -335,17 +340,20 @@ bool BenLED::TurnOffAndSleep(){
   
   if (!IsSleeping()){
     
-    if (ledONstate != 0){
+    // FIXME ledONstate is never set; here it is being read unitialized
+    //if (ledONstate != 0){
       
+      // probably safe to call TurnLEDoff even if LEDs are off already anyway
       bool ok = TurnLEDArray(0);
       if(not ok){
         Log("BenLED::TurnOffAndSleep failed to turn off all LEDs!!!",0,0);
         return false;
       }
       ledONstate = 0;
-    }
+      
+    //}
     
-    bool ok = SleepDriver();
+    ok = SleepDriver();
     if(not ok){
       Log("BenLED::TurnOffAndSleep failed to SleepDriver!",0,0);
       return false;
@@ -478,6 +486,12 @@ bool BenLED::TurnLEDon(std::string ledName){
   Read(reg_LED+2, data);
   Read(reg_LED+3, data);
   
+  // note current status of this LED in the CStore for display on the website
+  std::map<std::string,bool> ledStatuses;
+  m_data->CStore.Get("ledStatuses",ledStatuses);
+  ledStatuses[ledName] = true;
+  m_data->CStore.Set("ledStatuses",ledStatuses);
+  
   return akg;
   //use wiringPI function to write to correct register
   //and at the same time check for errors
@@ -499,6 +513,12 @@ bool BenLED::TurnLEDoff(std::string ledName){
   akg &= Write(reg_LED + 1, 0x00);        //LEDn_ON_H
   akg &= Write(reg_LED + 2, 0x00);        //LEDn_OFF_L
   akg &= Write(reg_LED + 3, 0x00);        //LEDn_OFF_H
+  
+  // note current status of this LED in the CStore for display on the website
+  std::map<std::string,bool> ledStatuses;
+  m_data->CStore.Get("ledStatuses",ledStatuses);
+  ledStatuses[ledName]=false;
+  m_data->CStore.Set("ledStatuses",ledStatuses);
   
   return akg;
   //return Write(reg_LED, 0x00);

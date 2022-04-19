@@ -4,6 +4,7 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <utility>
 
 #include "TTree.h"
 
@@ -113,7 +114,9 @@ public:
   TF1* pure_fct;
   TF1* calib_curve;
 
-  std::vector<std::pair<double,double>> concs_and_peakdiffs;
+  std::vector<std::pair<double,double>> concs_and_errs;
+  std::vector<std::pair<double,double>> peakdiffs_and_errs;
+  
   /*
     state mode;	//state for scheduler
     
