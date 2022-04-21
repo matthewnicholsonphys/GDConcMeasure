@@ -19,6 +19,8 @@ bool LivePlotter::Initialise(std::string configfile, DataModel &data){
 
 bool LivePlotter::Execute(){
   
+  Log("LivePlotter Executing...",v_debug,verbosity);
+  
   // Check if NewMeasurement flag has been set in the CStore by the MatthewAnalysis Tool.
   bool new_measurement;
   bool get_ok = m_data->CStore.Get("NewMeasurement",new_measurement);

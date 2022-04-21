@@ -7,6 +7,7 @@ bool TraceAverage::Initialise(std::string configfile, DataModel &data){
   
   if(configfile!="")  m_variables.Initialise(configfile);
   //m_variables.Print();
+  m_variables.Get("verbosity",verbosity);
   
   m_data= &data;
   
@@ -16,8 +17,12 @@ bool TraceAverage::Initialise(std::string configfile, DataModel &data){
 
 bool TraceAverage::Execute(){
   
+  Log("TraceAverage Executing...",v_debug,verbosity);
+  
   std::string measure;
   if(m_data->CStore.Get("Measure",measure) && measure == "Start"){
+    
+    Log("TraceAverage new data to process...",v_debug,verbosity);
     
     std::vector<double> value;
     std::vector<double> error;

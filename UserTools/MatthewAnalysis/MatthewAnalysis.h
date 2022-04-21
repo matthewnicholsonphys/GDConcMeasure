@@ -46,6 +46,12 @@ class MatthewAnalysis: public Tool {
   TF1* left_peak = nullptr;
   TF1* right_peak = nullptr;
   
+  int verbosity=1;
+  int v_error=0;
+  int v_warning=1;
+  int v_message=2;
+  int v_debug=3;
+  
 };
 
 

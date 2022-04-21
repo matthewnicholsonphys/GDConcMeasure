@@ -18,16 +18,22 @@ bool MatthewAnalysis::Initialise(std::string configfile, DataModel &data){
   if(configfile!="")  m_variables.Initialise(configfile);
   //m_variables.Print();
   m_data= &data;
+  
+  m_variables.Get("verbosity",verbosity);
 
-  bool success = (RetrieveDarkSubPure() && RetrieveCalibrationCurve());
+  bool success = (RetrieveDarkSubPure() && RetrieveCalibrationCurveDB());
   return success;
 }
 
 bool MatthewAnalysis::Execute(){
   
+  Log("MatthewAnalysis Executing...",v_debug,verbosity);
+  
   // check if we have an Analyse flag in the CStore indicating intensity data
   // is available for fitting
   if (ReadyToAnalyse()){
+    
+    Log("MatthewAnalysis Processing new measurement...",v_debug,verbosity);
     
     // reinit analysis results to prevent accidental carry-over
     ReInit();
@@ -115,9 +121,12 @@ bool MatthewAnalysis::Execute(){
 
 bool MatthewAnalysis::Finalise(){
   
-  delete m_data->dark_sub_pure;
-  delete m_data->pure_fct;
-  delete m_data->calib_curve;
+  if(m_data->dark_sub_pure) delete m_data->dark_sub_pure;
+  m_data->dark_sub_pure = nullptr;
+  if(m_data->pure_fct) delete m_data->pure_fct;
+  m_data->pure_fct=nullptr;
+  if(m_data->calib_curve) delete m_data->calib_curve;
+  m_data->calib_curve=nullptr;
   
   return true;
 }
@@ -153,11 +162,11 @@ bool MatthewAnalysis::RetrieveCalibrationCurve(){
   // retrieve calibration coefficients from config file
   for (auto i = 0; i < pol_order + 1; ++i){
     success *= m_variables.Get(calib_prefix + std::to_string(i), calib_coefficients[i]);
-    std::cout << calib_coefficients[i] << std::endl;
+    //std::cout << calib_coefficients[i] << std::endl;
   }
   if(!success){
     Log("MatthewAnalysis::RetrieveCalibrationCurve did not find "+std::to_string(pol_order)
-        +" calibration constants on config file!",0,0);
+        +" calibration constants on config file!",v_error,verbosity);
     return false;
   }
   
@@ -166,7 +175,7 @@ bool MatthewAnalysis::RetrieveCalibrationCurve(){
   calib_curve->SetParameters(calib_coefficients);
   
   if(!calib_curve->IsValid()){
-    Log("MatthewAnalysis::RetrieveCalibrationCurve calibration curve is not valid!",0,0);
+    Log("MatthewAnalysis::RetrieveCalibrationCurve calibration curve is not valid!",v_error,verbosity);
     return false;
   }
   m_data->calib_curve = calib_curve;
@@ -184,7 +193,7 @@ bool MatthewAnalysis::RetrieveCalibrationCurveDB(){
   bool get_ok = m_variables.Get("calib_version",calib_version);
   if(not get_ok){
     Log("MatthewAnalysis::RetrieveCalibrationCurve failed to find calibration curve "
-        "version number in config file",0,0);
+        "version number in config file",v_error,verbosity);
     return false;
   }
   
@@ -192,21 +201,28 @@ bool MatthewAnalysis::RetrieveCalibrationCurveDB(){
   m_data->CStore.Set("calib_version",calib_version);
   
   // use version number to lookup formula from database
-  std::string formula_str;
+  std::string formula_str="";
   std::string query_string = "SELECT values->'formula' FROM data WHERE name='calibration_curve' "
-                             "AND values->'version'=" + std::to_string(calib_version);
+                             "AND values->'version'=" + m_data->postgres.pqxx_quote(calib_version);
   bool success = m_data->postgres.ExecuteQuery(query_string, formula_str);
+  if(formula_str==""){
+    Log("MatthewAnalysis::RetrieveCalibrationCurveDB obtained empty formula "
+        "for calibration curve function",v_error,verbosity);
+    return false;
+  }
+  // we must strip enclosing quotations or the TF1 constructor goes berzerk
+  formula_str = formula_str.substr(1,formula_str.length()-2);
   
   // another query for the curve parameters
   query_string = "SELECT values->'params' FROM data WHERE name='calibration_curve' "
-                 "AND values->'version'=" + std::to_string(calib_version);
+                 "AND values->'version'=" + m_data->postgres.pqxx_quote(calib_version);
   std::string params_str;
   success &= m_data->postgres.ExecuteQuery(query_string, params_str);
   
   // check for errors
   if(!success){
     Log("MatthewAnalysis::RetrieveCalibrationCurve failed to retrieve calibration curve "
-        "or parameters for version "+std::to_string(calib_version),0,0);
+        "or parameters for version "+std::to_string(calib_version),v_error,verbosity);
     return false;
   }
   
@@ -222,14 +238,14 @@ bool MatthewAnalysis::RetrieveCalibrationCurveDB(){
     double nextval = strtod(tmp.c_str(),&endptr);
     if(endptr==&tmp[0]){
       Log("MatthewAnalysis::RetrieveCalibrationCurveDB failed to parse calibration parameters from string '"
-          +params_str+"' for calibration curve version "+std::to_string(calib_version),0,0);
+          +params_str+"' for calibration curve version "+std::to_string(calib_version),v_error,verbosity);
       return false;
     }
     calib_coefficients.push_back(nextval);
   }
   if(calib_coefficients.size()==0){
     Log("MatthewAnalysis::RetrieveCalibrationCurve parsed no parameters from string '"
-        +params_str+" for calibration curve version "+std::to_string(calib_version),0,0);
+        +params_str+" for calibration curve version "+std::to_string(calib_version),v_error,verbosity);
     return false;
   }
   
@@ -238,7 +254,7 @@ bool MatthewAnalysis::RetrieveCalibrationCurveDB(){
   calib_curve->SetParameters(calib_coefficients.data());
   if(!calib_curve->IsValid()){
     Log("MatthewAnalysis::RetrieveCalibrationCurve calibration curve constructed from formula '"
-        +formula_str+"' and parameters '"+params_str+"' is not valid!",0,0);
+        +formula_str+"' and parameters '"+params_str+"' is not valid!",v_error,verbosity);
     return false;
   }
   
@@ -260,7 +276,8 @@ bool MatthewAnalysis::RetrieveDarkSubPure(){
   // open the reference file
   TFile pure_file(pure_filename.c_str(), "READ");
   if (! pure_file.IsOpen()){
-    Log("MatthewAnalysis::RetrieveDarkSubPure failed to open pure file '"+pure_filename+"'",0,0);
+    Log("MatthewAnalysis::RetrieveDarkSubPure failed to open pure file '"
+        +pure_filename+"'",v_error,verbosity);
     return false;
   }
   
@@ -268,7 +285,7 @@ bool MatthewAnalysis::RetrieveDarkSubPure(){
   TGraphErrors* dark_subtracted_pure = (TGraphErrors*) pure_file.Get("Graph");
   if(dark_subtracted_pure==nullptr){
     Log("MatthewAnalysis::RetrieveDarkSubPure did not find 'Graph' in pure file '"
-        +pure_filename+"'",0,0);
+        +pure_filename+"'",v_error,verbosity);
     return false;
   }
   
@@ -316,7 +333,8 @@ std::pair<TTree*, TTree*> MatthewAnalysis::FindDarkAndLEDTrees(){
   std::string led_name;
   bool get_ok = m_data->CStore.Get("ledToAnalyse",led_name);
   if(not get_ok){
-    Log("MatthewAnalysis::FindDarkAndLEDTrees - Analyse flag found in CStore but no ledToAnalyse",0,0);
+    Log("MatthewAnalysis::FindDarkAndLEDTrees - Analyse flag found in CStore "
+        "but no ledToAnalyse",v_error,verbosity);
     return result;
   }
   
@@ -354,7 +372,7 @@ TGraphErrors MatthewAnalysis::PerformDarkSubtraction(TTree* ledTree, TTree* dark
       dark_values==nullptr      || dark_values->size()      != number_of_points ||
       dark_wavelengths==nullptr || dark_wavelengths->size() != number_of_points ||
       dark_errors==nullptr      || dark_errors->size()      != number_of_points ){
-      Log("MatthewAnalysis::PerformDarkSubtraction failed to get data from TTrees!",0,0);
+      Log("MatthewAnalysis::PerformDarkSubtraction failed to get data from TTrees!",v_error,verbosity);
       return TGraphErrors{};
   }
   
@@ -431,14 +449,15 @@ double* MatthewAnalysis::FunctionalFit(TGraphErrors& trace){
   // get the pure-water reference function
   TF1* pure_fct = m_data->pure_fct;
   if(pure_fct==nullptr){
-    Log("MatthewAnalysis::FunctionalFit obtained nullptr from DataModel for functional fit TF1",0,0);
+    Log("MatthewAnalysis::FunctionalFit obtained nullptr from DataModel for "
+        "functional fit TF1",v_error,verbosity);
     return nullptr;
   }
   
   // do the fit
   fitresptr = trace.Fit("pure_fct", "RS");
   if(fitresptr->IsEmpty() || !fitresptr->IsValid() || fitresptr->Status()!=0){
-    Log("MatthewAnalysis::FunctionalFit fit status indicates fit failed!",0,0);
+    Log("MatthewAnalysis::FunctionalFit fit status indicates fit failed!",v_error,verbosity);
     // see https://root.cern.ch/doc/master/classTH1.html#a7e7d34c91d5ebab4fc9bba3ca47dabdd
     // status section for an interpretation of int(res) values
     return nullptr;
@@ -502,7 +521,7 @@ std::pair<double,double> MatthewAnalysis::FindPeakDifference(TGraphErrors& absor
   rpf = absorbance_g.Fit("rightPeak", "0RS");
   if(lpf->IsEmpty() || !lpf->IsValid() || int(lpf)!=0 ||
      rpf->IsEmpty() || !rpf->IsValid() || int(rpf)!=0){
-    Log("MatthewAnalysis::FindPeakDifference fit to absorption peaks failed!",0,0);
+    Log("MatthewAnalysis::FindPeakDifference fit to absorption peaks failed!",v_error,verbosity);
     return std::pair<double,double>{0,0};
   }
   
@@ -519,6 +538,10 @@ std::pair<double,double> MatthewAnalysis::CalculateConcentration(const std::pair
   
   // get calibration curve
   TF1* calib_curve = m_data->calib_curve;
+  if(calib_curve==nullptr){
+    Log("MatthewAnalysis::CalculateConcentration calibration curve is null!",v_error,verbosity);
+    return std::pair<double,double>{0,0};
+  }
   
   std::pair<double,double> result;
   

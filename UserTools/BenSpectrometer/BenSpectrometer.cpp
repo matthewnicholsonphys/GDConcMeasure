@@ -27,6 +27,8 @@ bool BenSpectrometer::Initialise(std::string configfile, DataModel &data){
 
 bool BenSpectrometer::Execute(){
   
+  Log("BenSpectrometer Executing...",v_debug,verbosity);
+  
   // check if we've just changing power state
   std::string Power="";
   if(m_data->CStore.Get("Power",Power) && Power!=power){
@@ -66,7 +68,12 @@ bool BenSpectrometer::Execute(){
     Log("got measure",v_message,verbosity);
     // read measurement from spectrometer
     bool ok = GetData();
-    if(not ok) return ok;
+    if(not ok){
+      // should we stop the measurement here, so that downstream Tools
+      // do not see the 'Measure' flag and try to process non-existent data?
+      m_data->CStore.Remove("Measure");
+      return ok;
+    }
   
   }
   

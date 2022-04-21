@@ -16,19 +16,22 @@ bool SaveTraces::Initialise(std::string configfile, DataModel &data){
 
 
 bool SaveTraces::Execute(){
+  
+  Log("SaveTraces Executing...",v_debug,verbosity);
+  
   std::string save="";
   std::string name="";
   int overwrite=1;
     
   if(m_data->CStore.Get("Save",save) && save=="Save"){
     
-    m_data->CStore.Print();
+    //m_data->CStore.Print();
     save="";
     m_data->CStore.Set("Save",save);
     m_data->CStore.Get("Filename",name);
     m_data->CStore.Get("Overwrite",overwrite);
     
-    Log("filename="+name,v_message,verbosity);
+    Log("SaveTraces saving to filename: "+name,v_message,verbosity);
     
     std::string overwritestring = (overwrite==1) ? "RECREATE" : "UPDATE";
     // TODO if update, we need to open the file, retrieve the trees,

@@ -28,7 +28,11 @@ class TraceAverage: public Tool {
 
   bool InitTTree(TTree* tree);
 
-
+  int verbosity=1;
+  int v_error=0;
+  int v_warning=1;
+  int v_message=2;
+  int v_debug=3;
 
 };
 

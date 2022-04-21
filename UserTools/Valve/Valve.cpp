@@ -19,7 +19,8 @@ bool Valve::Initialise(std::string configfile, DataModel &data){
   }
   
   std::stringstream command;
-  command<<"echo \""<<m_valve_pin<<"\" > /sys/class/gpio/export";
+  command<<"if [ ! -d /sys/class/gpio/gpio"<<m_valve_pin<<" ]; then echo \""
+         <<m_valve_pin<<"\" > /sys/class/gpio/export; fi";
   std::string errmsg;
   int ok = SystemCall(command.str(), errmsg);
   if(ok!=0){
@@ -43,6 +44,8 @@ bool Valve::Initialise(std::string configfile, DataModel &data){
 
 
 bool Valve::Execute(){
+  
+  Log("Valve Executing...",v_debug,verbosity);
   
   std::string Valve="";
   bool ok = true;

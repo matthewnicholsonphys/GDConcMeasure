@@ -10,6 +10,8 @@
 #include <typeinfo>
 #include <cxxabi.h>  // demangle
 
+#include "Algorithms.h" // Print for parameter packs
+
 class Postgres {
 	
 	public:
@@ -55,8 +57,34 @@ class Postgres {
 		return pqxx::nullconnection{}.quote_name(name);
 	}
 	// quote values
-	inline std::string pqxx_quote(std::string string){
-		return pqxx::nullconnection{}.quote(string);
+	inline std::string pqxx_quote(std::string string, std::string* err=nullptr){
+		//return pqxx::nullconnection{}.quote(string);
+		// annoyingly we can't use a null connection just to get libpqxx to quote things for us;
+		// we must have a valid connection to a real database :/
+		if(OpenConnection(err)==nullptr) return "";
+		try {
+			return conn->quote(string);
+		} catch (std::exception& e){
+			std::string errmsg = std::string("Postgres::pqxx_quote<std::string> threw exception ")
+			                     +e.what();
+			std::cerr<<errmsg<<std::endl;
+			if(err) *err=errmsg;
+			return "";
+		}
+	}
+	
+	template< typename T, typename std::enable_if<std::is_arithmetic<T>::value, bool>::type potato=true >
+	std::string pqxx_quote(T number, std::string* err=nullptr){
+		if(OpenConnection(err)==nullptr) return "";
+		try {
+			return conn->quote(std::to_string(number));
+		} catch (std::exception& e){
+			std::string errmsg = std::string("Postgres::pqxx_quote<std::string> threw exception ")
+			                     +e.what();
+			std::cerr<<errmsg<<std::endl;
+			if(err) *err=errmsg;
+			return "";
+		}
 	}
 	// ------------------ //
 	
@@ -134,9 +162,9 @@ class Postgres {
 			}
 			catch (const pqxx::sql_error &e){
 				std::cerr << e.what() << std::endl
-						  << "When executing query: " << e.query();
+				          << "When executing query: " << e.query();
 				if(e.sqlstate()!=""){
-					std::cerr << ", with SQLSTATE error code: " << e.sqlstate();
+					std::cerr << ", returned with SQLSTATE error code: " << e.sqlstate();
 				}
 				std::cerr<<std::endl;
 				std::cerr<<"Postgres::ExpandRow failed to convert sql return field "
@@ -168,9 +196,9 @@ class Postgres {
 			}
 			catch (const pqxx::sql_error &e){
 				std::cerr << e.what() << std::endl
-						  << "When executing query: " << e.query();
+				          << "When executing query: " << e.query();
 				if(e.sqlstate()!=""){
-					std::cerr << ", with SQLSTATE error code: " << e.sqlstate();
+					std::cerr << ", returned with SQLSTATE error code: " << e.sqlstate();
 				}
 				std::cerr<<std::endl;
 				std::cerr<<"Postgres::ExpandRow failed to convert sql return field "<<(row.size()-1)
@@ -237,13 +265,14 @@ class Postgres {
 				}
 			}
 			catch (const pqxx::sql_error &e){
-				std::string msg = e.what();
-					        msg += "When executing query: " + e.query();
+				std::stringstream errmsg;
+				errmsg << e.what() << "When executing query: " << e.query() << " with args: ";
+				Print(errmsg, std::forward<Rest>(args)...);
 				if(e.sqlstate()!=""){
-					msg += ", with SQLSTATE error code: " + e.sqlstate();
+					errmsg << ", returned with SQLSTATE error code: " << e.sqlstate();
 				}
-				std::cerr<<msg<<std::endl;
-				if(err) *err = msg;
+				std::cerr<<errmsg.str()<<std::endl;
+				if(err) *err = errmsg.str();
 			}
 			catch (std::exception const &e){
 				std::cerr << e.what() << std::endl;
@@ -296,7 +325,7 @@ class Postgres {
 					query_string += " WHERE ";
 					for(int i=0; i<criterions.size(); ++i){
 						query_string += criterions.at(i)+comparators.at(i)+"$"
-						             +  std::to_string(fields.size()+i);
+						             +  std::to_string(i+1+fields.size());
 						if(i<(criterions.size()-1)) query_string+= ", AND ";
 					}
 				}
@@ -322,13 +351,14 @@ class Postgres {
 				}
 			}
 			catch (const pqxx::sql_error &e){
-				std::string msg = e.what();
-					        msg += "When executing query: " + e.query();
+				std::stringstream errmsg;
+				errmsg << e.what() << "When executing query: " << e.query() << " with args: ";
+				Print(errmsg, std::forward<Rest>(args)...);
 				if(e.sqlstate()!=""){
-					msg += ", with SQLSTATE error code: " + e.sqlstate();
+					errmsg << ", returned with SQLSTATE error code: " + e.sqlstate();
 				}
-				std::cerr<<msg<<std::endl;
-				if(err) *err = msg;
+				std::cerr<<errmsg.str()<<std::endl;
+				if(err) *err = errmsg.str();
 			}
 			catch (std::exception const &e){
 				std::cerr << e.what() << std::endl;

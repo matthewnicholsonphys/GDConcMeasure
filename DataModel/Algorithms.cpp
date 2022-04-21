@@ -12,7 +12,8 @@ int SystemCall(std::string cmd, std::string& errmsg){
   // so if we append 2>&1 we get stderr into our output file too!
   // fortunately we can put redirects whereever we like,
   // so insert it before anything else
-  cmd.insert(0,"2>&1 ");
+  cmd.insert(0,"2>&1; ");
+  cmd.append(";");
   
   // fork, execute cmd with '/bin/sh -c' and open a read pipe connected to outout (r)
   FILE * stream = popen(cmd.c_str(), "r");

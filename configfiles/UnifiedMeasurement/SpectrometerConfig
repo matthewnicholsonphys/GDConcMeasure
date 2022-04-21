@@ -1,5 +1,5 @@
 # configuration for spectrometer
-verbosity 2
+verbosity 1
 traces 2000                     #number of traces to take each measurement
 integration 25000               # integration time in microseconds
 #SpectrometerModel Jaz

@@ -9,6 +9,7 @@ bool SaveToDB::Initialise(std::string configfile, DataModel &data){
 	//m_variables.Print();
 	
 	m_variables.Get("max_webpage_records",max_webpage_records);
+	m_variables.Get("verbosity",verbosity);
 	
 	m_data= &data;
 	
@@ -17,6 +18,8 @@ bool SaveToDB::Initialise(std::string configfile, DataModel &data){
 
 
 bool SaveToDB::Execute(){
+	
+	Log("SaveToDB Executing...",v_debug,verbosity);
 	
 	// for each Tool in the ToolChain, execute the corresponding
 	// method to record its outputs to the database
@@ -75,7 +78,7 @@ bool SaveToDB::MatthewAnalysis(){
 			Log("SaveToDB::MatthewAnalysis did not find dark trace mean & sigma in CStore!",0,0);
 		} else {
 			std::string dark_json = "{ \"mean\":"+std::to_string(dark_mean)
-				                  + ", \"width\":"+std::to_string(dark_sigma)+"}";
+			                      + ", \"width\":"+std::to_string(dark_sigma)+"}";
 			// store to database
 			field_names = std::vector<std::string>{"run","timestamp","tool","name","values"};
 			error_ret="";
@@ -102,7 +105,7 @@ bool SaveToDB::MatthewAnalysis(){
 			Log("SaveToDB::MatthewAnalysis did not find raw trace min/max in CStore!",0,0);
 		} else {
 			std::string rawtrace_json = "{ \"max\":"+std::to_string(led_on_max)
-				                      + ", \"min\":"+std::to_string(led_on_min)+"}";
+			                          + ", \"min\":"+std::to_string(led_on_min)+"}";
 			// store to database
 			field_names = std::vector<std::string>{"run","timestamp","tool","name","values"};
 			error_ret="";
@@ -464,11 +467,12 @@ bool SaveToDB::MatthewAnalysis(){
 		int calib_version;
 		get_ok = m_data->CStore.Get("calib_version",calib_version);
 		if(not get_ok){
+			Log("SaveToDB::MatthewAnalysis failed to retrieve calibration version from CStore",0,0);
+		} else {
 			// FIXME calling 'psql -c "INSERT INTO mytable ( jsonb_field ) VALUES ( 3 )";
 			// produces an error 'column "jsonb_field" is of type jsonb but expression is of type integer
 			// whereas using "... VALUES ( '3' ) ..." works. Not sure how this interacts with
 			// exec_params (which underlies Postgres::Insert); we may need to cast to string
-			std::string calib_ver_string = std::to_string(calib_version);
 			// store to database
 			field_names = std::vector<std::string>{"run","timestamp","tool","name","values"};
 			error_ret="";
@@ -509,7 +513,9 @@ bool SaveToDB::MatthewAnalysis(){
 		
 		// TODO draw lines on graph where this crosses: lookup line to lead eye
 		
-	} // if we had a new measurement
+	} else {
+		get_ok = true;   // no new measurement, nothing to save
+	}
 	
 	return get_ok;
 	
@@ -520,6 +526,7 @@ bool SaveToDB::BenPower(){
 	
 	std::string Power="OFF";   // or "ON"
 	m_data->CStore.Get("Power",Power);
+	Power = "{\"status\": \""+Power+"\"}";
 	
 	// store to database
 	field_names = std::vector<std::string>{"timestamp","values"};
@@ -548,8 +555,10 @@ bool SaveToDB::BenPower(){
 bool SaveToDB::Valve(){
 	bool all_ok = true;
 	
-	std::string valve="CLOSE";  // or "OPEN"
-	m_data->CStore.Set("Valve",valve);
+	std::string valve="CLOSED";  // or "OPEN"
+	m_data->CStore.Get("Valve",valve);
+	if(valve=="CLOSE") valve="CLOSED"; // grammar.
+	valve = "{\"status\": \""+valve+"\"}";
 	
 	// store to database
 	field_names = std::vector<std::string>{"timestamp","values"};
@@ -583,7 +592,7 @@ bool SaveToDB::BenLED(){
 	int pwm_comms_ok=0;
 	m_data->CStore.Get("PWMBoardHandle",pwm_comms_ok);
 	// store to database
-	field_names = std::vector<std::string>{"timestamp","value"};
+	field_names = std::vector<std::string>{"timestamp","values"};
 	criterions = std::vector<std::string>{"name"};
 	comparators = std::vector<char>{'='};
 	error_ret="";
@@ -596,7 +605,7 @@ bool SaveToDB::BenLED(){
 	                        "now()",                     // timestamp
 	                        pwm_comms_ok,                // new values (jsonb)
 	                        // variadic argument list of criterion values
-	                        "pwm_comms_ok");             // name
+	                        "pwm_connected");            // name
 	if(error_ret!=""){
 		Log("SaveToDB::BenLED failed to update PWM comms state "
 		    "in database with error '"+error_ret+"'",0,0);
@@ -606,14 +615,14 @@ bool SaveToDB::BenLED(){
 	std::map<std::string,bool> ledStatuses;
 	m_data->CStore.Get("ledStatuses",ledStatuses);
 	// convert to json to insert into DB
-	std::string ledstatusstring="{";
+	std::string ledstatusstring="{ ";
 	for(auto&& ledStatus : ledStatuses){
 		ledstatusstring += "\""+ledStatus.first+"\":"+std::to_string(ledStatus.second)+",";
 	}
 	// replace trailing ',' with closing '}'
 	ledstatusstring.back()='}';
 	// store to database
-	field_names = std::vector<std::string>{"timestamp","value"};
+	field_names = std::vector<std::string>{"timestamp","values"};
 	criterions = std::vector<std::string>{"name"};
 	comparators = std::vector<char>{'='};
 	error_ret="";
@@ -645,7 +654,7 @@ bool SaveToDB::BenSpectrometer(){
 	m_data->CStore.Get("SpectrometerConnected",connected);
 	
 	// store to database
-	field_names = std::vector<std::string>{"timestamp","value"};
+	field_names = std::vector<std::string>{"timestamp","values"};
 	criterions = std::vector<std::string>{"name"};
 	comparators = std::vector<char>{'='};
 	error_ret="";
@@ -700,17 +709,17 @@ bool SaveToDB::TraceAverage(){
 			//return false;
 		}
 		// convert 3 vectors to json
-		std::string trace_data = "{ \"yvals\":[";
+		std::string trace_data = "{ \"yvals\":[ ";
 		for(int i=0; i<value.size(); ++i){
 			trace_data += std::to_string(value.at(i))+",";
 		}
 		trace_data.back()=']';
-		trace_data += ", \"yerrs\":[";
+		trace_data += ", \"yerrs\":[ ";
 		for(int i=0; i<error.size(); ++i){
 			trace_data += std::to_string(error.at(i))+",";
 		}
 		trace_data.back()=']';
-		trace_data += ", \"xvals\":[";
+		trace_data += ", \"xvals\":[ ";
 		for(int i=0; i<wavelength.size(); ++i){
 			trace_data += std::to_string(wavelength.at(i))+",";
 		}
@@ -718,7 +727,7 @@ bool SaveToDB::TraceAverage(){
 		trace_data += "}";
 		
 		// store to database
-		field_names = std::vector<std::string>{"timestamp","value"};
+		field_names = std::vector<std::string>{"timestamp","values"};
 		criterions = std::vector<std::string>{"name"};
 		comparators = std::vector<char>{'='};
 		error_ret="";
@@ -752,9 +761,10 @@ bool SaveToDB::SaveTraces(){
 	// get last filename to be written to with SaveTraces tool
 	std::string name;
 	m_data->CStore.Get("Filename",name);
+	name = "{\"filename\":\""+name+"\"}";
 	
 	// store to database
-	field_names = std::vector<std::string>{"timestamp","value"};
+	field_names = std::vector<std::string>{"timestamp","values"};
 	criterions = std::vector<std::string>{"name"};
 	comparators = std::vector<char>{'='};
 	error_ret="";
@@ -795,7 +805,7 @@ bool SaveToDB::MarcusScheduler(){
 	// convert to json
 	std::string scheduler_commands = BuildJson(commands);
 	// store to database
-	field_names = std::vector<std::string>{"timestamp","value"};
+	field_names = std::vector<std::string>{"timestamp","values"};
 	criterions = std::vector<std::string>{"name"};
 	comparators = std::vector<char>{'='};
 	error_ret="";
@@ -822,7 +832,7 @@ bool SaveToDB::MarcusScheduler(){
 	                               + ", \"command_step\":"+std::to_string(command_step)
 	                               + ", \"loop_counts\":"+loop_counts_json+"}";
 	// store to database
-	field_names = std::vector<std::string>{"timestamp","value"};
+	field_names = std::vector<std::string>{"timestamp","values"};
 	criterions = std::vector<std::string>{"name"};
 	comparators = std::vector<char>{'='};
 	error_ret="";
@@ -961,3 +971,10 @@ std::string SaveToDB::BuildJson(TFitResultPtr& fitresptr){
 	return fit_status;
 }
 
+std::string SaveToDB::CastJsonb(std::string& in){
+	return std::string(std::string("'") + in + "'::jsonb");
+}
+
+std::string SaveToDB::CastJsonb(int in){
+	return std::string(std::string("'") + std::to_string(in) + "'::jsonb");
+}

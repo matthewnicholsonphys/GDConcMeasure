@@ -38,12 +38,20 @@ class SaveToDB: public Tool {
 	std::string BuildJson(int* arr, int n);
 	std::string BuildJson(std::vector<std::string> arr);
 	std::string BuildJson(TFitResultPtr& fitresptr);
+	std::string CastJsonb(std::string& in);
+	std::string CastJsonb(int in);
 	
 	std::vector<std::string> field_names;
 	std::vector<std::string> criterions;
 	std::vector<char> comparators;
 	std::string error_ret;
 	std::string query_string;
+	
+	int verbosity=1;
+	int v_error=0;
+	int v_warning=1;
+	int v_message=2;
+	int v_debug=3;
 };
 
 

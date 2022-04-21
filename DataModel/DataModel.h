@@ -110,9 +110,9 @@ public:
   std::vector<double> wavelength;	//can be retrieved from seabreeze
   boost::posix_time::ptime measurment_time;
 
-  TGraphErrors* dark_sub_pure;
-  TF1* pure_fct;
-  TF1* calib_curve;
+  TGraphErrors* dark_sub_pure = nullptr;
+  TF1* pure_fct = nullptr;
+  TF1* calib_curve = nullptr;
 
   std::vector<std::pair<double,double>> concs_and_errs;
   std::vector<std::pair<double,double>> peakdiffs_and_errs;

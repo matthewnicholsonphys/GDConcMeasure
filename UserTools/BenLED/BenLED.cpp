@@ -24,7 +24,7 @@ bool BenLED::Initialise(std::string configfile, DataModel &data){
   m_variables.Get("delay", fDelay);
   m_variables.Get("map_wiring", wiringLED);
   
-  Log("BenLED: LED wiring and setup will be read from " + wiringLED, 1, verbosity);
+  Log("BenLED: LED wiring and setup will be read from " + wiringLED, v_message, verbosity);
   
   /*
   //check when mapping file was changed
@@ -49,6 +49,8 @@ bool BenLED::Initialise(std::string configfile, DataModel &data){
 }
 
 bool BenLED::Execute(){
+  
+  Log("BenLED Executing...", v_debug, verbosity);
   
   bool ok = true;
   std::string Power="";
@@ -97,20 +99,29 @@ bool BenLED::Execute(){
     } else if(LED=="Change"){
       
       //m_data->CStore.Print();
-      short R=0;
-      short G=0;
-      short B=0;
-      short White=0;
-      short B385=0;
-      short UV260=0;
-      short UV275=0;
-      m_data->CStore.Get("R",R);
-      m_data->CStore.Get("G",G);
-      m_data->CStore.Get("B",B);
-      m_data->CStore.Get("White",White);
-      m_data->CStore.Get("385",B385);
-      m_data->CStore.Get("260",UV260);
-      m_data->CStore.Get("275",UV275);
+      std::string R_str="0";
+      std::string G_str="0";
+      std::string B_str="0";
+      std::string White_str="0";
+      std::string B385_str="0";
+      std::string UV260_str="0";
+      std::string UV275_str="0";
+      m_data->CStore.Get("R",R_str);
+      m_data->CStore.Get("G",G_str);
+      m_data->CStore.Get("B",B_str);
+      m_data->CStore.Get("White",White_str);
+      m_data->CStore.Get("385",B385_str);
+      m_data->CStore.Get("260",UV260_str);
+      m_data->CStore.Get("275",UV275_str);
+      
+      // not the most robust way, but probably the best we can do.
+      short R=(R_str=="1");
+      short G=(G_str=="1");
+      short B=(B_str=="1");
+      short White=(White_str=="1");
+      short B385=(B385_str=="1");
+      short UV260=(UV260_str=="1");
+      short UV275=(UV275_str=="1");
       
       if( R || G || B ){
         ok &= TurnLEDon("LEDRGBAnnode");
@@ -123,7 +134,6 @@ bool BenLED::Execute(){
         ok &= TurnLEDoff("LEDR");
         ok &= TurnLEDoff("LEDG");
         ok &= TurnLEDoff("LEDB");
-      
       }
       
       if(R)  ok &= TurnLEDoff("LEDR");
@@ -157,17 +167,10 @@ bool BenLED::TurnOnAll(){
   }
   
   bool ok = TurnLEDon("LEDRGBAnnode");
-  if(not ok){
-    Log("BenLED::TurnOnAll failed trying to turn on RGB Anode!",0,0);
-    // return false;   XXX ?? should we continue?
-  }
   
   // try to turn on all other LEDs
   for (std::map<std::string, unsigned int>::iterator it =  mLED_name.begin(); it != mLED_name.end(); ++it){
     ok &= TurnLEDon(it->first);
-  }
-  if(not ok){
-    Log("BenLED::TurnOnAll failed to turn on all LEDs!",0,0);
   }
   
   return ok;
@@ -191,9 +194,6 @@ bool BenLED::TurnOffAll(){
   }
   // turn off RGB LED
   all_ok &= TurnLEDoff("LEDRGBAnnode");
-  if(not all_ok){
-    Log("BenLED::TurnOffAll failed to turn off all LEDs!!!",0,0);
-  }
   
   return all_ok;
 }
@@ -201,7 +201,12 @@ bool BenLED::TurnOffAll(){
 
 bool BenLED::Finalise(){
   
-  return TurnOffAndSleep();        // 0 will turn off all LEDs
+  // turn off all LEDs... but only try this if we have an open connection to the PWM board
+  bool ok = true;
+  if (file_descript){
+    ok = TurnOffAndSleep();        // 0 will turn off all LEDs
+  }
+  return ok;
 }
 
 
@@ -258,6 +263,10 @@ bool BenLED::EstablishI2C(){
   }
   
   std::ifstream inWiring(".led_wiring");
+  if(!inWiring.is_open()){
+    Log("BenLED::EstablishI2C failed to find file .led_wiring!",v_error,verbosity);
+    return false;
+  }
   std::string line;
   int addr;
   bool address_found=false;
@@ -303,7 +312,7 @@ bool BenLED::EstablishI2C(){
   }
   
   // if we found a device,try to establish comms
-  Log("BenLED: making I2C connection to address " + addr, 1, verbosity);
+  Log("BenLED making I2C connection to address " + std::to_string(addr), v_message, verbosity);
   
   file_descript = wiringPiI2CSetup(addr);
   if(file_descript<0){
@@ -338,16 +347,16 @@ bool BenLED::SetPWMfreq(double freq){
 
 bool BenLED::TurnOffAndSleep(){
   
+  bool ok = true;
   if (!IsSleeping()){
     
     // FIXME ledONstate is never set; here it is being read unitialized
     //if (ledONstate != 0){
       
       // probably safe to call TurnLEDoff even if LEDs are off already anyway
-      bool ok = TurnLEDArray(0);
+      ok = TurnLEDArray(0);
       if(not ok){
-        Log("BenLED::TurnOffAndSleep failed to turn off all LEDs!!!",0,0);
-        return false;
+        //return false;    // FIXME if this failed, should we return? should we update the internal state?
       }
       ledONstate = 0;
       
@@ -356,11 +365,10 @@ bool BenLED::TurnOffAndSleep(){
     ok = SleepDriver();
     if(not ok){
       Log("BenLED::TurnOffAndSleep failed to SleepDriver!",0,0);
-      return false;
     }
   }
   
-  return true;
+  return ok;
 }
 
 bool BenLED::IsSleeping(){
@@ -492,6 +500,9 @@ bool BenLED::TurnLEDon(std::string ledName){
   ledStatuses[ledName] = true;
   m_data->CStore.Set("ledStatuses",ledStatuses);
   
+  if(!akg){
+    Log("BenLED::TurnLEDon failed to turn on LED "+ledName,0,0);
+  }
   return akg;
   //use wiringPI function to write to correct register
   //and at the same time check for errors
@@ -520,6 +531,9 @@ bool BenLED::TurnLEDoff(std::string ledName){
   ledStatuses[ledName]=false;
   m_data->CStore.Set("ledStatuses",ledStatuses);
   
+  if(!akg){
+    Log("BenLED::TurnLEDoff failed to turn off LED "+ledName,0,0);
+  }
   return akg;
   //return Write(reg_LED, 0x00);
 }

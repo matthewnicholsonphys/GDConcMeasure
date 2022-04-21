@@ -11,6 +11,8 @@ bool MarcusScheduler::Initialise(std::string configfile, DataModel &data){
 	
 	m_data= &data;
 	
+	m_variables.Get("verbosity",verbosity);
+	
 	// check we have an input file specifying the sequence of commands to be run
 	if(!m_variables.Get("command_file",command_file)){
 		Log("MarcusScheduler::Initialise - no command_file specified in config file!",v_error,verbosity);
@@ -46,6 +48,8 @@ bool MarcusScheduler::Initialise(std::string configfile, DataModel &data){
 // ««-------------- ≪ °◇◆◇° ≫ --------------»»
 
 bool MarcusScheduler::Execute(){
+	
+	Log("MarcusScheduler Executing...",v_debug,verbosity);
 	
 	// update current commandfile line number in datamodel for display on website
 	m_data->CStore.Set("MarcusSchedulerCurrentCommand",current_command);
@@ -260,7 +264,8 @@ bool MarcusScheduler::check_break_loop(std::string& the_command){
 				} else {
 					// if we scanned to the end of the command list
 					// but didn't find a 'loop' command, just ignore the flag file
-					Log("MarcusScheduler::check_break_loop - Did not find a 'loop' command, ignoring break loop",v_warning,verbosity);
+					Log("MarcusScheduler::check_break_loop - Did not find a 'loop' command, "
+					    "ignoring break loop",v_warning,verbosity);
 					std::string syscmd="rm -f "+break_loop_flagfile_name;
 					system(syscmd.c_str());
 					

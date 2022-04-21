@@ -1,9 +1,10 @@
-verbosity 2
-CalibCoeff0 0.0079581671
-CalibCoeff1 2.7415760
-CalibCoeff2 -31.591756
-CalibCoeff3 478.69924
-CalibCoeff4 18682.891
-CalibCoeff5 -29982.759
+verbosity 1
+calib_version 0   # now pulls the calibration constants from the database
+#CalibCoeff0 0.0079581671
+#CalibCoeff1 2.7415760
+#CalibCoeff2 -31.591756
+#CalibCoeff3 478.69924
+#CalibCoeff4 18682.891
+#CalibCoeff5 -29982.759
 
 pure_filename pureDarkSubtracted.root

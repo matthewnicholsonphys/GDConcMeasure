@@ -21,7 +21,8 @@ bool BenPower::Initialise(std::string configfile, DataModel &data){
   Log("power pin is "+std::to_string(m_powerpin),v_message,verbosity);
   
   std::stringstream command;
-  command<<"echo \""<<m_powerpin<<"\" > /sys/class/gpio/export";
+  command<<"if [ ! -d /sys/class/gpio/gpio"<<m_powerpin<<" ]; then echo \""
+         <<m_powerpin<<"\" > /sys/class/gpio/export; fi";
   std::string errmsg;
   int ok = SystemCall(command.str(), errmsg);
   if(ok!=0){
@@ -44,6 +45,8 @@ bool BenPower::Initialise(std::string configfile, DataModel &data){
 }
 
 bool BenPower::Execute(){
+  
+  Log("BenPower Executing...",v_debug,verbosity);
   
   std::string Power="";
   int ok = true;
