@@ -39,6 +39,7 @@ private:
   int intTime;
   int nTraces;
   std::string power;
+  int wakedelay;
   
   int verbosity=1;
   int v_error=0;

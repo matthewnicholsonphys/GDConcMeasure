@@ -1,0 +1,3 @@
+verbosity 1
+# right valve
+valve_pin 15

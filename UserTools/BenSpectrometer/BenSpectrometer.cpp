@@ -18,6 +18,7 @@ bool BenSpectrometer::Initialise(std::string configfile, DataModel &data){
   m_variables.Get("SpectrometerModel",SpectrometerModel);
   m_variables.Get("SpectrometerIP",SpectrometerIP);
   m_variables.Get("SpectrometerPort",SpectrometerPort);
+  m_variables.Get("wakedelay",wakedelay);
   
   // default state power off
   power="OFF";
@@ -40,7 +41,13 @@ bool BenSpectrometer::Execute(){
       // if we've just powered up, establish a connection
       Log("spectrometer on",v_message,verbosity);
       
+      Log("BenSpectrometer sleeping for "+std::to_string(wakedelay)+"s after power-up "
+          +"to allow spectrometer to wake up",v_warning,verbosity);
+      sleep(wakedelay);
+      Log("attempting to connect to spectrometer...",v_message,verbosity);
       // make 50(!) attempts to connect
+      // to be honest this seems pointless; i've never seen it connect on any attempt other than the first.
+      // if the first fails, all others similarly fail.
       int tries=0;
       while(!EstablishUSB()){
         tries++;
@@ -147,9 +154,10 @@ bool BenSpectrometer::EstablishUSB(){
   sleep(30);
   sbapi_open_device(device_ids[0], &error);
   Log("error="+std::to_string(error),((error==0) ? v_debug : v_error),verbosity);
-  if(flag ==0) return false;
+  if(flag ==0 || error!=0) return false;
   spectrometer_ids = (long *)calloc(1, sizeof(long));
   Log("spectrometer_ids="+std::to_string(*spectrometer_ids),v_debug,verbosity);
+  if((*spectrometer_ids)==0) return false;
   Log("device_ids[0]="+std::to_string(device_ids[0]),v_debug,verbosity);
   sbapi_get_spectrometer_features(device_ids[0], &error, spectrometer_ids, 1); /// this may not be needed
   Log("error="+std::to_string(error),((error==0) ? v_debug : v_error),verbosity);

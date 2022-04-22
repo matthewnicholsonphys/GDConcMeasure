@@ -1,7 +1,9 @@
 myGracefulStop      GracefulStop            configfiles/UnifiedMeasurement/GracefulStopConfig
 myMarcusScheduler   MarcusScheduler         configfiles/UnifiedMeasurement/MarcusSchedulerConfig
 myBenPower          BenPower                configfiles/UnifiedMeasurement/PowerConfig
-myValve             Valve                   configfiles/UnifiedMeasurement/ValveConfig
+#myValve             Valve                   configfiles/UnifiedMeasurement/ValveConfig     # pump power
+myValve1             Valve                   configfiles/UnifiedMeasurement/ValveConfig_v1  # LHS pump
+myValve2             Valve                   configfiles/UnifiedMeasurement/ValveConfig_v2  # RHS pump
 BenLED              BenLED                  configfiles/UnifiedMeasurement/LEDConfig
 BenSpectrometer     BenSpectrometer         configfiles/UnifiedMeasurement/SpectrometerConfig
 TraceAverage        TraceAverage            configfiles/UnifiedMeasurement/TraceAverageConfig

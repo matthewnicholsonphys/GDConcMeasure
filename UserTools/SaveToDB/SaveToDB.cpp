@@ -1,4 +1,5 @@
 #include "SaveToDB.h"
+#include "Algorithms.h" // for SystemCall
 
 SaveToDB::SaveToDB():Tool(){}
 
@@ -8,10 +9,91 @@ bool SaveToDB::Initialise(std::string configfile, DataModel &data){
 	if(configfile!="")  m_variables.Initialise(configfile);
 	//m_variables.Print();
 	
+	m_data= &data;
+	
 	m_variables.Get("max_webpage_records",max_webpage_records);
 	m_variables.Get("verbosity",verbosity);
 	
-	m_data= &data;
+	// until we have a better definition, each execution of the ToolChain
+	// will consitute a new run, unless flagged as a debug run.
+	// Debug runs will be flagged by a run_config of -1.
+	int run_config;
+	get_ok = m_variables.Get("run_config",run_config);
+	if(!get_ok){
+		Log("SaveToDB::Initialise found no 'run_config' in configuration file!",v_error,verbosity);
+		return false;    // make no assumptions
+	}
+	
+	// run number for debug runs will be -1 as well
+	runnum=-1;
+	
+	// if not a debug run
+	if(run_config>=0){
+		// For each new run we'll make a new entry in the run table,
+		// for which we need the following:
+		// 0. run number (auto-incrementing, we'll retrieve it from the new entry)
+		// 1. runconfig version number
+		// 2. source code git tag
+		// 3. run start time ('now()', set here)
+		// 4. run stop time ('now()', set in Finalise)
+		// 5. any additional notes (optional)
+		
+		// get the current git tag
+		std::string command = "git describe --tags";
+		std::string git_tag;
+		get_ok = SystemCall(command, git_tag);   // second arg is combined stderr+stdout
+		if(get_ok!=0){
+			Log("SaveToDB::Initialise failed to retrieve current git tag with error '"
+				+git_tag+"'",v_error,verbosity);
+			return false;
+		}
+		
+		// get any notes. notes are optional: don't bail if this fails.
+		std::string run_notes;
+		// Stores won't parse multiple words into a variable, so notes need to be
+		// read from a separate file. probably for the best.
+		std::string notes_filename;
+		get_ok = m_variables.Get("run_notes",notes_filename);
+		if(get_ok && notes_filename!=""){
+			std::ifstream notes_file(notes_filename.c_str());
+			if(notes_file.is_open()){
+				std::string line;
+				while(getline(notes_file, line)){
+					run_notes.append("\n");
+					run_notes.append(line);
+				}
+				std::cout<<"run notes were: '"<<run_notes<<"'"<<std::endl;
+			}
+		}
+		
+		// make a new entry in the run database
+		field_names = std::vector<std::string>{"start","runconfig","notes","git_tag"};
+		error_ret="";
+		get_ok = m_data->postgres.Insert("run",                       // table name
+		                                 field_names,                 // field names
+		                                 &error_ret,                  // error return string
+		                                 // variadic argument list of field values
+		                                 "now()",                     // start timestamp
+		                                 run_config,                  // run config ID
+		                                 run_notes,                   // run notes
+		                                 git_tag);                    // git tag
+		if(!get_ok){
+			Log("SaveToDB::Initialise failed to make new run entry in database with error '"
+			    +error_ret+"'",v_error,verbosity);
+			return false;
+		}
+		
+		// get the maximum run number, which should be the entry we just made.
+		error_ret="";
+		get_ok = m_data->postgres_helper.GetCurrentRun(runnum, nullptr, &error_ret);
+		if(!get_ok || runnum<0){
+			Log("SaveToDB::Initialise failed to get latest run number in databse with error '"
+			    +error_ret+"'",v_error,verbosity);
+			return false;
+		}
+		Log("Current run number is "+std::to_string(runnum),v_message,verbosity);
+		// measurement entries will be linked to this run number.
+	}
 	
 	return true;
 }
@@ -23,15 +105,47 @@ bool SaveToDB::Execute(){
 	
 	// for each Tool in the ToolChain, execute the corresponding
 	// method to record its outputs to the database
-	bool get_ok = true;
+	get_ok = true;
+	try{
 	get_ok &= MarcusScheduler();
+	} catch(...){ std::cerr<<"failed to save marcusscheduler"<<std::endl; }
+	if(!get_ok) { std::cerr<<"failed to save marcusscheduler"<<std::endl; }
+	get_ok = true;
+	try{
 	get_ok &= BenPower();
+	} catch(...){ std::cerr<<"failed to save benpower"<<std::endl; }
+	if(!get_ok) { std::cerr<<"failed to save benpower"<<std::endl; }
+	get_ok = true;
+	try{
 	get_ok &= Valve();
+	} catch(...){ std::cerr<<"failed to save valve"<<std::endl; }
+	if(!get_ok) { std::cerr<<"failed to save valve"<<std::endl; }
+	get_ok = true;
+	try{
 	get_ok &= BenLED();
+	} catch(...){ std::cerr<<"failed to save benled"<<std::endl; }
+	if(!get_ok) { std::cerr<<"failed to save benled"<<std::endl; }
+	get_ok = true;
+	try{
 	get_ok &= BenSpectrometer();
+	} catch(...){ std::cerr<<"failed to save benspec"<<std::endl; }
+	if(!get_ok) { std::cerr<<"failed to save benspec"<<std::endl; }
+	get_ok = true;
+	try{
 	get_ok &= TraceAverage();
+	} catch(...){ std::cerr<<"failed to save traceav"<<std::endl; }
+	if(!get_ok) { std::cerr<<"failed to save traceav"<<std::endl; }
+	get_ok = true;
+	try{
 	get_ok &= MatthewAnalysis();
+	} catch(...){ std::cerr<<"failed to save mattana"<<std::endl; }
+	if(!get_ok) { std::cerr<<"failed to save mattana"<<std::endl; }
+	get_ok = true;
+	try{
 	get_ok &= SaveTraces();
+	} catch(...){ std::cerr<<"failed to save savetr"<<std::endl; }
+	if(!get_ok) { std::cerr<<"failed to save savetr"<<std::endl; }
+	get_ok = true;
 	get_ok &= RoutineCalibration();  // placeholder, Tool TODO
 	
 	return get_ok;
@@ -40,23 +154,34 @@ bool SaveToDB::Execute(){
 
 bool SaveToDB::Finalise(){
 	
-	return true;
+	// end of run: update end time in database
+	field_names = std::vector<std::string>{"stop"};
+	criterions = std::vector<std::string>{"runnum"};
+	comparators = std::vector<char>{'='};
+	error_ret="";
+	get_ok = m_data->postgres.Update("run",                       // table name
+	                                 field_names,                 // field names
+	                                 criterions,                  // fields we're applying SELECT on to match
+	                                 comparators,                 // comparison operator required by match
+	                                 &error_ret,                  // error return string
+	                                 // variadic argument list of new field values
+	                                 "now()",                     // stop timestamp
+	                                 // variadic argument list of criterion values
+	                                 runnum);                     // updat entry for current run
+	if(!get_ok){
+		Log("SaveToDB::BenPower failed to update end time of current run "
+		    "in database with error '"+error_ret+"'",v_error,verbosity);
+	}
+	
+	return get_ok;
 }
 
 bool SaveToDB::MatthewAnalysis(){
 	
 	// see if we have new data to add to DB
 	bool new_measurement;
-	bool get_ok = m_data->CStore.Get("NewMeasurement",new_measurement);
+	get_ok = m_data->CStore.Get("NewMeasurement",new_measurement);
 	if(get_ok && new_measurement){
-		
-		// look up the run number
-		int runnum;
-		get_ok = m_data->CStore.Get("run_num",runnum);
-		if(not get_ok){
-			Log("SaveToDB::MatthewAnalysis no run_num in CStore!",0,0);
-			return false; // we need this
-		}
 		
 		////////////////////////////////////////////////
 		// gd concentration calculation proceeds as follows:
@@ -75,25 +200,26 @@ bool SaveToDB::MatthewAnalysis(){
 		get_ok  = m_data->CStore.Get("dark_mean",dark_mean);
 		get_ok &= m_data->CStore.Get("dark_sigma",dark_sigma);
 		if(not get_ok){
-			Log("SaveToDB::MatthewAnalysis did not find dark trace mean & sigma in CStore!",0,0);
+			Log("SaveToDB::MatthewAnalysis did not find dark trace mean or "
+			    "sigma in CStore!",v_error,verbosity);
 		} else {
 			std::string dark_json = "{ \"mean\":"+std::to_string(dark_mean)
 			                      + ", \"width\":"+std::to_string(dark_sigma)+"}";
 			// store to database
 			field_names = std::vector<std::string>{"run","timestamp","tool","name","values"};
 			error_ret="";
-			m_data->postgres.Insert("data",                      // table name
-			                        field_names,                 // field names
-			                        &error_ret,                  // error return string
-			                        // variadic argument list of field values
-			                        runnum,                      // run
-			                        "now()",                     // timestamp
-			                        "MatthewAnalysis",           // tool
-			                        "darktrace_params",          // name
-			                        dark_json);                  // values (jsonb)
-			if(error_ret!=""){
+			get_ok = m_data->postgres.Insert("data",                      // table name
+			                                 field_names,                 // field names
+			                                 &error_ret,                  // error return string
+			                                 // variadic argument list of field values
+			                                 runnum,                      // run
+			                                 "now()",                     // timestamp
+			                                 "MatthewAnalysis",           // tool
+			                                 "darktrace_params",          // name
+			                                 dark_json);                  // values (jsonb)
+			if(!get_ok){
 				Log("SaveToDB::MatthewAnalysis failed to save dark trace characteristics "
-				    "into database with error '"+error_ret+"'",0,0);
+				    "into database with error '"+error_ret+"'",v_error,verbosity);
 			}
 		}
 		
@@ -102,43 +228,46 @@ bool SaveToDB::MatthewAnalysis(){
 		get_ok  = m_data->CStore.Get("raw_absregion_max",led_on_max);
 		get_ok &= m_data->CStore.Get("raw_absregion_min",led_on_min);
 		if(not get_ok){
-			Log("SaveToDB::MatthewAnalysis did not find raw trace min/max in CStore!",0,0);
+			Log("SaveToDB::MatthewAnalysis did not find raw trace min/max in CStore!",v_error,verbosity);
 		} else {
 			std::string rawtrace_json = "{ \"max\":"+std::to_string(led_on_max)
 			                          + ", \"min\":"+std::to_string(led_on_min)+"}";
 			// store to database
 			field_names = std::vector<std::string>{"run","timestamp","tool","name","values"};
 			error_ret="";
-			m_data->postgres.Insert("data",                      // table name
-				                    field_names,                 // field names
-				                    &error_ret,                  // error return string
-				                    // variadic argument list of field values
-				                    runnum,                      // run
-				                    "now()",                     // timestamp
-				                    "MatthewAnalysis",           // tool
-				                    "rawtrace_params",           // name
-				                    rawtrace_json);              // values (jsonb)
-			if(error_ret!=""){
+			get_ok = m_data->postgres.Insert("data",                      // table name
+			                                 field_names,                 // field names
+			                                 &error_ret,                  // error return string
+			                                 // variadic argument list of field values
+			                                 runnum,                      // run
+			                                 "now()",                     // timestamp
+			                                 "MatthewAnalysis",           // tool
+			                                 "rawtrace_params",           // name
+			                                 rawtrace_json);              // values (jsonb)
+			if(!get_ok){
 				Log("SaveToDB::MatthewAnalysis failed to save raw trace characteristics "
-					"into database with error '"+error_ret+"'",0,0);
+					"into database with error '"+error_ret+"'",v_error,verbosity);
 			}
 		}
 		
 		// 1, dark-subtracted data trace
 		// -----------------------------
-		intptr_t dark_subtracted_gd_p;
+		intptr_t dark_subtracted_gd_p=0;
 		get_ok = m_data->CStore.Get("dark_subtracted_gd",dark_subtracted_gd_p);
+		if(not get_ok){
+			Log("SaveToDB::MatthewAnalysis did not find dark subtracted data in CStore!",v_error,verbosity);
+		}
 		
 		// we'll indicate points inside and outside the fit range differently,
 		// in order to assist with verification of the pure water fit.
 		// To do this, we need to split the data into two arrays;
 		// points inside the absorption region and those outside it.
 		std::pair<double,double> fit_range;
-		get_ok &= m_data->CStore.Get("gd_fit_range", fit_range);
-		
+		get_ok = m_data->CStore.Get("gd_fit_range", fit_range);
 		if(not get_ok){
-			Log("SaveToDB::MatthewAnalysis did not find dark subtracted data in CStore!",0,0);
-		} else {
+			Log("SaveToDB::MatthewAnalysis did not find gd fit range in CStore!",v_error,verbosity);
+		}
+		if(get_ok && dark_subtracted_gd_p!=0){
 			TGraphErrors* dark_subtracted_gd = reinterpret_cast<TGraphErrors*>(dark_subtracted_gd_p);
 			
 			// to store in database we need to convert to json array.
@@ -148,28 +277,28 @@ bool SaveToDB::MatthewAnalysis(){
 			// store in temporary db
 			field_names = std::vector<std::string>{"timestamp","name","values"};
 			error_ret="";
-			m_data->postgres.Insert("webpage",                   // table name
-			                        field_names,                 // field names
-			                        &error_ret,                  // error return string
-			                        // variadic argument list of field values
-			                        "now()",                     // timestamp
-			                        "dark_subtracted_data_in",   // name
-			                        gd_data_inside_absregion);   // values (jsonb)
-			if(error_ret!=""){
+			get_ok = m_data->postgres.Insert("webpage",                   // table name
+			                                 field_names,                 // field names
+			                                 &error_ret,                  // error return string
+			                                 // variadic argument list of field values
+			                                 "now()",                     // timestamp
+			                                 "dark_subtracted_data_in",   // name
+			                                 gd_data_inside_absregion);   // values (jsonb)
+			if(!get_ok){
 				Log("SaveToDB::MatthewAnalysis failed to insert dark subtracted data withinin "
-					"absorption region into database with error '"+error_ret+"'",0,0);
+				    "absorption region into database with error '"+error_ret+"'",v_error,verbosity);
 			}
 			error_ret="";
-			m_data->postgres.Insert("webpage",                   // table name
-			                        field_names,                 // field names
-			                        &error_ret,                  // error return string
-			                        // variadic argument list of field values
-			                        "now()",                     // timestamp
-			                        "dark_subtracted_data_out",  // name
-			                        gd_data_outside_absregion);  // values (jsonb)
-			if(error_ret!=""){
+			get_ok = m_data->postgres.Insert("webpage",                   // table name
+			                                 field_names,                 // field names
+			                                 &error_ret,                  // error return string
+			                                 // variadic argument list of field values
+			                                 "now()",                     // timestamp
+			                                 "dark_subtracted_data_out",  // name
+			                                 gd_data_outside_absregion);  // values (jsonb)
+			if(!get_ok){
 				Log("SaveToDB::MatthewAnalysis failed to insert dark subtracted data outside "
-					"absorption region into database with error '"+error_ret+"'",0,0);
+				    "absorption region into database with error '"+error_ret+"'",v_error,verbosity);
 			}
 			// retain only the last N entries from the website table
 			query_string = "DELETE FROM webpage WHERE name LIKE 'dark_subtracted_data_%' "
@@ -179,7 +308,7 @@ bool SaveToDB::MatthewAnalysis(){
 			get_ok = m_data->postgres.ExecuteQuery(query_string);
 			if(not get_ok){
 				Log("SaveToDB::MatthewAnalysis failed to delete old dark_subtracted_data records "
-				    "from webpage table",0,0);
+				    "from webpage table",v_error,verbosity);
 			}
 			
 		}
@@ -188,24 +317,26 @@ bool SaveToDB::MatthewAnalysis(){
 		// for persistent db storage, just record the name of the reference data file
 		std::string pure_filename;
 		get_ok = m_data->CStore.Get("pure_filename", pure_filename);
+		pure_filename = "{\"filename\":\""+pure_filename+"\"}";
 		if(not get_ok){
-			Log("SaveToDB::MatthewAnalysis failed to get pure reference trace filename from CStore!",0,0);
+			Log("SaveToDB::MatthewAnalysis failed to get pure reference trace filename from CStore!",
+			    v_error,verbosity);
 		} else {
 			// store to database
 			field_names = std::vector<std::string>{"run","timestamp","tool","name","values"};
 			error_ret="";
-			m_data->postgres.Insert("data",                      // table name
-			                        field_names,                 // field names
-			                        &error_ret,                  // error return string
-			                        // variadic argument list of field values
-			                        runnum,                      // run
-			                        "now()",                     // timestamp
-			                        "MatthewAnalysis",           // tool
-			                        "purewater_filename",        // name
-			                        pure_filename);              // values (jsonb)
-			if(error_ret!=""){
+			get_ok = m_data->postgres.Insert("data",                      // table name
+			                                 field_names,                 // field names
+			                                 &error_ret,                  // error return string
+			                                 // variadic argument list of field values
+			                                 runnum,                      // run
+			                                 "now()",                     // timestamp
+			                                 "MatthewAnalysis",           // tool
+			                                 "purewater_filename",        // name
+			                                 pure_filename);              // values (jsonb)
+			if(!get_ok){
 				Log("SaveToDB::MatthewAnalysis failed to save pure water reference data filename "
-				    "into database with error '"+error_ret+"'",0,0);
+				    "into database with error '"+error_ret+"'",v_error,verbosity);
 			}
 		}
 		
@@ -218,28 +349,29 @@ bool SaveToDB::MatthewAnalysis(){
 		get_ok = m_data->postgres.ExecuteQuery(query_string);
 		if(not get_ok){
 			Log("SaveToDB::MatthewAnalysis failed to delete existing dark_subtracted_pure record "
-			    "from webpage table",0,0);
+			    "from webpage table",v_error,verbosity);
 		}
 		// insert a new record
 		field_names = std::vector<std::string>{"timestamp","name","values"};
 		error_ret="";
-		m_data->postgres.Insert("webpage",
-		                        field_names,
-		                        &error_ret,
-		                        "now()",
-		                        "dark_subtracted_pure",
-		                        dark_sub_pure);
-		if(error_ret!=""){
+		get_ok = m_data->postgres.Insert("webpage",
+		                                 field_names,
+		                                 &error_ret,
+		                                 "now()",
+		                                 "dark_subtracted_pure",
+		                                 dark_sub_pure);
+		if(!get_ok){
 			Log("SaveToDB::MatthewAnalysis failed to insert new 'dark_subtracted_pure' "
-			    "record into webpage table with error "+error_ret,0,0);
+			    "record into webpage table with error "+error_ret,v_error,verbosity);
 		}
 		
 		
 		// store reference pure trace after scaling to fit the Gd data in the lobes of the LED peak
 		intptr_t pure_scaled_p;
 		get_ok = m_data->CStore.Get("pure_scaled",pure_scaled_p);
-		if(not get_ok){
-			Log("SaveToDB::MatthewAnalysis failed to get scaled pure function from CStore!",0,0);
+		if(!get_ok){
+			Log("SaveToDB::MatthewAnalysis failed to get scaled pure function from CStore!",
+			    v_error,verbosity);
 		} else {
 			TGraphErrors* pure_scaled = reinterpret_cast<TGraphErrors*>(pure_scaled_p);
 			// convert to json
@@ -248,22 +380,22 @@ bool SaveToDB::MatthewAnalysis(){
 			query_string = "DELETE FROM webpage WHERE name = 'pure_scaled'";
 			get_ok = m_data->postgres.ExecuteQuery(query_string);
 			if(not get_ok){
-				Log("SaveToDB::MatthewAnalysis failed to delete existing 'pure_scaled' entry "
-				    "from webpage table",0,0);
+				Log("SaveToDB::MatthewAnalysis failed to delete existing pure_scaled entry "
+				    "from webpage table",v_error,verbosity);
 			}
 			// insert new record in its place
 			field_names = std::vector<std::string>{"timestamp","name","values"};
 			error_ret="";
-			m_data->postgres.Insert("webpage",                   // table name
-			                        field_names,                 // field names
-			                        &error_ret,                  // error return string
-			                        // variadic argument list of field values
-			                        "now()",                     // timestamp
-			                        "pure_scaled",               // name
-			                        pure_scaled_json);           // values (jsonb)
-			if(error_ret!=""){
+			get_ok = m_data->postgres.Insert("webpage",                   // table name
+			                                 field_names,                 // field names
+			                                 &error_ret,                  // error return string
+			                                 // variadic argument list of field values
+			                                 "now()",                     // timestamp
+			                                 "pure_scaled",               // name
+			                                 pure_scaled_json);           // values (jsonb)
+			if(!get_ok){
 				Log("SaveToDB::MatthewAnalysis failed to insert new scaled pure data "
-				    "into database with error '"+error_ret+"'",0,0);
+				    "into database with error '"+error_ret+"'",v_error,verbosity);
 			}
 		}
 		
@@ -282,43 +414,44 @@ bool SaveToDB::MatthewAnalysis(){
 		// store to db. These get stored persistently, not just temporarily for the webpage
 		field_names = std::vector<std::string>{"run","timestamp","tool","name","values"};
 		error_ret="";
-		m_data->postgres.Insert("data",                      // table name
-		                        field_names,                 // field names
-		                        &error_ret,                  // error return string
-		                        // variadic argument list of field values
-		                        runnum,                      // run
-		                        "now()",                     // timestamp
-		                        "MatthewAnalysis",           // tool
-		                        "pure_fit_pars",             // name
-		                        pure_fit_pars);              // values (jsonb)
-		if(error_ret!=""){
+		get_ok = m_data->postgres.Insert("data",                      // table name
+		                                 field_names,                 // field names
+		                                 &error_ret,                  // error return string
+		                                 // variadic argument list of field values
+		                                 runnum,                      // run
+		                                 "now()",                     // timestamp
+		                                 "MatthewAnalysis",           // tool
+		                                 "pure_fit_pars",             // name
+		                                 pure_fit_pars);              // values (jsonb)
+		if(!get_ok){
 			Log("SaveToDB::MatthewAnalysis failed to insert new pure data fit parameters "
-			    "into database with error '"+error_ret+"'",0,0);
+			    "into database with error '"+error_ret+"'",v_error,verbosity);
 		}
 		
 		// Get FitResultPtr, which contains info on goodness of fit
 		intptr_t fitresptr_p;
 		get_ok = m_data->CStore.Get("data_fitresptr",fitresptr_p);
 		if(not get_ok){
-			Log("SaveToDB::MatthewAnalysis failed to get pure water fit result from CStore!",0,0);
+			Log("SaveToDB::MatthewAnalysis failed to get pure water fit result from CStore!",
+			    v_error,verbosity);
 		} else {
 			TFitResultPtr* fitresptr = reinterpret_cast<TFitResultPtr*>(fitresptr_p);
 			std::string fit_status = BuildJson(*fitresptr);
 			// store to database
 			field_names = std::vector<std::string>{"run","timestamp","tool","name","values"};
 			error_ret="";
-			m_data->postgres.Insert("data",                      // table name
-				                    field_names,                 // field names
-				                    &error_ret,                  // error return string
-				                    // variadic argument list of field values
-				                    runnum,                      // run
-				                    "now()",                     // timestamp
-				                    "MatthewAnalysis",           // tool
-				                    "pure_fit_status",           // name
-				                    fit_status);                 // values (jsonb)
-			if(error_ret!=""){
+			get_ok = m_data->postgres.Insert("data",                      // table name
+			                                 field_names,                 // field names
+			                                 &error_ret,                  // error return string
+			                                 // variadic argument list of field values
+			                                 runnum,                      // run
+			                                 "now()",                     // timestamp
+			                                 "MatthewAnalysis",           // tool
+			                                 "pure_fit_status",           // name
+			                                 fit_status);                 // values (jsonb)
+			if(!get_ok){
 				Log("SaveToDB::MatthewAnalysis failed to insert new pure data fit status "
-					"into database with error '"+error_ret+"'",0,0);
+				    "into database with error '"+error_ret+"'",v_error,verbosity);
 			}
 		}
 		
@@ -326,7 +459,7 @@ bool SaveToDB::MatthewAnalysis(){
 		intptr_t absorbance_p;
 		get_ok = m_data->CStore.Get("absorbance",absorbance_p);
 		if(not get_ok){
-			Log("SaveToDB::MatthewAnalysis failed to get absorbance data from CStore!",0,0);
+			Log("SaveToDB::MatthewAnalysis failed to get absorbance data from CStore!",v_error,verbosity);
 		} else {
 			TGraphErrors* absorbance = reinterpret_cast<TGraphErrors*>(absorbance_p);
 			// convert to json
@@ -334,16 +467,16 @@ bool SaveToDB::MatthewAnalysis(){
 			// delete any existing entry so we don't keep accumulating them
 			field_names = std::vector<std::string>{"timestamp","name","values"};
 			error_ret="";
-			m_data->postgres.Insert("webpage",                   // table name
-			                        field_names,                 // field names
-			                        &error_ret,                  // error return string
-			                        // variadic argument list of field values
-			                        "now()",                     // timestamp
-			                        "absorbance_trace",          // name
-			                        absorbance_json);            // values (jsonb)
-			if(error_ret!=""){
+			get_ok = m_data->postgres.Insert("webpage",                   // table name
+			                                 field_names,                 // field names
+			                                 &error_ret,                  // error return string
+			                                 // variadic argument list of field values
+			                                 "now()",                     // timestamp
+			                                 "absorbance_trace",          // name
+			                                 absorbance_json);            // values (jsonb)
+			if(!get_ok){
 				Log("SaveToDB::MatthewAnalysis failed to insert absorbance trace "
-				    "into database with error '"+error_ret+"'",0,0);
+				    "into database with error '"+error_ret+"'",v_error,verbosity);
 			}
 			// retain only the last N entries from the website table
 			query_string = "DELETE FROM webpage WHERE name='absorbance_trace' AND id NOT IN "
@@ -352,7 +485,7 @@ bool SaveToDB::MatthewAnalysis(){
 			get_ok = m_data->postgres.ExecuteQuery(query_string);
 			if(not get_ok){
 				Log("SaveToDB::MatthewAnalysis failed to delete old absorbance_trace records "
-					"from webpage table",0,0);
+					"from webpage table",v_error,verbosity);
 			}
 		}
 		
@@ -366,7 +499,8 @@ bool SaveToDB::MatthewAnalysis(){
 		get_ok &= m_data->CStore.Get("LeftPeakFitResult",lpf_p);
 		get_ok &= m_data->CStore.Get("RightPeakFitResult",rpf_p);
 		if(not get_ok){
-			Log("SaveToDB::MatthewAnalysis failed to get absorption peak fits from CStore!",0,0);
+			Log("SaveToDB::MatthewAnalysis failed to get absorption peak fits from CStore!",
+			    v_error,verbosity);
 		} else {
 			TF1* left_peak = reinterpret_cast<TF1*>(left_peak_p);
 			TF1* right_peak = reinterpret_cast<TF1*>(right_peak_p);
@@ -384,36 +518,36 @@ bool SaveToDB::MatthewAnalysis(){
 			// store to db. These get stored persistently, not just temporarily for the webpage
 			field_names = std::vector<std::string>{"run","timestamp","tool","name","values"};
 			error_ret="";
-			m_data->postgres.Insert("data",                      // table name
-			                        field_names,                 // field names
-			                        &error_ret,                  // error return string
-			                        // variadic argument list of field values
-			                        runnum,                      // run
-			                        "now()",                     // timestamp
-			                        "MatthewAnalysis",           // tool
-			                        "left_abspk_fit_pars",       // name
-			                        leftabspk_fit_pars);         // values (jsonb)
-			if(error_ret!=""){
+			get_ok = m_data->postgres.Insert("data",                      // table name
+			                                 field_names,                 // field names
+			                                 &error_ret,                  // error return string
+			                                 // variadic argument list of field values
+			                                 runnum,                      // run
+			                                 "now()",                     // timestamp
+			                                 "MatthewAnalysis",           // tool
+			                                 "left_abspk_fit_pars",       // name
+			                                 leftabspk_fit_pars);         // values (jsonb)
+			if(!get_ok){
 				Log("SaveToDB::MatthewAnalysis failed to insert left absorption peak fit parameters "
-				    "into database with error '"+error_ret+"'",0,0);
+				    "into database with error '"+error_ret+"'",v_error,verbosity);
 			}
 			
 			std::string leftpeak_fit_status = BuildJson(*lpf);
 			// store to database
 			field_names = std::vector<std::string>{"run","timestamp","tool","name","values"};
 			error_ret="";
-			m_data->postgres.Insert("data",                      // table name
-			                        field_names,                 // field names
-			                        &error_ret,                  // error return string
-			                        // variadic argument list of field values
-			                        runnum,                      // run
-			                        "now()",                     // timestamp
-			                        "MatthewAnalysis",           // tool
-			                        "left_abspk_fit_status",     // name
-			                        leftpeak_fit_status);        // values (jsonb)
-			if(error_ret!=""){
+			get_ok = m_data->postgres.Insert("data",                      // table name
+			                                 field_names,                 // field names
+			                                 &error_ret,                  // error return string
+			                                 // variadic argument list of field values
+			                                 runnum,                      // run
+			                                 "now()",                     // timestamp
+			                                 "MatthewAnalysis",           // tool
+			                                 "left_abspk_fit_status",     // name
+			                                 leftpeak_fit_status);        // values (jsonb)
+			if(!get_ok){
 				Log("SaveToDB::MatthewAnalysis failed to insert left absorption peak fit status "
-				    "into database with error '"+error_ret+"'",0,0);
+				    "into database with error '"+error_ret+"'",v_error,verbosity);
 			}
 			
 			// repeat for right peak
@@ -426,36 +560,36 @@ bool SaveToDB::MatthewAnalysis(){
 			// store to db. These get stored persistently, not just temporarily for the webpage
 			field_names = std::vector<std::string>{"run","timestamp","tool","name","values"};
 			error_ret="";
-			m_data->postgres.Insert("data",                      // table name
-			                        field_names,                 // field names
-			                        &error_ret,                  // error return string
-			                        // variadic argument list of field values
-			                        runnum,                      // run
-			                        "now()",                     // timestamp
-			                        "MatthewAnalysis",           // tool
-			                        "right_abspk_fit_pars",      // name
-			                        rightabspk_fit_pars);        // values (jsonb)
-			if(error_ret!=""){
+			get_ok = m_data->postgres.Insert("data",                      // table name
+			                                 field_names,                 // field names
+			                                 &error_ret,                  // error return string
+			                                 // variadic argument list of field values
+			                                 runnum,                      // run
+			                                 "now()",                     // timestamp
+			                                 "MatthewAnalysis",           // tool
+			                                 "right_abspk_fit_pars",      // name
+			                                 rightabspk_fit_pars);        // values (jsonb)
+			if(!get_ok){
 				Log("SaveToDB::MatthewAnalysis failed to insert right absorption peak fit parameters "
-				    "into database with error '"+error_ret+"'",0,0);
+				    "into database with error '"+error_ret+"'",v_error,verbosity);
 			}
 			
 			std::string rightpeak_fit_status = BuildJson(*rpf);
 			// store to database
 			field_names = std::vector<std::string>{"run","timestamp","tool","name","values"};
 			error_ret="";
-			m_data->postgres.Insert("data",                      // table name
-			                        field_names,                 // field names
-			                        &error_ret,                  // error return string
-			                        // variadic argument list of field values
-			                        runnum,                      // run
-			                        "now()",                     // timestamp
-			                        "MatthewAnalysis",           // tool
-			                        "right_abspk_fit_status",    // name
-			                        rightpeak_fit_status);       // values (jsonb)
-			if(error_ret!=""){
+			get_ok = m_data->postgres.Insert("data",                      // table name
+			                                 field_names,                 // field names
+			                                 &error_ret,                  // error return string
+			                                 // variadic argument list of field values
+			                                 runnum,                      // run
+			                                 "now()",                     // timestamp
+			                                 "MatthewAnalysis",           // tool
+			                                 "right_abspk_fit_status",    // name
+			                                 rightpeak_fit_status);       // values (jsonb)
+			if(!get_ok){
 				Log("SaveToDB::MatthewAnalysis failed to insert right absorption peak fit status "
-				    "into database with error '"+error_ret+"'",0,0);
+				    "into database with error '"+error_ret+"'",v_error,verbosity);
 			}
 			// we'll leave the user to re-calculate the difference in heights
 			// from the parameters from the 2 gaussian fits if they desire.
@@ -467,7 +601,8 @@ bool SaveToDB::MatthewAnalysis(){
 		int calib_version;
 		get_ok = m_data->CStore.Get("calib_version",calib_version);
 		if(not get_ok){
-			Log("SaveToDB::MatthewAnalysis failed to retrieve calibration version from CStore",0,0);
+			Log("SaveToDB::MatthewAnalysis failed to retrieve calibration version from CStore",
+			    v_error,verbosity);
 		} else {
 			// FIXME calling 'psql -c "INSERT INTO mytable ( jsonb_field ) VALUES ( 3 )";
 			// produces an error 'column "jsonb_field" is of type jsonb but expression is of type integer
@@ -476,18 +611,18 @@ bool SaveToDB::MatthewAnalysis(){
 			// store to database
 			field_names = std::vector<std::string>{"run","timestamp","tool","name","values"};
 			error_ret="";
-			m_data->postgres.Insert("data",                      // table name
-			                        field_names,                 // field names
-			                        &error_ret,                  // error return string
-			                        // variadic argument list of field values
-			                        runnum,                      // run
-			                        "now()",                     // timestamp
-			                        "MatthewAnalysis",           // tool
-			                        "calibration_version",       // name
-			                        calib_version);              // values (jsonb)
-			if(error_ret!=""){
+			get_ok = m_data->postgres.Insert("data",                      // table name
+			                                 field_names,                 // field names
+			                                 &error_ret,                  // error return string
+			                                 // variadic argument list of field values
+			                                 runnum,                      // run
+			                                 "now()",                     // timestamp
+			                                 "MatthewAnalysis",           // tool
+			                                 "calibration_version",       // name
+			                                 calib_version);              // values (jsonb)
+			if(!get_ok){
 				Log("SaveToDB::MatthewAnalysis failed to insert calibration curve version "
-				    "into database with error '"+error_ret+"'",0,0);
+				    "into database with error '"+error_ret+"'",v_error,verbosity);
 			}
 		}
 		
@@ -497,18 +632,18 @@ bool SaveToDB::MatthewAnalysis(){
 		                                   + ", \"err\":"+std::to_string(gdconcentration.second)+" }";
 		field_names = std::vector<std::string>{"run","timestamp","tool","name","values"};
 		error_ret="";
-		m_data->postgres.Insert("data",                      // table name
-		                        field_names,                 // field names
-		                        &error_ret,                  // error return string
-		                        // variadic argument list of field values
-		                        runnum,                      // run
-		                        "now()",                     // timestamp
-		                        "MatthewAnalysis",           // tool
-		                        "gdconcentration",           // name
-		                        gdconcentration_string);     // values (jsonb)
-		if(error_ret!=""){
+		get_ok = m_data->postgres.Insert("data",                      // table name
+		                                 field_names,                 // field names
+		                                 &error_ret,                  // error return string
+		                                 // variadic argument list of field values
+		                                 runnum,                      // run
+		                                 "now()",                     // timestamp
+		                                 "MatthewAnalysis",           // tool
+		                                 "gdconcentration",           // name
+		                                 gdconcentration_string);     // values (jsonb)
+		if(!get_ok){
 			Log("SaveToDB::MatthewAnalysis failed to insert calculated concentration "
-			    "into database with error '"+error_ret+"'",0,0);
+			    "into database with error '"+error_ret+"'",v_error,verbosity);
 		}
 		
 		// TODO draw lines on graph where this crosses: lookup line to lead eye
@@ -533,19 +668,19 @@ bool SaveToDB::BenPower(){
 	criterions = std::vector<std::string>{"name"};
 	comparators = std::vector<char>{'='};
 	error_ret="";
-	m_data->postgres.Update("webpage",                   // table name
-	                        field_names,                 // field names
-	                        criterions,                  // fields we're applying SELECT on to match
-	                        comparators,                 // comparison operator required by match
-	                        &error_ret,                  // error return string
-	                        // variadic argument list of new field values
-	                        "now()",                     // timestamp
-	                        Power,                       // new values (jsonb)
-	                        // variadic argument list of criterion values
-	                        "powerstate");               // name
-	if(error_ret!=""){
+	get_ok = m_data->postgres.Update("webpage",                   // table name
+	                                 field_names,                 // field names
+	                                 criterions,                  // fields we're applying SELECT on to match
+	                                 comparators,                 // comparison operator required by match
+	                                 &error_ret,                  // error return string
+	                                 // variadic argument list of new field values
+	                                 "now()",                     // timestamp
+	                                 Power,                       // new values (jsonb)
+	                                 // variadic argument list of criterion values
+	                                 "powerstate");               // name
+	if(!get_ok){
 		Log("SaveToDB::BenPower failed to update power state "
-		    "in database with error '"+error_ret+"'",0,0);
+		    "in database with error '"+error_ret+"'",v_error,verbosity);
 		all_ok = false;
 	}
 	
@@ -565,19 +700,19 @@ bool SaveToDB::Valve(){
 	criterions = std::vector<std::string>{"name"};
 	comparators = std::vector<char>{'='};
 	error_ret="";
-	m_data->postgres.Update("webpage",                   // table name
-	                        field_names,                 // field names
-	                        criterions,                  // fields we're applying SELECT on to match
-	                        comparators,                 // comparison operator required by match
-	                        &error_ret,                  // error return string
-	                        // variadic argument list of new field values
-	                        "now()",                     // timestamp
-	                        valve,                       // new values (jsonb)
-	                        // variadic argument list of criterion values
-	                        "valvestate");               // name
-	if(error_ret!=""){
+	get_ok = m_data->postgres.Update("webpage",                   // table name
+	                                 field_names,                 // field names
+	                                 criterions,                  // fields we're applying SELECT on to match
+	                                 comparators,                 // comparison operator required by match
+	                                 &error_ret,                  // error return string
+	                                 // variadic argument list of new field values
+	                                 "now()",                     // timestamp
+	                                 valve,                       // new values (jsonb)
+	                                 // variadic argument list of criterion values
+	                                 "valvestate");               // name
+	if(!get_ok){
 		Log("SaveToDB::Valve failed to update valve state "
-		    "in database with error '"+error_ret+"'",0,0);
+		    "in database with error '"+error_ret+"'",v_error,verbosity);
 		all_ok = false;
 	}
 	
@@ -596,19 +731,19 @@ bool SaveToDB::BenLED(){
 	criterions = std::vector<std::string>{"name"};
 	comparators = std::vector<char>{'='};
 	error_ret="";
-	m_data->postgres.Update("webpage",                   // table name
-	                        field_names,                 // field names
-	                        criterions,                  // fields we're applying SELECT on to match
-	                        comparators,                 // comparison operator required by match
-	                        &error_ret,                  // error return string
-	                        // variadic argument list of new field values
-	                        "now()",                     // timestamp
-	                        pwm_comms_ok,                // new values (jsonb)
-	                        // variadic argument list of criterion values
-	                        "pwm_connected");            // name
-	if(error_ret!=""){
+	get_ok = m_data->postgres.Update("webpage",                   // table name
+	                                 field_names,                 // field names
+	                                 criterions,                  // fields we're applying SELECT on to match
+	                                 comparators,                 // comparison operator required by match
+	                                 &error_ret,                  // error return string
+	                                 // variadic argument list of new field values
+	                                 "now()",                     // timestamp
+	                                 pwm_comms_ok,                // new values (jsonb)
+	                                 // variadic argument list of criterion values
+	                                 "pwm_connected");            // name
+	if(!get_ok){
 		Log("SaveToDB::BenLED failed to update PWM comms state "
-		    "in database with error '"+error_ret+"'",0,0);
+		    "in database with error '"+error_ret+"'",v_error,verbosity);
 		all_ok = false;
 	}
 	
@@ -626,19 +761,19 @@ bool SaveToDB::BenLED(){
 	criterions = std::vector<std::string>{"name"};
 	comparators = std::vector<char>{'='};
 	error_ret="";
-	m_data->postgres.Update("webpage",                   // table name
-	                        field_names,                 // field names
-	                        criterions,                  // fields we're applying SELECT on to match
-	                        comparators,                 // comparison operator required by match
-	                        &error_ret,                  // error return string
-	                        // variadic argument list of new field values
-	                        "now()",                     // timestamp
-	                        ledstatusstring,             // new values (jsonb)
-	                        // variadic argument list of criterion values
-	                        "ledStatuses");              // name
-	if(error_ret!=""){
+	get_ok = m_data->postgres.Update("webpage",                   // table name
+	                                 field_names,                 // field names
+	                                 criterions,                  // fields we're applying SELECT on to match
+	                                 comparators,                 // comparison operator required by match
+	                                 &error_ret,                  // error return string
+	                                 // variadic argument list of new field values
+	                                 "now()",                     // timestamp
+	                                 ledstatusstring,             // new values (jsonb)
+	                                 // variadic argument list of criterion values
+	                                 "ledStatuses");              // name
+	if(!get_ok){
 		Log("SaveToDB::BenLED failed to update LED states "
-		    "in database with error '"+error_ret+"'",0,0);
+		    "in database with error '"+error_ret+"'",v_error,verbosity);
 		all_ok = false;
 	}
 	
@@ -658,19 +793,19 @@ bool SaveToDB::BenSpectrometer(){
 	criterions = std::vector<std::string>{"name"};
 	comparators = std::vector<char>{'='};
 	error_ret="";
-	m_data->postgres.Update("webpage",                   // table name
-	                        field_names,                 // field names
-	                        criterions,                  // fields we're applying SELECT on to match
-	                        comparators,                 // comparison operator required by match
-	                        &error_ret,                  // error return string
-	                        // variadic argument list of new field values
-	                        "now()",                     // timestamp
-	                        connected,                   // new values (jsonb)
-	                        // variadic argument list of criterion values
-	                        "spectrometer_connected");   // name
-	if(error_ret!=""){
+	get_ok = m_data->postgres.Update("webpage",                   // table name
+	                                 field_names,                 // field names
+	                                 criterions,                  // fields we're applying SELECT on to match
+	                                 comparators,                 // comparison operator required by match
+	                                 &error_ret,                  // error return string
+	                                 // variadic argument list of new field values
+	                                 "now()",                     // timestamp
+	                                 connected,                   // new values (jsonb)
+	                                 // variadic argument list of criterion values
+	                                 "spectrometer_connected");   // name
+	if(!get_ok){
 		Log("SaveToDB::BenSpectrometer failed to update spectrometer connection status "
-		    "in database with error '"+error_ret+"'",0,0);
+		    "in database with error '"+error_ret+"'",v_error,verbosity);
 		all_ok = false;
 	}
 	
@@ -682,7 +817,7 @@ bool SaveToDB::TraceAverage(){
 	bool all_ok = true;
 	
 	bool new_data=false;
-	bool get_ok = m_data->CStore.Get("NewData",new_data);
+	get_ok = m_data->CStore.Get("NewData",new_data);
 	if(get_ok && new_data){
 		
 		// Store latest trace (averaged over spectrometer acquisitions) in DataModel TTree
@@ -696,16 +831,16 @@ bool SaveToDB::TraceAverage(){
 		std::vector<double> value;       std::vector<double>* a=&value;
 		std::vector<double> error;       std::vector<double>* b=&error;
 		std::vector<double> wavelength;  std::vector<double>* c=&wavelength;
-		bool err=false;
-		err |= (tree->SetBranchAddress("value", &a) < 0);
-		err |= (tree->SetBranchAddress("error", &b) < 0);
-		err |= (tree->SetBranchAddress("wavelength", &c) < 0);
-		err |= ((tree->GetEntry(tree->GetEntries()-1)) <= 0);
-		if(err){
+		get_ok=false;
+		get_ok |= (tree->SetBranchAddress("value", &a) < 0);
+		get_ok |= (tree->SetBranchAddress("error", &b) < 0);
+		get_ok |= (tree->SetBranchAddress("wavelength", &c) < 0);
+		get_ok |= ((tree->GetEntry(tree->GetEntries()-1)) <= 0);
+		if(get_ok){
 			std::stringstream ss;
 			ss << "SaveToDB::TraceAverage failed to get data for latest trace from TTree "
 			   << name <<" at " << tree;
-			Log(ss.str(),0,0);
+			Log(ss.str(),v_error,verbosity);
 			//return false;
 		}
 		// convert 3 vectors to json
@@ -731,19 +866,19 @@ bool SaveToDB::TraceAverage(){
 		criterions = std::vector<std::string>{"name"};
 		comparators = std::vector<char>{'='};
 		error_ret="";
-		m_data->postgres.Update("webpage",                   // table name
-		                        field_names,                 // field names
-		                        criterions,                  // fields we're applying SELECT on to match
-		                        comparators,                 // comparison operator required by match
-		                        &error_ret,                  // error return string
-		                        // variadic argument list of new field values
-		                        "now()",                     // timestamp
-		                        trace_data,                  // new values (jsonb)
-		                        // variadic argument list of criterion values
-		                        "last_trace");               // name
-		if(error_ret!=""){
+		get_ok = m_data->postgres.Update("webpage",              // table name
+		                                 field_names,            // field names
+		                                 criterions,             // fields we're applying SELECT on to match
+		                                 comparators,            // comparison operator required by match
+		                                 &error_ret,             // error return string
+		                                 // variadic argument list of new field values
+		                                 "now()",                // timestamp
+		                                 trace_data,             // new values (jsonb)
+		                                 // variadic argument list of criterion values
+		                                 "last_trace");          // name
+		if(!get_ok){
 			Log("SaveToDB::TraceAverage failed to update last trace data "
-			    "in database with error '"+error_ret+"'",0,0);
+			    "in database with error '"+error_ret+"'",v_error,verbosity);
 			all_ok = false;
 		}
 		
@@ -768,19 +903,19 @@ bool SaveToDB::SaveTraces(){
 	criterions = std::vector<std::string>{"name"};
 	comparators = std::vector<char>{'='};
 	error_ret="";
-	m_data->postgres.Update("webpage",                   // table name
-	                        field_names,                 // field names
-	                        criterions,                  // fields we're applying SELECT on to match
-	                        comparators,                 // comparison operator required by match
-	                        &error_ret,                  // error return string
-	                        // variadic argument list of new field values
-	                        "now()",                     // timestamp
-	                        name,                        // new values (jsonb)
-	                        // variadic argument list of criterion values
-	                        "output_filename");          // name
-	if(error_ret!=""){
+	get_ok = m_data->postgres.Update("webpage",                   // table name
+	                                 field_names,                 // field names
+	                                 criterions,                  // fields we're applying SELECT on to match
+	                                 comparators,                 // comparison operator required by match
+	                                 &error_ret,                  // error return string
+	                                 // variadic argument list of new field values
+	                                 "now()",                     // timestamp
+	                                 name,                        // new values (jsonb)
+	                                 // variadic argument list of criterion values
+	                                 "output_filename");          // name
+	if(!get_ok){
 		Log("SaveToDB::SaveTraces failed to update active filename "
-		    "in database with error '"+error_ret+"'",0,0);
+		    "in database with error '"+error_ret+"'",v_error,verbosity);
 		all_ok = false;
 	}
 	
@@ -809,19 +944,19 @@ bool SaveToDB::MarcusScheduler(){
 	criterions = std::vector<std::string>{"name"};
 	comparators = std::vector<char>{'='};
 	error_ret="";
-	m_data->postgres.Update("webpage",                   // table name
-	                        field_names,                 // field names
-	                        criterions,                  // fields we're applying SELECT on to match
-	                        comparators,                 // comparison operator required by match
-	                        &error_ret,                  // error return string
-	                        // variadic argument list of new field values
-	                        "now()",                     // timestamp
-	                        scheduler_commands,          // new values (jsonb)
-	                        // variadic argument list of criterion values
-	                        "scheduler_commands");       // name
-	if(error_ret!=""){
+	get_ok = m_data->postgres.Update("webpage",                   // table name
+	                                 field_names,                 // field names
+	                                 criterions,                  // fields we're applying SELECT on to match
+	                                 comparators,                 // comparison operator required by match
+	                                 &error_ret,                  // error return string
+	                                 // variadic argument list of new field values
+	                                 "now()",                     // timestamp
+	                                 scheduler_commands,          // new values (jsonb)
+	                                 // variadic argument list of criterion values
+	                                 "scheduler_commands");       // name
+	if(!get_ok){
 		Log("SaveToDB::MarcusScheduler failed to update scheduler commands "
-		    "in database with error '"+error_ret+"'",0,0);
+		    "in database with error '"+error_ret+"'",v_error,verbosity);
 		all_ok = false;
 	}
 	
@@ -836,19 +971,19 @@ bool SaveToDB::MarcusScheduler(){
 	criterions = std::vector<std::string>{"name"};
 	comparators = std::vector<char>{'='};
 	error_ret="";
-	m_data->postgres.Update("webpage",                   // table name
-	                        field_names,                 // field names
-	                        criterions,                  // fields we're applying SELECT on to match
-	                        comparators,                 // comparison operator required by match
-	                        &error_ret,                  // error return string
-	                        // variadic argument list of new field values
-	                        "now()",                     // timestamp
-	                        scheduler_progress,          // new values (jsonb)
-	                        // variadic argument list of criterion values
-	                        "scheduler_progress");       // name
-	if(error_ret!=""){
+	get_ok = m_data->postgres.Update("webpage",                   // table name
+	                                 field_names,                 // field names
+	                                 criterions,                  // fields we're applying SELECT on to match
+	                                 comparators,                 // comparison operator required by match
+	                                 &error_ret,                  // error return string
+	                                 // variadic argument list of new field values
+	                                 "now()",                     // timestamp
+	                                 scheduler_progress,          // new values (jsonb)
+	                                 // variadic argument list of criterion values
+	                                 "scheduler_progress");       // name
+	if(!get_ok){
 		Log("SaveToDB::MarcusScheduler failed to update scheduler progress "
-		    "in database with error '"+error_ret+"'",0,0);
+		    "in database with error '"+error_ret+"'",v_error,verbosity);
 		all_ok = false;
 	}
 	

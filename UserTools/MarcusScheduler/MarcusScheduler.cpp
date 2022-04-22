@@ -34,7 +34,12 @@ bool MarcusScheduler::Initialise(std::string configfile, DataModel &data){
 	// initialise the starting point.
 	
 	// 'current_command' is the number of command in the command vector currently being run.
-	current_command=-1;
+	// if -1, go to main menu. Allow user to bypass this by specifying 'start' as first command.
+	if(commands.front()=="start"){
+		current_command = 1;
+	} else {
+		current_command=-1;
+	}
 	
 	// some input commands require several Execute loops
 	// (e.g. a 'measure 275' command requires steps to turn on the LEDs, take the measurement,
@@ -164,18 +169,19 @@ void MarcusScheduler::ReadCommandFile(){
 void MarcusScheduler::MainMenu(){
 	// Main Menu - propt user for action
 	std::string command;
-	std::cout<<"Type Start to power up, Stop to power down, or anything else to begin automation: "<<std::endl;
+	std::cout<<"Type Up to power up, Down to power down, Quit to exit, "
+	         <<"or Start to begin automation: "<<std::endl;
 	
 	// read input from user
 	std::cin>>command;
 	
 	// determine action
-	if(command=="Start"){
+	if(command=="Up"){
 		// bring power up
 		std::string tmp("{\"Auto\":\"Stop\",\"Power\":\"ON\"}");
 		m_data->CStore.JsonParser(tmp);
 	
-	} else if(command=="Stop"){
+	} else if(command=="Down"){
 		// ensure power is off
 		std::string tmp("{\"Auto\":\"Stop\",\"Power\":\"OFF\"}");
 		m_data->CStore.JsonParser(tmp);
@@ -185,9 +191,14 @@ void MarcusScheduler::MainMenu(){
 		m_data->CStore.JsonParser(tmp);
 		m_data->vars.Set("StopLoop",1);
 	
-	} else if(command!=""){
-		// on anything else, load the first command to begin automation
+	} else if(command=="Start"){
+		// load the first command to begin automation
 		current_command=0;
+	
+	} else if(command!=""){
+		// on anything else, remain at main menu
+		std::cout<<"Unknown command '"<<command<<"'"<<std::endl;
+		current_command=-1;
 	}
 }
 
@@ -331,7 +342,11 @@ void MarcusScheduler::ProcessCommand(std::string& the_command){
 	// Queue up the next action, based on the current command and, if applicable,
 	// which step we're at in carrying it out.
 	
-	if(the_command.substr(0,4)=="wait"){
+	if(the_command.substr(0,5)=="power"){
+		// power up or down PSU
+		DoPower(the_command);
+		
+	} else if(the_command.substr(0,4)=="wait"){
 		// wait for a specified time
 		DoWait(the_command);
 		
@@ -379,6 +394,35 @@ void MarcusScheduler::ProcessCommand(std::string& the_command){
 		++current_command;
 	}
 	
+}
+
+// ««-------------- ≪ °◇◆◇° ≫ --------------»»
+
+void MarcusScheduler::DoPower(std::string the_command){
+	// power up or down the PSU
+	
+	// strip off the preceding 'power' to get the action
+	std::string on_or_off = the_command.substr(6,std::string::npos);
+	
+	// strip off trailing comments
+	on_or_off = on_or_off.substr(0,on_or_off.find(' '));
+	
+	// check we recognise the action, and form the json string
+	Log(std::string("setting power to: \"")+on_or_off+std::string("\""),v_debug,verbosity);
+	std::string json_string;
+	if(on_or_off=="on" || on_or_off=="up"){
+		json_string="{\"Power\":\"ON\"}";
+	} else if(on_or_off=="off" || on_or_off=="down"){
+		json_string="{\"Power\":\"OFF\"}";
+	} else {
+		Log("MarcusScheduler::DoValves - Unknown power state: '"+on_or_off+"'",v_error,verbosity);
+	}
+	
+	// queue up the action
+	m_data->CStore.JsonParser(json_string);
+	
+	// advance to the next command
+	++current_command;
 }
 
 // ««-------------- ≪ °◇◆◇° ≫ --------------»»

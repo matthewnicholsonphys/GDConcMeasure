@@ -52,6 +52,7 @@ class MarcusScheduler: public Tool {
 	// individual handlers for automation commands
 	void DoSave(std::string the_command);
 	void DoAnalyse(std::string the_command);
+	void DoPower(std::string the_command);
 	void DoValves(std::string the_command);
 	void DoMeasure(std::string the_command);
 	void DoWait(std::string the_command);

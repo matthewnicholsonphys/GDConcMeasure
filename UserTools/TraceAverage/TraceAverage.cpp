@@ -139,16 +139,16 @@ bool TraceAverage::InitTTree(TTree* tree){
   short min;
   short sec;
   
-  int bptr = 1;
-  bptr &= intptr_t(tree->Branch("value", &value));
-  bptr &= intptr_t(tree->Branch("error", &error));
-  bptr &= intptr_t(tree->Branch("wavelength", &wavelength));
-  bptr &= intptr_t(tree->Branch("year", &year, "year/S"));
-  bptr &= intptr_t(tree->Branch("month", &month, "month/S"));
-  bptr &= intptr_t(tree->Branch("day", &day, "day/S"));
-  bptr &= intptr_t(tree->Branch("hour", &hour, "hour/S"));
-  bptr &= intptr_t(tree->Branch("min", &min, "min/S"));
-  bptr &= intptr_t(tree->Branch("sec", &sec, "sec/S"));
+  bool bptr = true;
+  bptr &= bool(tree->Branch("value", &value));
+  bptr &= bool(tree->Branch("error", &error));
+  bptr &= bool(tree->Branch("wavelength", &wavelength));
+  bptr &= bool(tree->Branch("year", &year, "year/S"));
+  bptr &= bool(tree->Branch("month", &month, "month/S"));
+  bptr &= bool(tree->Branch("day", &day, "day/S"));
+  bptr &= bool(tree->Branch("hour", &hour, "hour/S"));
+  bptr &= bool(tree->Branch("min", &min, "min/S"));
+  bptr &= bool(tree->Branch("sec", &sec, "sec/S"));
   
   if(!bptr){
     Log("TraceAverage::InitTTree error making TTree branches!",0,0);

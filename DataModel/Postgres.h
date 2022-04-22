@@ -128,8 +128,7 @@ class Postgres {
 		// run an SQL query and try to pass the results
 		// into a parameter pack. the passed arguments
 		// must be compatible with the returned columns
-		pqxx::row local_row;
-		bool success = Query(query_string, 1, nullptr, &local_row);
+		bool success = Query(query_string, 0, nullptr, nullptr);
 		return success;
 	}
 	

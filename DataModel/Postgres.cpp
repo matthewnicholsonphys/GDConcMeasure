@@ -131,11 +131,9 @@ bool Postgres::Query(std::string query, int nret, pqxx::result* res, pqxx::row* 
 			//pqxx::work(*conn);
 			pqxx::nontransaction txn(*conn);
 			
-			// run the requested query
 			// the type of exec we run is based on the user's expected number of returned rows, nret
-			if(nret==0){
-				txn.exec0(query);
-			} else if(res==nullptr && row==nullptr){
+			// some sanity checks that things are consistent.
+			if(nret>0 && res==nullptr && row==nullptr){
 				std::string msg =  "Postgres::ExecuteQuery called with expected number of returned rows ";
 				            msg += std::to_string(nret)+" but nowhere to return the result!";
 				std::cerr<<msg<<std::endl;
@@ -152,7 +150,13 @@ bool Postgres::Query(std::string query, int nret, pqxx::result* res, pqxx::row* 
 					// this is perhaps less unreasonable, if they only want the first.
 				}
 			}
-			if(nret==1){
+			// run the requested query
+			if(nret==0){
+				// no returns expected
+				txn.exec0(query);
+				// if we didn't throw, we're done.
+				return true;
+			} else if(nret==1){
 				// user expects one returned row
 				if(res==nullptr){
 					*row = txn.exec1(query);

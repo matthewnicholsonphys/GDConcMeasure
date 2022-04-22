@@ -94,20 +94,20 @@ bool MatthewAnalysis::Execute(){
     m_data->CStore.Set("NewMeasurement",true);
     
     // debug prints
-    std::cout << "Peak difference from " << "ledName" << " is: " << peaksdiff_w_error.first
+    std::cout << "Peak difference from " << led_name << " is: " << peaksdiff_w_error.first
               << " +/- " << peaksdiff_w_error.second << '\n';
-    std::cout << "Concentration from " << "ledName" << " is: " << concentration_w_error.first
+    std::cout << "Concentration from " << led_name << " is: " << concentration_w_error.first
               << " +/- " << concentration_w_error.second << '\n';
     
     // update datamodel
-    m_data->vars.Set("dark_subtracted_gd",reinterpret_cast<intptr_t>(&dark_subtracted_gd));
-    m_data->vars.Set("data_fitresptr",reinterpret_cast<intptr_t>(&fitresptr));
-    m_data->vars.Set("pure_scaled",reinterpret_cast<intptr_t>(&pure_scaled));
-    m_data->vars.Set("absorbance",reinterpret_cast<intptr_t>(&absorbance));
-    m_data->vars.Set("LeftPeakFitFunc",reinterpret_cast<intptr_t>(left_peak));
-    m_data->vars.Set("RightPeakFitFunc",reinterpret_cast<intptr_t>(right_peak));
-    m_data->vars.Set("LeftPeakFitResult",reinterpret_cast<intptr_t>(&lpf));
-    m_data->vars.Set("RightPeakFitResult",reinterpret_cast<intptr_t>(&rpf));
+    m_data->CStore.Set("dark_subtracted_gd",reinterpret_cast<intptr_t>(&dark_subtracted_gd));
+    m_data->CStore.Set("data_fitresptr",reinterpret_cast<intptr_t>(&fitresptr));
+    m_data->CStore.Set("pure_scaled",reinterpret_cast<intptr_t>(&pure_scaled));
+    m_data->CStore.Set("absorbance",reinterpret_cast<intptr_t>(&absorbance));
+    m_data->CStore.Set("LeftPeakFitFunc",reinterpret_cast<intptr_t>(left_peak));
+    m_data->CStore.Set("RightPeakFitFunc",reinterpret_cast<intptr_t>(right_peak));
+    m_data->CStore.Set("LeftPeakFitResult",reinterpret_cast<intptr_t>(&lpf));
+    m_data->CStore.Set("RightPeakFitResult",reinterpret_cast<intptr_t>(&rpf));
     m_data->concs_and_errs.push_back(concentration_w_error);
     m_data->peakdiffs_and_errs.push_back(peaksdiff_w_error);
     
@@ -330,7 +330,6 @@ std::pair<TTree*, TTree*> MatthewAnalysis::FindDarkAndLEDTrees(){
   
   // this tool only extracts concentration from one trace (one LED) at a time;
   // get the name of the LED whose trace we're analysing
-  std::string led_name;
   bool get_ok = m_data->CStore.Get("ledToAnalyse",led_name);
   if(not get_ok){
     Log("MatthewAnalysis::FindDarkAndLEDTrees - Analyse flag found in CStore "

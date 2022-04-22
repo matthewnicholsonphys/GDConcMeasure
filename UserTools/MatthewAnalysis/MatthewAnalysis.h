@@ -37,6 +37,8 @@ class MatthewAnalysis: public Tool {
   std::pair<double,double> CalculateConcentration(const std::pair<double,double>&);
   void ReInit();
   
+  std::string led_name;
+  
   TGraphErrors dark_subtracted_gd;
   TGraphErrors pure_scaled;
   TGraphErrors absorbance;
