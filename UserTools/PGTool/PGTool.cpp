@@ -3,11 +3,6 @@
 #include <typeinfo>
 #include <cxxabi.h>  // demangle
 
-PGTool::PGTool():Tool(){
-	// get the name of the tool from its class name
-	toolName=abi::__cxa_demangle(typeid(*this).name(), nullptr, nullptr, nullptr);
-}
-
 // List of relations
 // Schema |    Name     | Type  |  Owner   |    Size    | Description 
 //--------+-------------+-------+----------+------------+-------------
@@ -40,14 +35,14 @@ bool PGTool::Initialise(std::string configfile, DataModel &data){
 	m_data->vars.Set("system","lappd");   // for DAQ systems this would be in the datamodel constructor
 	
 	// Retrieve varibles from the postgres database
-	std::cout<<toolName<<": Getting config"<<std::endl;
+	std::cout<<m_unique_name<<": Getting config"<<std::endl;
 	m_data->postgres.SetVerbosity(10);
 	std::string json_data;
-	get_ok = m_data->postgres_helper.GetToolConfig(toolName, json_data);
+	get_ok = m_data->postgres_helper.GetToolConfig(m_class_name, json_data);
 	
 	std::cout<<"JSON version of Tool config was: "<<json_data<<std::endl;
 	if(json_data==""){
-		Log(toolName+" Error! Failed to get Tool config from database!",v_error,verbosity);
+		Log(m_class_name+" Error! Failed to get Tool config from database!",v_error,verbosity);
 		return false;
 	}
 	
@@ -135,7 +130,7 @@ bool PGTool::Execute(){
 		
 		// these are the contents of the configfiles table, for now.
 		std::string systemname = "lappd";                          // 'system'      - text field
-		std::string toolname = toolName;                           // 'name'        - text field
+		std::string toolname = m_class_name;                       // 'name'        - text field
 		int version=0;                                             // 'version'     - integer field
 		std::string author = "moflaher";                           // 'author'      - text field
 		

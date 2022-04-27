@@ -6,23 +6,46 @@ MarcusScheduler::MarcusScheduler():Tool(){}
 
 bool MarcusScheduler::Initialise(std::string configfile, DataModel &data){
 	
+	m_data= &data;
+	
+	/* - new method, Retrieve configuration options from the postgres database - */
+	int RunConfig=-1;
+	m_data->vars.Get("RunConfig",RunConfig);
+	
+	if(RunConfig>=0){
+		std::string configtext;
+		get_ok = m_data->postgres_helper.GetToolConfig(m_unique_name, configtext);
+		if(!get_ok){
+			Log("MarcusScheduler::Initialise - Failed to get Tool config from database!",v_error,verbosity);
+			return false;
+		}
+		
+		// parse the configuration to populate the usual m_variables Store.
+		if(configtext!="") m_variables.Initialise(std::stringstream(configtext));
+		
+		// read the list of commands and transfer to internal vector
+		get_ok = ReadCommandEntry();
+		if(!get_ok) return false;
+		
+	}
+	
+	/* - old method, parse configuration options from local file - */
 	if(configfile!="")  m_variables.Initialise(configfile);
+	
+	// read the list of commands and transfer to internal vector
+	if(m_variables.Has("command_file")){
+		get_ok = ReadCommandFile();
+		if(!get_ok) return false;
+	}
+	
 	//m_variables.Print();
 	
-	m_data= &data;
 	
 	m_variables.Get("verbosity",verbosity);
 	
-	// check we have an input file specifying the sequence of commands to be run
-	if(!m_variables.Get("command_file",command_file)){
-		Log("MarcusScheduler::Initialise - no command_file specified in config file!",v_error,verbosity);
-		return false;
-	}
 	break_loop_flagfile_name = "UserTools/MarcusScheduler/breakloop";
 	m_variables.Get("break_loop_flagfile",break_loop_flagfile_name);
 	
-	// read command file and transfer to internal vector of commands
-	ReadCommandFile();
 	// put set of commands into DataModel for display on website by later tool
 	m_data->CStore.Set("MarcusSchedulerCommands",commands);
 	
@@ -35,7 +58,7 @@ bool MarcusScheduler::Initialise(std::string configfile, DataModel &data){
 	
 	// 'current_command' is the number of command in the command vector currently being run.
 	// if -1, go to main menu. Allow user to bypass this by specifying 'start' as first command.
-	if(commands.front()=="start"){
+	if(commands.size() && commands.front()=="start"){
 		current_command = 1;
 	} else {
 		current_command=-1;
@@ -146,7 +169,18 @@ bool MarcusScheduler::Finalise(){
 
 // ««-------------- ≪ °◇◆◇° ≫ --------------»»
 
-void MarcusScheduler::ReadCommandFile(){
+bool MarcusScheduler::ReadCommandFile(){
+	
+	// clear any existing commands - do not merge command files
+	commands.clear();
+	
+	// 'command_file' defines the path to another local file with the list of commands to run
+	if(!m_variables.Get("command_file",command_file)){
+		Log("MarcusScheduler::Initialise - no command_file specified in config file!",v_error,verbosity);
+		return false;
+	}
+	if(command_file=="NULL") return true;
+	
 	// read the input file, storing the sequence of commands into a vector
 	std::string line;
 	std::ifstream myfile (command_file);
@@ -161,7 +195,52 @@ void MarcusScheduler::ReadCommandFile(){
 		myfile.close();
 	} else {
 		Log("MarcusScheduler::ReadCommandFile - Unable to open file: "+command_file,v_error,verbosity);
+		return false;
 	}
+	return true;
+}
+
+// ««-------------- ≪ °◇◆◇° ≫ --------------»»
+
+bool MarcusScheduler::ReadCommandEntry(){
+	
+	// clear any existing commands - do not merge command files
+	commands.clear();
+	
+	// when using the databse, additional configuration files such as the list of commands 
+	// are stored in the auxiliary table. Much like Tool configurations, auxiliary table entries
+	// are located by a name and a version number.
+	std::string commands_list_name;
+	int commands_list_version;
+	bool ok = m_variables.Get("command_file::name", commands_list_name);
+	ok &= m_variables.Get("command_file::version", commands_list_version);
+	if(not ok){
+		Log("MarcusScheduler::ReadCommandEntry - did not find command_file::name or "
+		    "command_file::version in tool configuration!",v_error,verbosity);
+		return false;
+	}
+	
+	// get the content of the commands file from the auxiliary table
+	std::string commands_list_contents;
+	std::string query_string = std::string("SELECT contents FROM auxiliary WHERE name=")
+	                           +m_data->postgres.pqxx_quote(commands_list_name)
+	                           +" AND version="+std::to_string(commands_list_version);
+	
+	// run the query. variable order should match that SELECTed in the query.
+	m_data->postgres.ExecuteQuery(query_string, commands_list_contents);
+	
+	// parse contents into local vector
+	std::string line;
+	std::stringstream commands_stream(commands_list_contents);
+	while(getline(commands_stream,line)){
+		if(line.size()==0) continue;
+		if(line[0]=='#') continue;
+		commands.push_back(line);
+		// note any loops- if present, we'll add loop indices to output filenames
+		if(line.substr(0,line.find(' '))=="loop") looping=true;
+	}
+	
+	return true;
 }
 
 // ««-------------- ≪ °◇◆◇° ≫ --------------»»
@@ -206,7 +285,7 @@ void MarcusScheduler::MainMenu(){
 
 void MarcusScheduler::PutSystemInSafeState(){
 	// ensure all the LEDs are off and valves are closed
-	std::string json_string = "{\"R\":\"0\",\"G\":\"0\",\"B\":\"0\",\"White\":\"0\",\"385\":\"0\",\"260\":\"0\",\"275\":\"0\",\"LED\":\"Change\",\"Valve\":\"CLOSE\"}";
+	std::string json_string = "{\"R\":\"0\",\"G\":\"0\",\"B\":\"0\",\"White\":\"0\",\"385\":\"0\",\"275_A\":\"0\",\"275_B\":\"0\",\"LED\":\"Change\",\"Valve_inlet\":\"CLOSE\",\"Valve_outlet\":\"CLOSE\",\"Valve_pump\":\"CLOSE\"}";
 	m_data->CStore.JsonParser(json_string);
 }
 
@@ -362,6 +441,10 @@ void MarcusScheduler::ProcessCommand(std::string& the_command){
 		// save traces to file
 		DoSave(the_command);
 		
+	} else if(the_command.substr(0,5)=="pump"){
+		// start or stop the pump
+		DoPump(the_command);
+		
 	} else if(the_command.substr(0,5)=="valve"){
 		// open or close the inlet/outlet valves
 		DoValves(the_command);
@@ -415,7 +498,7 @@ void MarcusScheduler::DoPower(std::string the_command){
 	} else if(on_or_off=="off" || on_or_off=="down"){
 		json_string="{\"Power\":\"OFF\"}";
 	} else {
-		Log("MarcusScheduler::DoValves - Unknown power state: '"+on_or_off+"'",v_error,verbosity);
+		Log("MarcusScheduler::DoPower - Unknown power state: '"+on_or_off+"'",v_error,verbosity);
 	}
 	
 	// queue up the action
@@ -566,6 +649,23 @@ void MarcusScheduler::DoSave(std::string the_command){
 		output_file = filenamesub+"_"+std::to_string(loop_count)+".root";
 	}
 	
+	// directory location will be based on the date
+	time_t rawtime;
+	time (&rawtime);
+	//tm* mytm = gmtime(&rawtime);     // UTC
+	tm* mytm = localtime(&rawtime);  // local time
+	short year=mytm->tm_year + 1900;
+	short month=mytm->tm_mon + 1;
+	std::string outputdir = "data/"+std::to_string(year)+"/"+std::to_string(month);
+	
+	// filename will also be prefixed with the current run number (unless it's a debug run)
+	int run_num=-1;
+	get_ok = m_data->postgres_helper.GetCurrentRun(run_num);
+	std::string prefix = ( run_num < 0 ) ? std::string("") : (std::to_string(run_num) +"_");
+	
+	// combine components e.g. 'data/${YEAR}/${MONTH}/${RUNNUM}_${filename}_${loopindex}.root'
+	output_file = outputdir+"/"+prefix+output_file;
+	
 	// queue up the save action
 	std::string json_string = "{\"Save\":\"Save\",\"Filename\":\""+output_file
 		+"\",\"Overwrite\",\""+std::to_string(overwrite_saves)+"\"}";
@@ -581,21 +681,56 @@ void MarcusScheduler::DoSave(std::string the_command){
 void MarcusScheduler::DoValves(std::string the_command){
 	// control the inlet/outlet valves
 	
-	// strip off the preceding 'valve' to get the action
-	std::string open_or_close = the_command.substr(6,std::string::npos);
+	// command should be 'valve type state' - split into fields
+	std::stringstream ss(the_command);
+	std::string prefix, type, open_or_close;
+	ss >> prefix >> type >> open_or_close;
 	
-	// strip off trailing comments
-	open_or_close = open_or_close.substr(0,open_or_close.find(' '));
-	
-	// check we recognise the action, and form the json string
-	Log(std::string("setting valve to: \"")+open_or_close+std::string("\""),v_debug,verbosity);
-	std::string json_string;
-	if(open_or_close=="open"){
-		json_string="{\"Valve\":\"OPEN\"}";
-	} else if(open_or_close=="close"){
-		json_string="{\"Valve\":\"CLOSE\"}";
+	// sanity check; type should be 'inlet' or 'outlet'
+	if(type!="inlet" && type!="outlet"){
+		Log("MarcusScheduler::DoValves - Unknown valve type '"+type+"'",v_error,verbosity);
 	} else {
-		Log("MarcusScheduler::DoValves - Unknown valve state: '"+open_or_close+"'",v_error,verbosity);
+		
+		// form the json string
+		Log(std::string("setting ")+type+" valve to: \""+open_or_close+"\"",v_debug,verbosity);
+		std::string json_string;
+		if(open_or_close=="open"){
+			json_string="{\"Valve_"+type+"\":\"OPEN\"}";
+		} else if(open_or_close=="close"){
+			json_string="{\"Valve_"+type+"\":\"CLOSE\"}";
+		} else {
+			Log("MarcusScheduler::DoValves - Unknown valve state '"+open_or_close+"'",v_error,verbosity);
+		}
+		
+		// queue up the action
+		m_data->CStore.JsonParser(json_string);
+	}
+	
+	// advance to the next command
+	++current_command;
+}
+
+// ««-------------- ≪ °◇◆◇° ≫ --------------»»
+
+void MarcusScheduler::DoPump(std::string the_command){
+	// control the pump
+	
+	// split off the preceding 'pump'
+	std::string on_or_off = the_command.substr(5,std::string::npos);
+	
+	// split off any trailing comments
+	on_or_off = on_or_off.substr(0,on_or_off.find(' '));
+	
+	// form the json string
+	Log(std::string("setting pump to: \"")+on_or_off+"\"",v_debug,verbosity);
+	std::string json_string;
+	// we actually use the Valve tool, since we're just toggling a gpio pin
+	if(on_or_off=="on"){
+		json_string="{\"Valve_pump\":\"OPEN\"}";
+	} else if(on_or_off=="off"){
+		json_string="{\"Valve_pump\":\"CLOSE\"}";
+	} else {
+		Log("MarcusScheduler::DoValves - Unknown pump state '"+on_or_off+"'",v_error,verbosity);
 	}
 	
 	// queue up the action
@@ -683,7 +818,7 @@ void MarcusScheduler::DoMeasure(std::string the_command){
 			{
 			// first thing, ensure all LEDs are off
 			// ====================================
-			json_string = "{\"R\":\"0\",\"G\":\"0\",\"B\":\"0\",\"White\":\"0\",\"385\":\"0\",\"260\":\"0\",\"275\":\"0\",\"LED\":\"Change\"}";
+			json_string = "{\"R\":\"0\",\"G\":\"0\",\"B\":\"0\",\"White\":\"0\",\"385\":\"0\",\"275_A\":\"0\",\"275_B\":\"0\",\"LED\":\"Change\"}";
 			++command_step;
 			//break;  // XXX
 			}
@@ -767,7 +902,7 @@ void MarcusScheduler::DoMeasure(std::string the_command){
 			{
 			// finally, disable the LEDs. VERY IMPORTANT.
 			// ==========================================
-			json_string = "{\"R\":\"0\",\"G\":\"0\",\"B\":\"0\",\"White\":\"0\",\"385\":\"0\",\"260\":\"0\",\"275\":\"0\",\"LED\":\"Change\"}";
+			json_string = "{\"R\":\"0\",\"G\":\"0\",\"B\":\"0\",\"White\":\"0\",\"385\":\"0\",\"275_A\":\"0\",\"275_B\":\"0\",\"LED\":\"Change\"}";
 			// time to move to the next command
 			command_step=0;
 			++current_command;

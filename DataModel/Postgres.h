@@ -53,8 +53,18 @@ class Postgres {
 	// https://libpqxx.readthedocs.io/en/6.3/a00255.html#ga81fe65fbb9561af7c5f0b33a9fe27e5a
 	// -------
 	// quote field or table names
-	inline std::string pqxx_quote_name(std::string name){
-		return pqxx::nullconnection{}.quote_name(name);
+	inline std::string pqxx_quote_name(std::string name, std::string* err=nullptr){
+		if(OpenConnection(err)==nullptr) return "";
+		try {
+			return conn->quote_name(name);
+		} catch (std::exception& e){
+			std::string errmsg = std::string("Postgres::pqxx_quote_name threw exception ")
+			                     +e.what()+" trying to quote '"+name+"'";
+			std::cerr<<errmsg<<std::endl;
+			if(err) *err=errmsg;
+			return "";
+		}
+		return "";
 	}
 	// quote values
 	inline std::string pqxx_quote(std::string string, std::string* err=nullptr){
@@ -66,7 +76,7 @@ class Postgres {
 			return conn->quote(string);
 		} catch (std::exception& e){
 			std::string errmsg = std::string("Postgres::pqxx_quote<std::string> threw exception ")
-			                     +e.what();
+			                     +e.what()+" trying to quote '"+string+"'";
 			std::cerr<<errmsg<<std::endl;
 			if(err) *err=errmsg;
 			return "";

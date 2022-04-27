@@ -1,2 +1,3 @@
 verbosity 1
+type pump
 valve_pin 17

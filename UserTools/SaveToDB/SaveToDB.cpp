@@ -6,29 +6,37 @@ SaveToDB::SaveToDB():Tool(){}
 
 bool SaveToDB::Initialise(std::string configfile, DataModel &data){
 	
+	m_data= &data;
+	
+	/* - new method, Retrieve configuration options from the postgres database - */
+	int RunConfig=-1;
+	m_data->vars.Get("RunConfig",RunConfig);
+	
+	if(RunConfig>=0){
+		std::string configtext;
+		bool get_ok = m_data->postgres_helper.GetToolConfig(m_unique_name, configtext);
+		if(!get_ok){
+			Log(m_unique_name+" Failed to get Tool config from database!",v_error,verbosity);
+			return false;
+		}
+		// parse the configuration to populate the m_variables Store.
+		if(configtext!="") m_variables.Initialise(std::stringstream(configtext));
+		
+	}
+	
+	/* - old method, read config from local file - */
 	if(configfile!="")  m_variables.Initialise(configfile);
+	
 	//m_variables.Print();
 	
-	m_data= &data;
 	
 	m_variables.Get("max_webpage_records",max_webpage_records);
 	m_variables.Get("verbosity",verbosity);
 	
 	// until we have a better definition, each execution of the ToolChain
-	// will consitute a new run, unless flagged as a debug run.
-	// Debug runs will be flagged by a run_config of -1.
-	int run_config;
-	get_ok = m_variables.Get("run_config",run_config);
-	if(!get_ok){
-		Log("SaveToDB::Initialise found no 'run_config' in configuration file!",v_error,verbosity);
-		return false;    // make no assumptions
-	}
-	
-	// run number for debug runs will be -1 as well
-	runnum=-1;
-	
-	// if not a debug run
-	if(run_config>=0){
+	// will consitute a new run and will result in a new entry in the run database,
+	// unless flagged as a debug run by a RunConfig of -1.
+	if(RunConfig>=0){
 		// For each new run we'll make a new entry in the run table,
 		// for which we need the following:
 		// 0. run number (auto-incrementing, we'll retrieve it from the new entry)
@@ -50,19 +58,13 @@ bool SaveToDB::Initialise(std::string configfile, DataModel &data){
 		
 		// get any notes. notes are optional: don't bail if this fails.
 		std::string run_notes;
-		// Stores won't parse multiple words into a variable, so notes need to be
-		// read from a separate file. probably for the best.
-		std::string notes_filename;
-		get_ok = m_variables.Get("run_notes",notes_filename);
-		if(get_ok && notes_filename!=""){
-			std::ifstream notes_file(notes_filename.c_str());
-			if(notes_file.is_open()){
-				std::string line;
-				while(getline(notes_file, line)){
-					run_notes.append("\n");
-					run_notes.append(line);
-				}
-				std::cout<<"run notes were: '"<<run_notes<<"'"<<std::endl;
+		// run notes are read from a separate file, hard-coded to be called 'run_notes.txt' for now
+		std::ifstream notes_file("run_notes.txt");
+		if(notes_file.is_open()){
+			std::string line;
+			while(getline(notes_file, line)){
+				run_notes.append("\n");
+				run_notes.append(line);
 			}
 		}
 		
@@ -74,7 +76,7 @@ bool SaveToDB::Initialise(std::string configfile, DataModel &data){
 		                                 &error_ret,                  // error return string
 		                                 // variadic argument list of field values
 		                                 "now()",                     // start timestamp
-		                                 run_config,                  // run config ID
+		                                 RunConfig,                   // run config ID
 		                                 run_notes,                   // run notes
 		                                 git_tag);                    // git tag
 		if(!get_ok){

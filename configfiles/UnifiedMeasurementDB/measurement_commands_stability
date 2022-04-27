@@ -1,0 +1,26 @@
+wait 900
+start_loop
+valve open
+measure dark
+measure dark
+measure dark
+measure dark
+valve close
+wait 150
+measure dark
+measure dark
+measure dark
+measure dark
+measure dark
+measure 275_B
+measure dark
+measure 275_A
+measure dark
+measure R G B
+measure dark
+measure White 385
+save april22_stability.root
+wait 600
+loop
+quit
+

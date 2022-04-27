@@ -6,13 +6,29 @@ BenLED::BenLED():Tool(){}
 
 bool BenLED::Initialise(std::string configfile, DataModel &data){
   
-  if(configfile!=""){
-    m_configfile = configfile;
-    m_variables.Initialise(configfile);
+  m_data= &data;
+  
+  /* - new method, Retrieve configuration options from the postgres database - */
+  int RunConfig=-1;
+  m_data->vars.Get("RunConfig",RunConfig);
+  
+  if(RunConfig>=0){
+    std::string configtext;
+    bool get_ok = m_data->postgres_helper.GetToolConfig(m_unique_name, configtext);
+    if(!get_ok){
+      Log(m_unique_name+" Failed to get Tool config from database!",v_error,verbosity);
+      return false;
+    }
+    // parse the configuration to populate the m_variables Store.
+    if(configtext!="") m_variables.Initialise(std::stringstream(configtext));
+    
   }
+  
+  /* - old method, read config from local file - */
+  if(configfile!="")  m_variables.Initialise(configfile);
+  
   //m_variables.Print();
   
-  m_data = &data;
   
   m_variables.Get("verbosity",verbosity);
   
@@ -22,25 +38,10 @@ bool BenLED::Initialise(std::string configfile, DataModel &data){
   
   m_variables.Get("voltage_supply", fVin);
   m_variables.Get("delay", fDelay);
-  m_variables.Get("map_wiring", wiringLED);
   
-  Log("BenLED: LED wiring and setup will be read from " + wiringLED, v_message, verbosity);
-  
-  /*
-  //check when mapping file was changed
-  std::string cmd = "stat -c %Y " + wiringLED + " > .led_timestamp";
-  int s = system(cmd.c_str());
-  std::ifstream inTimestamp(".led_timestamp");
-  unsigned long newTime = lastTime+1;        //initiliased randomly
-  if (std::getline(inTimestamp, cmd))
-    newTime = std::strtol(cmd.c_str(), NULL, 10);
-  
-  //if it hasn't been changed since last time, don't do anyhting
-  if (newTime != lastTime)
-  */
-  
-  // read LED pin mapping from config file
-  MapLED();
+  // read LED pin mapping from the appropriate source
+  // (i.e. let local file override database)
+  MapLED(m_variables.Has("map_wiring"));
   
   //lastTime = newTime;
   power="OFF";
@@ -104,15 +105,15 @@ bool BenLED::Execute(){
       std::string B_str="0";
       std::string White_str="0";
       std::string B385_str="0";
-      std::string UV260_str="0";
-      std::string UV275_str="0";
+      std::string UV275_A_str="0";
+      std::string UV275_B_str="0";
       m_data->CStore.Get("R",R_str);
       m_data->CStore.Get("G",G_str);
       m_data->CStore.Get("B",B_str);
       m_data->CStore.Get("White",White_str);
       m_data->CStore.Get("385",B385_str);
-      m_data->CStore.Get("260",UV260_str);
-      m_data->CStore.Get("275",UV275_str);
+      m_data->CStore.Get("275_A",UV275_A_str);
+      m_data->CStore.Get("275_B",UV275_B_str);
       
       // not the most robust way, but probably the best we can do.
       short R=(R_str=="1");
@@ -120,8 +121,8 @@ bool BenLED::Execute(){
       short B=(B_str=="1");
       short White=(White_str=="1");
       short B385=(B385_str=="1");
-      short UV260=(UV260_str=="1");
-      short UV275=(UV275_str=="1");
+      short UV275_A=(UV275_A_str=="1");
+      short UV275_B=(UV275_B_str=="1");
       
       if( R || G || B ){
         ok &= TurnLEDon("LEDRGBAnnode");
@@ -145,10 +146,10 @@ bool BenLED::Execute(){
       else ok &= TurnLEDoff("LEDW");
       if(B385) ok &= TurnLEDon("LED385L");
       else ok &= TurnLEDoff("LED385L");
-      if(UV260) ok &= TurnLEDon("LED260J");
-      else ok &= TurnLEDoff("LED260J");
-      if(UV275) ok &= TurnLEDon("LED275J");
-      else ok &= TurnLEDoff("LED275J");
+      if(UV275_A) ok &= TurnLEDon("LED275J_A");
+      else ok &= TurnLEDoff("LED275J_A");
+      if(UV275_B) ok &= TurnLEDon("LED275J_B");
+      else ok &= TurnLEDoff("LED275J_B");
       //delete entries after maybe??
     }
     m_data->CStore.Remove("LED");
@@ -209,8 +210,7 @@ bool BenLED::Finalise(){
   return ok;
 }
 
-
-void BenLED::MapLED(){
+void BenLED::MapLED(bool localFile){
   // build maps of LED name to pin, voltage, and bit within a bitmap.
   Log("Reading LED pin mapping",v_message,verbosity);
   
@@ -218,10 +218,62 @@ void BenLED::MapLED(){
   mLED_chan.clear();
   mLED_duty.clear();
   
-  std::ifstream inConfig(wiringLED.c_str());
+  
+  std::istream* inConfig;
+  std::ifstream mappingfile;
+  std::stringstream mappingstream;
+  
+  // get LED pin mapping either from file ...
+  if(localFile){
+    
+    // get local file name
+    m_variables.Get("map_wiring", wiringLED);
+    Log("BenLED: LED wiring and setup will be read from " + wiringLED, v_message, verbosity);
+    
+    /*
+    //check when mapping file was changed
+    std::string cmd = "stat -c %Y " + wiringLED + " > .led_timestamp";
+    int s = system(cmd.c_str());
+    std::ifstream inTimestamp(".led_timestamp");
+    unsigned long newTime = lastTime+1;        //initiliased randomly
+    if (std::getline(inTimestamp, cmd))
+      newTime = std::strtol(cmd.c_str(), NULL, 10);
+    
+    //if it hasn't been changed since last time, don't do anyhting
+    if (newTime != lastTime)
+    */
+    
+    // open the file for reading
+    mappingfile.open(wiringLED.c_str());
+    if(!mappingfile.is_open()){
+      Log(std::string("BenLED::MapLED failed to open local file '")+localFile+"'",v_error,verbosity);
+      return;
+    }
+    inConfig = dynamic_cast<std::istream*>(&mappingfile);
+    
+  // ... or from the database
+  } else {
+    
+    // get wiring file contents from DB
+    std::string mapping_contents;
+    bool ok = GetLEDmapping(mapping_contents);
+    if(not ok) return;
+    
+    // convert to a stringstream for parsing
+    mappingstream.str(mapping_contents);
+    inConfig = dynamic_cast<std::istream*>(&mappingstream);
+    
+  }
+  
+  // parse the text stream
+  ParseMapping(inConfig);
+  
+}
+
+void BenLED::ParseMapping(std::istream* inConfig){
   std::string line;
   //this, in binary, will be a string of 1 and 0 where 1 is LED on and 0 is LED off
-  while (std::getline(inConfig, line)){        //reading configfile
+  while (std::getline(*inConfig, line)){        //reading configfile
     
     //removes all comments (anything after '#')
     if (line.find_first_of('#') != std::string::npos)
@@ -247,6 +299,35 @@ void BenLED::MapLED(){
     }
   }
 }
+
+
+bool BenLED::GetLEDmapping(std::string& mapping_contents){
+  
+  std::string mapping_name;
+  int mapping_version;
+  bool ok = m_variables.Get("map_wiring::name", mapping_name);
+  ok &= m_variables.Get("map_wiring::version", mapping_version);
+  if(not ok){
+    Log("BenLED::GetLEDmapping - did not find map_wiring::name or "
+        "map_wiring::version in tool configuration!",v_error,verbosity);
+    return false;
+  }
+  
+  // get the content of the commands file from the auxiliary table
+  std::string query_string = std::string("SELECT contents FROM auxiliary WHERE name=")
+                             +m_data->postgres.pqxx_quote(mapping_name)
+                             +" AND version="+std::to_string(mapping_version);
+
+  // run the query. variable order should match that SELECTed in the query.
+  ok = m_data->postgres.ExecuteQuery(query_string, mapping_contents);
+  if(!ok){
+    Log("BenLED::MapLED failed to retrieve pin mapping '"+mapping_name+":"
+        +std::to_string(mapping_version)+"' from database",v_error,verbosity);
+  }
+  
+  return ok;
+}
+
 
 //this routine will setup I2C connection with first address found
 //in I2C mapping by i2cdetect program

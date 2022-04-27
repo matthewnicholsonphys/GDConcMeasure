@@ -1,3 +1,4 @@
 verbosity 1
+type outlet
 # right valve
 valve_pin 15

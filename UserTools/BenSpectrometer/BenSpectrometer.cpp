@@ -4,12 +4,29 @@ BenSpectrometer::BenSpectrometer() : Tool(){}
 
 bool BenSpectrometer::Initialise(std::string configfile, DataModel &data){
   
-  if(configfile!=""){
-    m_variables.Initialise(configfile);
+  m_data= &data;
+  
+  /* - new method, Retrieve configuration options from the postgres database - */
+  int RunConfig=-1;
+  m_data->vars.Get("RunConfig",RunConfig);
+  
+  if(RunConfig>=0){
+    std::string configtext;
+    bool get_ok = m_data->postgres_helper.GetToolConfig(m_unique_name, configtext);
+    if(!get_ok){
+      Log(m_unique_name+" Failed to get Tool config from database!",v_error,verbosity);
+      return false;
+    }
+    // parse the configuration to populate the m_variables Store.
+    if(configtext!="") m_variables.Initialise(std::stringstream(configtext));
+    
   }
+  
+  /* - old method, read config from local file - */
+  if(configfile!="")  m_variables.Initialise(configfile);
+  
   //m_variables.Print();
   
-  m_data = &data;
   
   // get Tool configuration
   m_variables.Get("traces", nTraces);
@@ -51,7 +68,7 @@ bool BenSpectrometer::Execute(){
       int tries=0;
       while(!EstablishUSB()){
         tries++;
-        Log("Attempt "+std::to_string(tries)+"/50",v_debug,verbosity);
+        Log("Attempt "+std::to_string(tries)+"/50",v_warning,verbosity);
         if(tries>=50){
           Log("couldnt establish connetion to spectrometer",v_error,verbosity);
           return false;

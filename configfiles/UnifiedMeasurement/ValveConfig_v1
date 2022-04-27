@@ -1,3 +1,4 @@
 verbosity 1
+type inlet
 # left valve
 valve_pin 18

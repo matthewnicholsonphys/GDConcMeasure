@@ -38,11 +38,12 @@ class MarcusScheduler: public Tool {
 	std::vector<int> loop_counts;       // number performed so far
 	std::string break_loop_flagfile_name;
 	
-	std::map<std::string,int> LED_states{{"R",0}, {"G",0}, {"B",0}, {"White",0}, {"385",0}, {"260",0}, {"275",0}};
-	const std::map<std::string,int> off_LED_states{{"R",0}, {"G",0}, {"B",0}, {"White",0}, {"385",0}, {"260",0}, {"275",0}};
+	std::map<std::string,int> LED_states{{"R",0}, {"G",0}, {"B",0}, {"White",0}, {"385",0}, {"275_A",0}, {"275_B",0}};
+	const std::map<std::string,int> off_LED_states{{"R",0}, {"G",0}, {"B",0}, {"White",0}, {"385",0}, {"275_A",0}, {"275_B",0}};
 	
 	
-	void ReadCommandFile();
+	bool ReadCommandFile();
+	bool ReadCommandEntry();
 	void MainMenu();
 	void PutSystemInSafeState();
 	
@@ -53,6 +54,7 @@ class MarcusScheduler: public Tool {
 	void DoSave(std::string the_command);
 	void DoAnalyse(std::string the_command);
 	void DoPower(std::string the_command);
+	void DoPump(std::string the_command);
 	void DoValves(std::string the_command);
 	void DoMeasure(std::string the_command);
 	void DoWait(std::string the_command);
@@ -71,6 +73,7 @@ class MarcusScheduler: public Tool {
 	int v_warning=1;
 	int v_message=2;
 	int v_debug=3;
+	int get_ok;
 
 };
 

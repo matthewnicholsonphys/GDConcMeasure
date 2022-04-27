@@ -1,5 +1,7 @@
 #include "PGHelper.h"
 #include "DataModel.h"
+#include <sstream>
+#include <exception>
 
 PGHelper::PGHelper(DataModel* m_data_in) : m_data(m_data_in) {};
 
@@ -45,13 +47,31 @@ bool PGHelper::GetCurrentRun(int& runnum, int* runconfig, std::string* err){
 }
 
 bool PGHelper::GetRunConfig(int& runconfig, int* runnum_in, std::string* err){
+	// Get the run config ID for a given run number. If no run number is given,
+	// the run config ID in m_data->vars will be used.
+	if(verbosity>v_debug) std::cout<<"getting runconfig for run "<<runnum_in<<std::endl;
 	
 	// first we need a run number. see if we're given one
 	if(runnum_in==nullptr || *runnum_in<0){
-		// not given one. Assume the latest run in the rundb
+		// not given one.
+		if(verbosity>v_debug) std::cout<<"no run number; getting runconfig from vars"<<std::endl;
+		
+		/*
+		// Assume the latest run in the rundb
 		if(verbosity>v_debug) std::cout<<"No run number given, looking up latest run"<<std::endl;
 		get_ok = GetCurrentRun(*runnum_in, &runconfig, err);
 		// this gets the runconfig at the same time, and will populate any error, so we're done.
+		*/
+		
+		// take it from m_data->vars
+		get_ok = m_data->vars.Get("RunConfig",runconfig);
+		if(not get_ok){
+			std::string errmsg = "GetRunConfig called with no run number, but failed to Get "
+			                     "RunConfig from ToolChainConfig";
+			std::cerr<<errmsg<<std::endl;
+			if(err) *err=errmsg;
+		}
+		
 		return get_ok;
 	}
 	
@@ -70,13 +90,18 @@ bool PGHelper::GetRunConfig(int& runconfig, int* runnum_in, std::string* err){
 }
 
 bool PGHelper::GetToolsConfig(std::string& toolsconfig, int* runnum, int* runconfig_in, std::string* err){
-	// get the json representing list of tools and their configfile version nums
+	// get the text representing list of tools and their configfile version nums
 	// if runconfig is given, toolsconfig for that runconfig will be used
-	// else if runnum is given, toolsconfig for that runconfig will be used
-	// else toolsconfig for the runconfig for the latest runnum in rundb will be used
+	// else if runnum is given, toolsconfig for that runconfig will be used.
+	// if neither are given the toolsconfig for the runconfig number in m_data->vars will be used
 	
 	int runconfigtmp;
-	int* runconfig = (runconfig_in!=nullptr || *runconfig_in<0 ) ? runconfig_in : &runconfigtmp;
+	int* runconfig;
+	if(runconfig_in!=nullptr && ((*runconfig_in)>=0) ){
+		runconfig = runconfig_in;
+	} else {
+		runconfig = &runconfigtmp;
+	}
 	get_ok = GetRunConfig(*runconfig, runnum, err);
 	if(not get_ok) return false;
 	
@@ -100,62 +125,58 @@ bool PGHelper::GetToolsConfig(std::string& toolsconfig, int* runnum, int* runcon
 	return true;
 }
 
+bool PGHelper::GetToolConfig(std::string toolname, std::string& toolconfig, int* runconfig_in, int* runnum_in, std::string* err){
+	// Get the tool configuration for the given tool in the current toolchain
+	
+	// first get the toolsconfig for the current run config
+	std::string toolsconfig;
+	if(verbosity>v_debug) std::cout<<"getting toolsconfig"<<std::endl;
+	get_ok = GetToolsConfig(toolsconfig, runconfig_in, runnum_in, err);
+	if(not get_ok) return false;
+	
+	// parse it into a store
+	if(verbosity>v_debug) std::cout<<"parsing toolsconfig"<<std::endl;
+	BoostStore toolsconfigstore;
+	get_ok = ParseToolsConfig(toolsconfig, toolsconfigstore, err);
+	if(not get_ok) return false;
+	
+	// extract the entry corresponding to the given unique identifier of this Tool instance.
+	std::pair<std::string, int> configkey;
+	if(verbosity>v_debug) std::cout<<"getting config version for tool instance "<<toolname<<std::endl;
+	get_ok = toolsconfigstore.Get(toolname, configkey);
+	if(not get_ok){
+		std::string errmsg = std::string("PGHelper::GetToolConfig did not find tool '")
+		                     +toolname+"' in the toolsconfig for the current runconfig!";
+		std::cerr<<errmsg<<std::endl;
+		if(err) *err=errmsg;
+		return false;
+	}
+	
+	// use the class name and configfile version to get the tool config
+	if(verbosity>v_debug) std::cout<<"querying configuration for tool "<<configkey.first
+	                               <<", version "<<configkey.second<<std::endl;
+	get_ok = GetToolConfig(configkey.first, configkey.second, toolconfig, err);
+	
+	return get_ok;
+}
 
-bool PGHelper::GetToolConfig(std::string toolname, std::string& toolconfig, int* versionnum_in, int* runconfig, int* runnum, std::string* err){
+bool PGHelper::GetToolConfig(std::string className, int version, std::string& toolconfig, std::string* err){
+	// use the tool class name and version number to look up the Tool config
 	
-	// to uniquely identify a config file within the configfiles table
-	// we need to provide the tool name, and the config file version number.
-	// if no version number is given, a run config or number may be given instead,
-	// in which case the corresponding version will be looked up.
-	// if none of the above is given, the latest run will be assumed.
-	
-	int versionnumtmp=-1;
-	int* versionnum = (versionnum_in || *versionnum_in<0) ? versionnum_in : &versionnumtmp;
-	if(*versionnum<0){
-		if(verbosity>v_debug) std::cout<<"No version number for requested Tool config"<<std::endl;
-		
-		std::string toolsconfig;
-		get_ok = GetToolsConfig(toolsconfig, runnum, runconfig, err);
-		if(not get_ok) return false;
-		
-		// the toolsconfig is a json map of tool names to version numbers
-		// we use these together to look up the tool config file in the configfiles table.
-		// first, convert the toolsconfig file to a Store for parsing
-		if(verbosity>v_debug) std::cout<<"parsing toolsconfig json"<<std::endl;
-		Store toolsconfigstore;
-		toolsconfigstore.JsonParser(toolsconfig);
-		
-		// try to get the configfile version number for our specified tool
-		if(not toolsconfigstore.Get(toolname,*versionnum)){
-			std::string errmsg = "PGHelper::GetToolConfig error! Tool "+toolname
-			                     +" is not in the list of tools for this run config!";
-			std::cerr<<errmsg<<std::endl;
-			if(err) *err=errmsg;
-			return false;
-		}
-		// sanity check
-		if(*versionnum<0){
-			std::string errmsg = "PGHelper::GetToolConfig error! invalid version number "
-			                     +std::to_string(*versionnum);
-			std::cerr<<errmsg<<std::endl;
-			if(err) *err=errmsg;
-			return false;
-		}
-	} // otherwise we were given a version number
-	
-	// use it to look up the Tool config
 	std::string query_string = "SELECT contents FROM configfiles WHERE tool = "
-	                           +m_data->postgres.pqxx_quote_name(toolname)
-	                           +" AND version = "+pqxx::to_string(*versionnum)+" ;";
+	                           +m_data->postgres.pqxx_quote(className)
+	                           +" AND version = "+std::to_string(version)+" ;";
+	
 	// perform the query
 	if(verbosity>v_debug){
-		std::cout<<"Getting tool "<<toolname<<" configfile version "<<(*versionnum)
+		std::cout<<"Getting tool "<<className<<" configfile version "<<version
 		         <<" with query \n"<<query_string<<"\n";
 	}
 	get_ok = m_data->postgres.ExecuteQuery(query_string, toolconfig);
+	
 	if(not get_ok){
-		std::string errmsg="error getting config for tool "+toolname
-		                  +", version "+std::to_string(*versionnum);
+		std::string errmsg="error getting config for tool "+className
+		                  +", version "+std::to_string(version);
 		std::cerr<<errmsg<<std::endl;
 		if(err) *err = errmsg;
 		return false;
@@ -212,4 +233,38 @@ int PGHelper::InsertToolConfig(Store config, std::string toolname, std::string a
 	                                                                     );
 	
 	return get_ok; // return if we succeeded - if not error will already be populated
+}
+
+bool PGHelper::ParseToolsConfig(std::string toolsconfig, BoostStore& configStore, std::string* err){
+	std::string errmsg="errors occurred converting config version to integer for tools: ";
+	std::string line;
+	std::string uniqueName, className, versionNum;
+	std::stringstream toolsconfigstream(toolsconfig);
+	bool get_ok = true;
+	while(getline(toolsconfigstream,line)){
+		if(line[0]=='#') continue;
+		if(line.empty()) continue;
+		std::stringstream ss(line);
+		ss >> uniqueName >> className >> versionNum;
+		//std::cout<<uniqueName<<":"<<className<<":"<<versionNum<<std::endl;
+		
+		// some tools may not need any configuration variables,
+		// ben has a habit of using 'NULL' in such cases
+		if(versionNum=="NULL") versionNum="-1";
+		
+		// convert the version number to an integer
+		int version;
+		try {
+			version = std::stoi(versionNum);
+			configStore.Set(uniqueName, std::pair<std::string,int>{className, version});
+		} catch (...){
+			get_ok = false;
+			errmsg += "'"+uniqueName+"'";
+		}
+	}
+	if(!get_ok){
+		std::cerr<<errmsg<<std::endl;
+		if(err) *err=errmsg;
+	}
+	return get_ok;
 }

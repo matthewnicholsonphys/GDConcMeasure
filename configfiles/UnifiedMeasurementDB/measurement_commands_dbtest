@@ -1,0 +1,14 @@
+start
+power up
+#wait 10
+#valve open
+#wait 10
+#valve close
+measure Dark
+measure 275
+analyse 275
+#measure Dark
+#measure 260
+#analyse 260
+save dbtestout.root
+quit

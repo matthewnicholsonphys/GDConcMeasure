@@ -6,13 +6,44 @@ Valve::Valve():Tool(){}
 
 bool Valve::Initialise(std::string configfile, DataModel &data){
   
+  m_data= &data;
+  
+  /* - new method, Retrieve configuration options from the postgres database - */
+  int RunConfig=-1;
+  m_data->vars.Get("RunConfig",RunConfig);
+  
+  if(RunConfig>=0){
+    std::string configtext;
+    bool get_ok = m_data->postgres_helper.GetToolConfig(m_unique_name, configtext);
+    if(!get_ok){
+      Log(m_unique_name+" Failed to get Tool config from database!",v_error,verbosity);
+      return false;
+    }
+    // parse the configuration to populate the m_variables Store.
+    if(configtext!="") m_variables.Initialise(std::stringstream(configtext));
+    
+  }
+  
+  /* - old method, read config from local file - */
   if(configfile!="")  m_variables.Initialise(configfile);
+  
   //m_variables.Print();
   
-  m_data= &data;
   
   m_variables.Get("verbosity",verbosity);
   
+  // get which valve we're controlling
+  std::string type="";
+  m_variables.Get("type",type);   // 'inlet', 'outlet' or 'pump'
+  if(type!="inlet" && type!="outlet" && type!= "pump"){
+    Log("Valve unrecognised type '"+type+"'",v_error,verbosity);
+    return false;
+  }
+  // we'll look for a corresponding flag in the DataModel
+  CStoreKey = "Valve_"+type;
+  
+  // get the pin connected to this valve
+  m_valve_pin=-1;
   if (!m_variables.Get("valve_pin",m_valve_pin)){
     Log("Valve pin not set",v_error,verbosity);
     return false;
@@ -45,12 +76,12 @@ bool Valve::Initialise(std::string configfile, DataModel &data){
 
 bool Valve::Execute(){
   
-  Log("Valve Executing...",v_debug,verbosity);
+  Log(CStoreKey+" Executing...",v_debug,verbosity);
   
   std::string Valve="";
   bool ok = true;
   
-  if(m_data->CStore.Get("Valve",Valve) && Valve!=valve){
+  if(m_data->CStore.Get(CStoreKey,Valve) && Valve!=valve){
     if(Valve=="OPEN"){
       ok = ValveOpen();
     }
@@ -74,6 +105,11 @@ bool Valve::Finalise(){
 bool Valve::ValveOpen(){
   
   Log("valve open",v_message,verbosity);
+  if(m_valve_pin<0){
+    Log(std::string("Valve::ValveOpen invalid valve pin ")+std::to_string(m_valve_pin),v_error,verbosity);
+    return false;
+  }
+  
   std::stringstream command;
   command<<"echo \"1\" > /sys/class/gpio/gpio"<<m_valve_pin<<"/value";
   std::string errmsg;
@@ -89,6 +125,11 @@ bool Valve::ValveOpen(){
 bool Valve::ValveClose(){
   
   Log("valve close",v_message,verbosity);
+  if(m_valve_pin<0){
+    Log(std::string("Valve::ValveClose invalid valve pin ")+std::to_string(m_valve_pin),v_error,verbosity);
+    return false;
+  }
+  
   std::stringstream command;
   command<<"echo \"0\" > /sys/class/gpio/gpio"<<m_valve_pin<<"/value";
   std::string errmsg;

@@ -35,7 +35,9 @@ public:
   bool TurnOffAll();
   
   bool EstablishI2C();
-  void MapLED();
+  void MapLED(bool localFile);
+  bool GetLEDmapping(std::string& mapping_contents);
+  void ParseMapping(std::istream*);
   bool SetPWMfreq(double freq);
   
   bool TurnOffAndSleep();

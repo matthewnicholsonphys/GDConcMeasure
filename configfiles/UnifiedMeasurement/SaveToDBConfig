@@ -1,4 +1,2 @@
 verbosity 1
 max_webpage_records 5
-run_config 0
-run_notes configfiles/UnifiedMeasurement/run_notes.txt

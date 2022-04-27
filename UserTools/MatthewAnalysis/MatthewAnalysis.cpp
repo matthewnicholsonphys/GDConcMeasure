@@ -15,13 +15,43 @@ MatthewAnalysis::MatthewAnalysis():Tool(){}
 
 bool MatthewAnalysis::Initialise(std::string configfile, DataModel &data){
 
-  if(configfile!="")  m_variables.Initialise(configfile);
-  //m_variables.Print();
   m_data= &data;
   
+  /* - new method, Retrieve configuration options from the postgres database - */
+  int RunConfig=-1;
+  m_data->vars.Get("RunConfig",RunConfig);
+  
+  if(RunConfig>=0){
+    std::string configtext;
+    bool get_ok = m_data->postgres_helper.GetToolConfig(m_unique_name, configtext);
+    if(!get_ok){
+      Log(m_unique_name+" Failed to get Tool config from database!",v_error,verbosity);
+      return false;
+    }
+    // parse the configuration to populate the m_variables Store.
+    if(configtext!="") m_variables.Initialise(std::stringstream(configtext));
+    
+  }
+  
+  /* - old method, read config from local file - */
+  if(configfile!="")  m_variables.Initialise(configfile);
+  
+  //m_variables.Print();
+  
+  
   m_variables.Get("verbosity",verbosity);
-
-  bool success = (RetrieveDarkSubPure() && RetrieveCalibrationCurveDB());
+  
+  
+  bool success = RetrieveDarkSubPure();
+  if(!success) return success;
+  
+  // get calibration cofficients from either local file (if present) or DB
+  if(m_variables.Has("CalibCoeff0")){
+    success = RetrieveCalibrationCurve();
+  } else {
+    success = RetrieveCalibrationCurveDB();
+  }
+  
   return success;
 }
 
@@ -166,7 +196,7 @@ bool MatthewAnalysis::RetrieveCalibrationCurve(){
   }
   if(!success){
     Log("MatthewAnalysis::RetrieveCalibrationCurve did not find "+std::to_string(pol_order)
-        +" calibration constants on config file!",v_error,verbosity);
+        +" calibration constants in config file!",v_error,verbosity);
     return false;
   }
   

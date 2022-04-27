@@ -1,0 +1,13 @@
+myGracefulStop      GracefulStop            configfiles/UnifiedMeasurementDB/GracefulStopConfig
+myMarcusScheduler   MarcusScheduler         configfiles/UnifiedMeasurementDB/MarcusSchedulerConfig
+myBenPower          BenPower                configfiles/UnifiedMeasurementDB/PowerConfig
+myPump              Valve                   configfiles/UnifiedMeasurementDB/ValveConfig
+myValveInlet        Valve                   configfiles/UnifiedMeasurementDB/ValveConfig_v1
+myValveOutlet       Valve                   configfiles/UnifiedMeasurementDB/ValveConfig_v2
+BenLED              BenLED                  configfiles/UnifiedMeasurementDB/LEDConfig
+BenSpectrometer     BenSpectrometer         configfiles/UnifiedMeasurementDB/SpectrometerConfig
+TraceAverage        TraceAverage            configfiles/UnifiedMeasurementDB/TraceAverageConfig
+myMatthewAnalysis   MatthewAnalysis         configfiles/UnifiedMeasurementDB/MatthewAnalysisConfig
+myLivePlotter       LivePlotter             configfiles/UnifiedMeasurementDB/LivePlotterConfig
+SaveTraces          SaveTraces              configfiles/UnifiedMeasurementDB/SaveTracesConfig
+mySaveToDB          SaveToDB                configfiles/UnifiedMeasurementDB/SaveToDBConfig

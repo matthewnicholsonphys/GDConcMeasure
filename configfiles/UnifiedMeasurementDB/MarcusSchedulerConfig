@@ -1,0 +1,2 @@
+verbosity 1
+command_file configfiles/UnifiedMeasurementDB/measurement_commands_dbtest

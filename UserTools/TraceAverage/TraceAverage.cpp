@@ -4,12 +4,32 @@ TraceAverage::TraceAverage():Tool(){}
 
 
 bool TraceAverage::Initialise(std::string configfile, DataModel &data){
-  
-  if(configfile!="")  m_variables.Initialise(configfile);
-  //m_variables.Print();
-  m_variables.Get("verbosity",verbosity);
-  
+
   m_data= &data;
+  
+  /* - new method, Retrieve configuration options from the postgres database - */
+  int RunConfig=-1;
+  m_data->vars.Get("RunConfig",RunConfig);
+  
+  if(RunConfig>=0){
+    std::string configtext;
+    bool get_ok = m_data->postgres_helper.GetToolConfig(m_unique_name, configtext);
+    if(!get_ok){
+      Log(m_unique_name+" Failed to get Tool config from database!",v_error,verbosity);
+      return false;
+    }
+    // parse the configuration to populate the m_variables Store.
+    if(configtext!="") m_variables.Initialise(std::stringstream(configtext));
+    
+  }
+  
+  /* - old method, read config from local file - */
+  if(configfile!="")  m_variables.Initialise(configfile);
+  
+  //m_variables.Print();
+  
+  
+  m_variables.Get("verbosity",verbosity);
   
   return true;
 }

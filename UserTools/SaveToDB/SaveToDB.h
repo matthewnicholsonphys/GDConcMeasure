@@ -46,7 +46,7 @@ class SaveToDB: public Tool {
 	std::vector<char> comparators;
 	std::string error_ret;
 	std::string query_string;
-	int runnum;
+	int runnum=-1;
 	
 	bool get_ok;
 	int verbosity=1;
