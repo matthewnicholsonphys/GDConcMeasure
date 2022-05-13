@@ -67,6 +67,8 @@ class MarcusScheduler: public Tool {
 	bool check_break_loop(std::string& the_command);
 	int check_for_break_file();
 	
+	bool debugrun=false;
+	
 	// for logging
 	int verbosity=1;
 	int v_error=0;

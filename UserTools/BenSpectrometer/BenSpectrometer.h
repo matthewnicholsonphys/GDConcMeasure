@@ -23,6 +23,7 @@ public:
   
   bool EstablishUSB();
   bool EstablishUSB_try_catch();
+  bool Connect();
   bool GetData();
   void RelinquishUSB();
   
@@ -32,8 +33,8 @@ private:
   std::string SpectrometerModel="Blaze";
   std::string SpectrometerIP="192.168.50.4";
   int SpectrometerPort=57357;
-  long*  device_ids;
-  long* spectrometer_ids;
+  long*  device_ids = nullptr;
+  long* spectrometer_ids = nullptr;
   int error;
   
   int intTime;

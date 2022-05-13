@@ -47,6 +47,7 @@ class SaveToDB: public Tool {
 	std::string error_ret;
 	std::string query_string;
 	int runnum=-1;
+	int RunConfig=-1;
 	
 	bool get_ok;
 	int verbosity=1;

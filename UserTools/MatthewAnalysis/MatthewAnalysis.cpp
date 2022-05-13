@@ -66,31 +66,37 @@ bool MatthewAnalysis::Execute(){
     Log("MatthewAnalysis Processing new measurement...",v_debug,verbosity);
     
     // reinit analysis results to prevent accidental carry-over
+    Log("MatthewAnalysis reinitializing variables",v_debug,verbosity);
     ReInit();
     
     // get the TTrees containing LED-on and LED-off traces
+    Log("MatthewAnalysis searching for TTrees",v_debug,verbosity);
     std::pair<TTree*, TTree*> dark_and_led_trees = FindDarkAndLEDTrees();
     TTree* dark_tree = dark_and_led_trees.first, *led_tree = dark_and_led_trees.second;
     if(dark_tree==nullptr || led_tree==nullptr){
       std::stringstream tmp;
       tmp << "MatthewAnalysis::FindDarkAndLEDTrees could not find signal ("<<led_tree
           << ") and/or dark ("<<dark_tree<<") TTree in DataModel";
-      Log(tmp.str(),0,0);
+      Log(tmp.str(),v_error,verbosity);
       return false;
     }
     
+    
     // pull LED-on and LED-off traces from TTrees and produce TGraph of dark-subtracted trace
+    Log("MatthewAnalysis performing dark subtraction",v_debug,verbosity);
     dark_subtracted_gd = PerformDarkSubtraction(led_tree, dark_tree);
     if(dark_subtracted_gd.GetN()==0){
       return false;  // failed to get data from TTrees
     }
     
     // Remove points in the absorption region 270-280nm TODO make this range configurable
+    Log("MatthewAnalysis removing absorption region",v_debug,verbosity);
     TGraphErrors dark_sub_gd_w_abs_region_removed = RemoveRegion(dark_subtracted_gd);
     
     // taking the reference pure water trace as a function, fit this function, scaled
     // and with a linear background added, to the measured trace with the absorption region removed.
     // The fit paramters represent the scaling and linear background added.
+    Log("MatthewAnalysis performing functional fit",v_debug,verbosity);
     double* fitting_parameters = FunctionalFit(dark_sub_gd_w_abs_region_removed);
     if(fitting_parameters==nullptr){
       return false;   // fit failed
@@ -100,16 +106,19 @@ bool MatthewAnalysis::Execute(){
     // scale pure water trace by fit function parameters to obtain a version of the pure water
     // spectrum that should match the LED-on spectrum in the lobes of the LED peak
     TGraphErrors dark_subtracted_pure = *(m_data->dark_sub_pure);
+    Log("MatthewAnalysis scaling pure reference curve to match data",v_debug,verbosity);
     pure_scaled = Scale(dark_subtracted_pure, fitting_parameters, fitting_errors);
     
     // use the difference between the scaled pure water trace and the current LED-on trace
     // in the gd absorption-peak region to determine the amount of absorbance due to Gd.
     // absorbance is defined as the log_10(received/transmitted light)
+    Log("MatthewAnalysis generating absorption curve",v_debug,verbosity);
     absorbance = CalculateAbsorbance(pure_scaled, dark_subtracted_gd);
     
     // fit the two main absorption peaks at 273 and 276 nm with gaussians,
     // then take difference in their amplitudes. As with the amplitudes of each peak,
     // this should be related to concentration.
+    Log("MatthewAnalysis calculating difference in heights of absorption peaks",v_debug,verbosity);
     std::pair<double,double> peaksdiff_w_error = FindPeakDifference(absorbance);
     //std::vector<double> peaksdiff_w_error = {0.02 * m_data->concs_and_peakdiffs.size() + 0.005, 0};
     if(peaksdiff_w_error==std::pair<double,double>{0,0}){
@@ -117,17 +126,19 @@ bool MatthewAnalysis::Execute(){
     }
     
     // use calibration curve to map difference in height of the two main absorbance peaks to gd concentration
+    Log("MatthewAnalysis mapping peak height difference to concentration",v_debug,verbosity);
     std::pair<double,double> concentration_w_error = CalculateConcentration(peaksdiff_w_error);
     
     // Inform downstream tools that a new measurement is available
     // maybe we could use the value to indicate if the data is good?
+    Log("MatthewAnalysis passing out results",v_debug,verbosity);
     m_data->CStore.Set("NewMeasurement",true);
     
     // debug prints
     std::cout << "Peak difference from " << led_name << " is: " << peaksdiff_w_error.first
-              << " +/- " << peaksdiff_w_error.second << '\n';
+              << " +/- " << peaksdiff_w_error.second << std::endl;
     std::cout << "Concentration from " << led_name << " is: " << concentration_w_error.first
-              << " +/- " << concentration_w_error.second << '\n';
+              << " +/- " << concentration_w_error.second << std::endl;
     
     // update datamodel
     m_data->CStore.Set("dark_subtracted_gd",reinterpret_cast<intptr_t>(&dark_subtracted_gd));
@@ -227,7 +238,7 @@ bool MatthewAnalysis::RetrieveCalibrationCurveDB(){
     return false;
   }
   
-  // put in datamodel for website
+  // put in datamodel for database
   m_data->CStore.Set("calib_version",calib_version);
   
   // use version number to lookup formula from database
@@ -383,15 +394,26 @@ TGraphErrors MatthewAnalysis::PerformDarkSubtraction(TTree* ledTree, TTree* dark
   std::vector<double> *led_values= nullptr, *led_wavelengths = nullptr, *led_errors = nullptr;
   std::vector<double>* dark_values = nullptr, *dark_wavelengths = nullptr, *dark_errors = nullptr;
    
-  ledTree->SetBranchAddress("value", &led_values);
-  darkTree->SetBranchAddress("value", &dark_values);
-  ledTree->SetBranchAddress("wavelength", &led_wavelengths);
-  darkTree->SetBranchAddress("wavelength", &dark_wavelengths);
-  ledTree->SetBranchAddress("error", &led_errors);
-  darkTree->SetBranchAddress("error", &dark_errors);
-   
+  Log("MatthewAnalysis setting branch addresses to retrieve data",v_debug,verbosity);
+  bool failure=false;
+  failure |= ((ledTree->SetBranchAddress("value", &led_values)) < 0);
+  failure |= ((ledTree->SetBranchAddress("wavelength", &led_wavelengths)) < 0);
+  failure |= ((ledTree->SetBranchAddress("error", &led_errors)) < 0);
+  if(failure){
+    Log("MatthewAnalysis failed to set branch addresses for "+led_name+" tree!",v_error,verbosity);
+    return false;
+  }
+  failure |= ((darkTree->SetBranchAddress("value", &dark_values)) < 0);
+  failure |= ((darkTree->SetBranchAddress("wavelength", &dark_wavelengths)) < 0);
+  failure |= ((darkTree->SetBranchAddress("error", &dark_errors)) < 0);
+  if(failure){
+    Log("MatthewAnalysis failed to set branch addresses for dark tree!",v_error,verbosity);
+    return false;
+  }
+  
+  Log("MatthewAnalysis getting TTree entries",v_debug,verbosity);
   ledTree->GetEntry(0);
-  darkTree->GetEntry(0);
+  darkTree->GetEntry(darkTree->GetEntries()-1);
   
   // check we got the data we expected
   const int number_of_points = 2068;    // expected trace size
@@ -420,7 +442,8 @@ TGraphErrors MatthewAnalysis::PerformDarkSubtraction(TTree* ledTree, TTree* dark
   for(int i=0; i<number_of_points; ++i){
     tmphist->Fill(dark_values->at(i));
   }
-  tmphist->Fit("gaus");
+  std::string options = (verbosity<v_debug) ? "Q" : "";
+  tmphist->Fit("gaus",options.c_str());
   double dark_mean = tmphist->GetFunction("gaus")->GetParameter(1);
   double dark_sigma = tmphist->GetFunction("gaus")->GetParameter(2);
   m_data->CStore.Set("dark_mean",dark_mean);
@@ -484,7 +507,8 @@ double* MatthewAnalysis::FunctionalFit(TGraphErrors& trace){
   }
   
   // do the fit
-  fitresptr = trace.Fit("pure_fct", "RS");
+  std::string options = (verbosity<v_debug) ? "RSQ" : "RS";
+  fitresptr = trace.Fit("pure_fct", options.c_str());
   if(fitresptr->IsEmpty() || !fitresptr->IsValid() || fitresptr->Status()!=0){
     Log("MatthewAnalysis::FunctionalFit fit status indicates fit failed!",v_error,verbosity);
     // see https://root.cern.ch/doc/master/classTH1.html#a7e7d34c91d5ebab4fc9bba3ca47dabdd
@@ -513,19 +537,19 @@ TGraphErrors MatthewAnalysis::Scale(TGraphErrors& pure_spectrum, const double* p
   
   return result;
 }
- 
+
 TGraphErrors MatthewAnalysis::CalculateAbsorbance(TGraphErrors& transmitted, TGraphErrors& received){
   // Creates absorbance spectrum; ie A = log10(received_light / transmitted_light)
   
   TGraphErrors result(transmitted.GetN());
   double trans_x, trans_y, rec_x, rec_y;
-
+  
   const float LOG10_OF_E = log10(exp(1));
   
   for (auto i = 0; i < transmitted.GetN(); ++i){
     transmitted.GetPoint(i, trans_x, trans_y);
     received.GetPoint(i, rec_x, rec_y);
-    if (trans_x > 260 && trans_x < 300){
+    if (trans_x > 260 && trans_x < 300 && (trans_y/rec_y) > 0){
       result.SetPoint(i, trans_x, log10(trans_y / rec_y ));
       result.SetPointError(i, transmitted.GetErrorX(i), LOG10_OF_E * sqrt(pow((transmitted.GetErrorY(i) / trans_y), 2) + pow(received.GetErrorY(i) / rec_y, 2)));
     }
@@ -546,8 +570,9 @@ std::pair<double,double> MatthewAnalysis::FindPeakDifference(TGraphErrors& absor
   left_peak  = new TF1("leftPeak",  "gaus", 272, 274);
   right_peak = new TF1("rightPeak", "gaus", 275, 277);
   
-  lpf = absorbance_g.Fit("leftPeak", "0RS");
-  rpf = absorbance_g.Fit("rightPeak", "0RS");
+  std::string options = (verbosity<v_debug) ? "0RSQ" : "0RS";
+  lpf = absorbance_g.Fit("leftPeak", options.c_str());
+  rpf = absorbance_g.Fit("rightPeak", options.c_str());
   if(lpf->IsEmpty() || !lpf->IsValid() || int(lpf)!=0 ||
      rpf->IsEmpty() || !rpf->IsValid() || int(rpf)!=0){
     Log("MatthewAnalysis::FindPeakDifference fit to absorption peaks failed!",v_error,verbosity);

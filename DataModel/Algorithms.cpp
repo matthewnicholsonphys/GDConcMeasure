@@ -2,11 +2,11 @@
 #include <stdio.h>
 #include <sys/wait.h>
 
-int SystemCall(std::string cmd, std::string& errmsg){
+int SystemCall(std::string cmd, std::string& retstring){
   // execute command, capture return status and any output
   
   int retstatus;                     // exit code of command
-  std::string retstring;             // string for return
+  retstring="";
   
   // gotcha: our particular command redirects stdout,
   // so if we append 2>&1 we get stderr into our output file too!
@@ -32,11 +32,11 @@ int SystemCall(std::string cmd, std::string& errmsg){
     int stat = pclose(stream);
     retstatus = (WIFEXITED(stat)) ? WEXITSTATUS(stat) : WTERMSIG(stat);
   } else {
-    errmsg = "SystemCall popen returned nullptr for command "+cmd;
+    retstring = "SystemCall popen returned nullptr for command "+cmd;
     return -1;
   }
   if(retstatus!=0){
-    errmsg="SystemCall with command "+cmd+" failed with error code "
+    retstring="SystemCall with command "+cmd+" failed with error code "
         +std::to_string(retstatus)+", stderr returned '"+retstring+"'";
   }
   

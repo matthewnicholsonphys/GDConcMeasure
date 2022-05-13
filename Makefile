@@ -18,11 +18,11 @@ DataModelLib=  $(RootLib)
 MyToolsInclude= $(RootInclude) -isystem ToolDAQ/seabreeze-3.0.11/SeaBreeze/include/ $(PostgresInclude)
 MyToolsLib= $(RootLib) -lwiringPi -L/usr/lib/arm-linux-gnueabihf/ -lusb -L ToolDAQ/seabreeze-3.0.11/SeaBreeze/lib/ -lseabreeze $(PostgresLib)
 
-all: lib/libStore.so lib/libLogging.so lib/libDataModel.so include/Tool.h lib/libMyTools.so lib/libServiceDiscovery.so lib/libToolChain.so main RemoteControl  NodeDaemon
+all: lib/libStore.so lib/libLogging.so lib/libDataModel.so include/Tool.h lib/libMyTools.so lib/libServiceDiscovery.so lib/libToolChain.so GAD_ToolChain RemoteControl  NodeDaemon
 
-main: src/main.cpp | lib/libMyTools.so lib/libStore.so lib/libLogging.so lib/libToolChain.so lib/libDataModel.so lib/libServiceDiscovery.so
+GAD_ToolChain: src/main.cpp | lib/libMyTools.so lib/libStore.so lib/libLogging.so lib/libToolChain.so lib/libDataModel.so lib/libServiceDiscovery.so
 	@echo -e "\n*************** Making " $@ "****************"
-	g++ -g src/main.cpp -o main -I include -L lib -lStore -lMyTools -lToolChain -lDataModel -lLogging -lServiceDiscovery -lpthread $(DataModelInclude) $(DataModelib) $(MyToolsInclude)  $(MyToolsLib) $(ZMQLib) $(ZMQInclude)  $(BoostLib) $(BoostInclude)
+	g++ -g src/main.cpp -o $@ -I include -L lib -lStore -lMyTools -lToolChain -lDataModel -lLogging -lServiceDiscovery -lpthread $(DataModelInclude) $(DataModelib) $(MyToolsInclude)  $(MyToolsLib) $(ZMQLib) $(ZMQInclude)  $(BoostLib) $(BoostInclude)
 
 
 lib/libStore.so: $(ToolDAQPath)/ToolDAQFramework/src/Store/*
@@ -49,7 +49,7 @@ clean:
 	@echo -e "\n*************** Cleaning up ****************"
 	rm -f include/*.h
 	rm -f lib/*.so
-	rm -f main
+	rm -f GAD_ToolChain
 	rm -f RemoteControl
 	rm -f NodeDaemon
 

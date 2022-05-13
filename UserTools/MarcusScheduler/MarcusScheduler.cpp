@@ -27,6 +27,9 @@ bool MarcusScheduler::Initialise(std::string configfile, DataModel &data){
 		get_ok = ReadCommandEntry();
 		if(!get_ok) return false;
 		
+	} else {
+		// note that this is a debug run and we shouldn't prepend run number to output filenames
+		debugrun=true;
 	}
 	
 	/* - old method, parse configuration options from local file - */
@@ -441,7 +444,7 @@ void MarcusScheduler::ProcessCommand(std::string& the_command){
 		// save traces to file
 		DoSave(the_command);
 		
-	} else if(the_command.substr(0,5)=="pump"){
+	} else if(the_command.substr(0,4)=="pump"){
 		// start or stop the pump
 		DoPump(the_command);
 		
@@ -647,6 +650,8 @@ void MarcusScheduler::DoSave(std::string the_command){
 	if(looping && overwrite_saves){
 		std::string filenamesub = filename.substr(0,filename.find_last_of('.'));
 		output_file = filenamesub+"_"+std::to_string(loop_count)+".root";
+	} else if(output_file.length()<6 || output_file.substr(output_file.length()-5,std::string::npos)!=".root"){
+		output_file+=".root";
 	}
 	
 	// directory location will be based on the date
@@ -656,21 +661,45 @@ void MarcusScheduler::DoSave(std::string the_command){
 	tm* mytm = localtime(&rawtime);  // local time
 	short year=mytm->tm_year + 1900;
 	short month=mytm->tm_mon + 1;
-	std::string outputdir = "data/"+std::to_string(year)+"/"+std::to_string(month);
+	char yearchr[5];
+	char monthchr[3];
+	snprintf(yearchr,5,"%04d",year);
+	snprintf(monthchr,3,"%02d",month);
+	std::string outputdir = std::string("data/")+yearchr+"/"+monthchr;
+	// make the directory in case it doesn't already exist.
+	// there appears to be no c++ equivalent to `mkdir -p`, so we'll just call that.
+	std::string cmd = std::string("mkdir -p ") + outputdir;
+	std::string errmsg;
+	get_ok = SystemCall(cmd.c_str(), errmsg);
 	
-	// filename will also be prefixed with the current run number (unless it's a debug run)
-	int run_num=-1;
-	get_ok = m_data->postgres_helper.GetCurrentRun(run_num);
-	std::string prefix = ( run_num < 0 ) ? std::string("") : (std::to_string(run_num) +"_");
-	
-	// combine components e.g. 'data/${YEAR}/${MONTH}/${RUNNUM}_${filename}_${loopindex}.root'
-	output_file = outputdir+"/"+prefix+output_file;
-	
-	// queue up the save action
-	std::string json_string = "{\"Save\":\"Save\",\"Filename\":\""+output_file
-		+"\",\"Overwrite\",\""+std::to_string(overwrite_saves)+"\"}";
-	Log(std::string("Queuing action: ")+json_string,v_debug,verbosity);
-	m_data->CStore.JsonParser(json_string);
+	if(get_ok!=0){
+		Log(std::string("MarcusScheduler::DoSave failed to make output directory ")
+		    +outputdir+" with error "+errmsg,0,0);
+		
+	} else {
+		
+		// filename will also be prefixed with the current run number (unless it's a debug run)
+		int run_num=-1;
+		if(!debugrun){
+			get_ok = m_data->postgres_helper.GetCurrentRun(run_num);
+		}
+		
+		if(run_num >= 0){
+			char prefix[8];
+			snprintf(prefix, 7, "%05d_", run_num);  // fixed-width run number
+			output_file = std::string(prefix)+output_file;
+		}
+		
+		output_file = outputdir+"/"+output_file;
+		// combine components e.g. 'data/${YEAR}/${MONTH}/${RUNNUM}_${filename}_${loopindex}.root'
+		
+		// queue up the save action
+		std::string json_string = "{\"Save\":\"Save\",\"Filename\":\""+output_file
+			+"\",\"Overwrite\",\""+std::to_string(overwrite_saves)+"\"}";
+		Log(std::string("Queuing action: ")+json_string,v_debug,verbosity);
+		m_data->CStore.JsonParser(json_string);
+		
+	}
 	
 	// advance to the next command
 	++current_command;
@@ -755,7 +784,7 @@ void MarcusScheduler::StartLoop(std::string the_command){
 	try{
 		// strip off the 'start_loop' prefix
 		std::string iteration_string = 
-		    iteration_string.substr(iteration_string.find_first_not_of(' '),std::string::npos);
+		    iteration_string.substr(the_command.find_first_not_of(' '),std::string::npos);
 		
 		// try to convert to an integer loop count
 		iterations = std::stoi(iteration_string);

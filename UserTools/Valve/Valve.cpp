@@ -106,7 +106,7 @@ bool Valve::ValveOpen(){
   
   Log("valve open",v_message,verbosity);
   if(m_valve_pin<0){
-    Log(std::string("Valve::ValveOpen invalid valve pin ")+std::to_string(m_valve_pin),v_error,verbosity);
+    Log(CStoreKey+"::ValveOpen invalid valve pin "+std::to_string(m_valve_pin),v_error,verbosity);
     return false;
   }
   
@@ -115,7 +115,7 @@ bool Valve::ValveOpen(){
   std::string errmsg;
   int ok = SystemCall(command.str(), errmsg);
   if(ok!=0){
-    Log("Valve::ValveOpen "+errmsg,0,0);
+    Log(CStoreKey+"::ValveOpen "+errmsg,0,0);
     return false;
   }
   valve="OPEN";
@@ -126,7 +126,7 @@ bool Valve::ValveClose(){
   
   Log("valve close",v_message,verbosity);
   if(m_valve_pin<0){
-    Log(std::string("Valve::ValveClose invalid valve pin ")+std::to_string(m_valve_pin),v_error,verbosity);
+    Log(CStoreKey+"::ValveClose invalid valve pin "+std::to_string(m_valve_pin),v_error,verbosity);
     return false;
   }
   
@@ -135,7 +135,7 @@ bool Valve::ValveClose(){
   std::string errmsg;
   int ok = SystemCall(command.str(), errmsg);
   if(ok!=0){
-    Log("Valve::ValveClose "+errmsg,0,0);
+    Log(CStoreKey+"::ValveClose "+errmsg,0,0);
     return false;
   }
   valve="CLOSE";

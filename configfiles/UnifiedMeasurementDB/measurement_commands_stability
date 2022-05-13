@@ -1,25 +1,32 @@
+start
+power on
 wait 900
+pump on
 start_loop
-valve open
-measure dark
-measure dark
-measure dark
-measure dark
-valve close
+valve outlet open
+valve inlet open
+measure Dark
+measure Dark
+measure Dark
+measure Dark
+valve inlet close
+valve outlet close
 wait 150
-measure dark
-measure dark
-measure dark
-measure dark
-measure dark
+measure Dark
+measure Dark
+measure Dark
+measure Dark
+measure Dark
 measure 275_B
-measure dark
+analyse 275_B
+measure Dark
 measure 275_A
-measure dark
+analyse 275_A
+measure Dark
 measure R G B
-measure dark
+measure Dark
 measure White 385
-save april22_stability.root
+save stability
 wait 600
 loop
 quit

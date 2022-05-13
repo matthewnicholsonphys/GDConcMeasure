@@ -1,5 +1,5 @@
 verbosity 1
-calib_version 0   # now pulls the calibration constants from the database
+#calib_version 0   # when pulling the calibration constants from the database
 # coefficients based on 275_A (previously 260)
 CalibCoeff0 -2.2420182e-05
 CalibCoeff1 2.4347342

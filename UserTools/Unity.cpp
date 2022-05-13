@@ -32,3 +32,4 @@
 #include "LivePlotter/LivePlotter.cpp"
 #include "SaveToDB/SaveToDB.cpp"
 #include "PGTool/PGTool.cpp"
+#include "LoadOldFiles/LoadOldFiles.cpp"

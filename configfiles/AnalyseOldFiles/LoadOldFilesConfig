@@ -1,0 +1,3 @@
+verbosity 1
+file_list configfiles/AnalyseOldFiles/file_list.txt
+calib_version 0
