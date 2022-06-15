@@ -1,5 +1,7 @@
 #include "Valve.h"
 #include "Algorithms.h"
+#include <thread>
+#include <chrono>
 
 Valve::Valve():Tool(){}
 
@@ -60,7 +62,8 @@ bool Valve::Initialise(std::string configfile, DataModel &data){
   }
   
   command.str("");
-  command<<"echo \"out\" > /sys/class/gpio/gpio"<<m_valve_pin<<"/direction";
+  command<<"STATE=$(cat /sys/class/gpio/gpio"<<m_valve_pin<<"/direction); if [ \"${STATE}\" != \"out\" ]; "
+         <<"then echo \"out\" > /sys/class/gpio/gpio"<<m_valve_pin<<"/direction; fi";
   ok = SystemCall(command.str(),errmsg);
   if(ok!=0){
     Log("Valve::Initialise "+errmsg,0,0);
@@ -83,11 +86,14 @@ bool Valve::Execute(){
   
   if(m_data->CStore.Get(CStoreKey,Valve) && Valve!=valve){
     if(Valve=="OPEN"){
+      Log(CStoreKey+"::Execute got OPEN",v_debug,verbosity);
       ok = ValveOpen();
     }
     if(Valve=="CLOSE"){
+      Log(CStoreKey+"::Execute got CLOSE",v_debug,verbosity);
       ok = ValveClose();
     }
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
   }
   
   return ok;

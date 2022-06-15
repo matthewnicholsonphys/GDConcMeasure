@@ -340,8 +340,8 @@ bool SaveToDB::MatthewAnalysis(){
 			// retain only the last N entries from the website table
 			query_string = "DELETE FROM webpage WHERE name LIKE 'dark_subtracted_data_%' "
 			               "AND id NOT IN (SELECT id FROM webpage WHERE "
-			               "name='dark_subtracted_data_in' ORDER BY id DESC LIMIT "
-			               +std::to_string(max_webpage_records)+");";
+			               "name LIKE 'dark_subtracted_data_%' ORDER BY id DESC LIMIT "
+			               +std::to_string(max_webpage_records*2)+");";
 			get_ok = m_data->postgres.ExecuteQuery(query_string);
 			if(not get_ok){
 				Log("SaveToDB::MatthewAnalysis failed to delete old dark_subtracted_data records "

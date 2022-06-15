@@ -423,6 +423,7 @@ int MarcusScheduler::check_for_break_file(){
 void MarcusScheduler::ProcessCommand(std::string& the_command){
 	// Queue up the next action, based on the current command and, if applicable,
 	// which step we're at in carrying it out.
+	Log("MarcusScheduler::ProcessCommand processing "+the_command,v_debug,verbosity);
 	
 	if(the_command.substr(0,5)=="power"){
 		// power up or down PSU
@@ -649,7 +650,18 @@ void MarcusScheduler::DoSave(std::string the_command){
 	std::string output_file = filename;
 	if(looping && overwrite_saves){
 		std::string filenamesub = filename.substr(0,filename.find_last_of('.'));
-		output_file = filenamesub+"_"+std::to_string(loop_count)+".root";
+		std::string loop_count_padded;
+		char loop_count_buf[6];
+		int written = snprintf(loop_count_buf,6,"%05d",loop_count);
+		if((written>=6) || (written<0)){
+			std::string logmessage="MarcusScheduler::DoSave error building filename for loop "
+			                       + std::to_string(loop_count) + " - too many loop iterations!";
+			Log(logmessage,v_error,verbosity);
+			loop_count_padded = std::to_string(loop_count);
+		} else {
+			loop_count_padded = std::string(loop_count_buf);
+		}
+		output_file = filenamesub+"_"+loop_count_padded+".root";
 	} else if(output_file.length()<6 || output_file.substr(output_file.length()-5,std::string::npos)!=".root"){
 		output_file+=".root";
 	}
@@ -783,13 +795,13 @@ void MarcusScheduler::StartLoop(std::string the_command){
 	size_t iterations;
 	try{
 		// strip off the 'start_loop' prefix
-		std::string iteration_string = 
-		    iteration_string.substr(the_command.find_first_not_of(' '),std::string::npos);
+		std::string iteration_string =
+		    the_command.substr(the_command.find_first_of(' ')+1,std::string::npos);
 		
 		// try to convert to an integer loop count
 		iterations = std::stoi(iteration_string);
 		
-	} catch(...){
+	} catch(std::exception& e){
 		// if not, assume infinite loops.
 		iterations = 0;
 	}
@@ -804,13 +816,17 @@ void MarcusScheduler::StartLoop(std::string the_command){
 void MarcusScheduler::EndLoop(std::string the_command){
 	// found the end of a segment to loop
 	// increment flattened loop counter used for unique output file names
+	Log("incrementing flattened loop count "+std::to_string(loop_count),v_debug,verbosity);
 	++loop_count;
 	
 	// increment the loop counter for this loop
+	Log("(we have "+std::to_string(loop_counts.size())+" ongoing loops)",v_debug,verbosity);
 	++loop_counts.back();
+	Log("incrementing innermost loop count to loop "+std::to_string(loop_counts.back())
+	    +"/"+std::to_string(loop_iterations.back()),v_debug,verbosity);
 	
 	// check if we've now performed all requested iterations of this loop
-	if(loop_iterations.back()>0 && loop_counts.back()>=loop_counts.back()){
+	if(loop_iterations.back()>0 && loop_counts.back()>=loop_iterations.back()){
 		// loop complete - remove it from our set of loops
 		loop_starts.pop_back();
 		loop_counts.pop_back();
