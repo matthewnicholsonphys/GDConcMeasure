@@ -158,6 +158,10 @@ bool SaveToDB::Execute(){
 	} catch(...){ std::cerr<<"failed to save mattana"<<std::endl; all_ok = false; }
 	if(!get_ok) { std::cerr<<"failed to save mattana"<<std::endl; all_ok = false; }
 	try{
+	get_ok = MarcusAnalysis();
+	} catch(...){ std::cerr<<"failed to save mattana"<<std::endl; all_ok = false; }
+	if(!get_ok) { std::cerr<<"failed to save mattana"<<std::endl; all_ok = false; }
+	try{
 	get_ok = SaveTraces();
 	} catch(...){ std::cerr<<"failed to save savetr"<<std::endl; all_ok = false; }
 	if(!get_ok) { std::cerr<<"failed to save savetr"<<std::endl; all_ok = false; }
@@ -704,6 +708,543 @@ bool SaveToDB::MatthewAnalysis(){
 	
 }
 
+bool SaveToDB::MarcusAnalysis(){
+	
+	// see if we have new data to add to DB
+	bool new_measurement;
+	get_ok = m_data->CStore.Get("NewMarcusMeasurement",new_measurement);
+	if(get_ok && new_measurement){
+		
+		Log("SaveToDB::MarcusAnalysis recording new measurement",v_debug,verbosity);
+		
+		// by default we'll use the time of the latest trace as the timestamp associated with the measurement
+		//std::string dbtimestamp = "now()";
+		std::string dbtimestamp=to_simple_string(m_data->measurment_time);
+		
+		// but allow the user to override with a custom timestamp (should be postgres compatible)
+		get_ok = m_data->CStore.Get("dbtimestamp",dbtimestamp);  // e.g "2020-09-16 15:54:00"
+		Log("SaveToDB::MarcusAnalysis timestamp for this measurement will be "+dbtimestamp,v_debug,verbosity);
+		
+		// by default we'll use the current run as the run number for insertions/updates,
+		// but allow the user to override with a custom run number
+		get_ok = m_data->CStore.Get("dbrunnum",runnum);
+		Log("SaveToDB::MarcusAnalysis run number for this measurement will be "+std::to_string(runnum),v_debug,verbosity);
+		
+		// Get this measurement number. This ties together database entries from the same spectrometer readout pair
+		// (dark+light), since we may have several associated concentration entries, from different methods.
+		if(m_data->measurment_time != last_measurement_time){
+			++measurementnum;
+		}
+		Log("SaveToDB::MarcusAnalysis measurement number for this measurement database entry "
+		    +std::to_string(measurementnum),v_debug,verbosity);
+		
+		// get which LED was being measured
+		std::string ledname="";
+		get_ok  = m_data->CStore.Get("ledToAnalyse",ledname);
+		if(!get_ok){
+			Log("SaveToDB::MarcusAnalysis failed to find ledToAnalyse in CStore!",v_debug,verbosity);
+			// we could bail, but again we may be able to deduce which LED was on from the spectrum later.
+		}
+		
+		////////////////////////////////////////////////
+		// gd concentration calculation proceeds as follows:
+		// 1. do dark subtraction, split into absorption and sideband regions
+		// 2. fit pure water reference to this plot
+		// 3. calculate absorption as log of the ratio between the scaled pure water and data
+		// 4. fit the absorbance with one of potentially multiple fitting methods
+		// 5. convert difference in amplitudes to concentration using a corresponding calibration curve
+		// we'll show results from various intermediate steps
+		////////////////////////////////////////////////
+		
+		// 0, raw traces
+		// for monitoring consistency, record some characteristics about the raw dark and led-on traces
+		// for the dark trace, we histogram it, fit it with a gaussian, and record the mean and sigma
+		Log("SaveToDB::MarcusAnalysis saving dark trace characteristics",v_debug,verbosity);
+		double dark_mean, dark_sigma;
+		get_ok  = m_data->CStore.Get("dark_mean",dark_mean);
+		get_ok &= m_data->CStore.Get("dark_sigma",dark_sigma);
+		if(not get_ok){
+			Log("SaveToDB::MarcusAnalysis did not find dark trace mean or "
+			    "sigma in CStore!",v_error,verbosity);
+		} else {
+			std::string dark_json = "{ \"mean\":"+std::to_string(dark_mean)
+			                      + ", \"width\":"+std::to_string(dark_sigma)+"}";
+			// store to database
+			field_names = std::vector<std::string>{"run","measurement","timestamp","ledname","tool","name","values", "data"};
+			error_ret="";
+			get_ok = m_data->postgres.Insert("data",                      // table name
+			                                 field_names,                 // field names
+			                                 &error_ret,                  // error return string
+			                                 // variadic argument list of field values
+			                                 runnum,                      // run
+			                                 measurementnum,              // measurement
+			                                 dbtimestamp,                 // timestamp
+			                                 ledname,                     // ledname
+			                                 "MarcusAnalysis",            // tool
+			                                 "darktrace_params",          // name
+			                                 dark_json);                  // values (jsonb)
+			if(!get_ok){
+				Log("SaveToDB::MarcusAnalysis failed to save dark trace characteristics "
+				    "into database with error '"+error_ret+"'",v_error,verbosity);
+			}
+		}
+		
+		// for the led-on trace, we record the max and min in the 270-280nm absorption region.
+		Log("SaveToDB::MarcusAnalysis saving LED-on trace characteristics",v_debug,verbosity);
+		double led_on_max, led_on_min;
+		get_ok  = m_data->CStore.Get("raw_absregion_max",led_on_max);
+		get_ok &= m_data->CStore.Get("raw_absregion_min",led_on_min);
+		if(not get_ok){
+			Log("SaveToDB::MarcusAnalysis did not find raw trace min/max in CStore!",v_error,verbosity);
+		} else {
+			std::string rawtrace_json = "{ \"max\":"+std::to_string(led_on_max)
+			                          + ", \"min\":"+std::to_string(led_on_min)+"}";
+			// store to database
+			field_names = std::vector<std::string>{"run","measurement","timestamp","ledname","tool","name","values"};
+			error_ret="";
+			get_ok = m_data->postgres.Insert("data",                      // table name
+			                                 field_names,                 // field names
+			                                 &error_ret,                  // error return string
+			                                 // variadic argument list of field values
+			                                 runnum,                      // run
+			                                 measurementnum,              // measurement
+			                                 dbtimestamp,                 // timestamp
+			                                 ledname,                     // ledname
+			                                 "MarcusAnalysis",            // tool
+			                                 "rawtrace_params",           // name
+			                                 rawtrace_json);              // values (jsonb)
+			if(!get_ok){
+				Log("SaveToDB::MarcusAnalysis failed to save raw trace characteristics "
+					"into database with error '"+error_ret+"'",v_error,verbosity);
+			}
+		}
+		
+		// 1, dark-subtracted data trace
+		// -----------------------------
+		Log("SaveToDB::MarcusAnalysis getting dark subtracted trace",v_debug,verbosity);
+		intptr_t dark_subtracted_data_in_p=0;
+		get_ok = m_data->CStore.Get("dark_subtracted_data_in",dark_subtracted_data_in_p);
+		intptr_t dark_subtracted_data_out_p=0;
+		get_ok &= m_data->CStore.Get("dark_subtracted_data_out",dark_subtracted_data_out_p);
+		if(not get_ok){
+			Log("SaveToDB::MarcusAnalysis did not find dark subtracted data in CStore!",v_error,verbosity);
+		} else {
+			Log("SaveToDB::MarcusAnalysis saving dark-subtracted trace",v_debug,verbosity);
+			TGraphErrors* dark_subtracted_data_in = reinterpret_cast<TGraphErrors*>(dark_subtracted_data_in_p);
+			TGraphErrors* dark_subtracted_data_out = reinterpret_cast<TGraphErrors*>(dark_subtracted_data_out_p);
+			
+			// to store in database we need to convert to json array.
+			std::string gd_data_inside_absregion =  BuildJson(dark_subtracted_data_in);
+			std::string gd_data_outside_absregion = BuildJson(dark_subtracted_data_out);
+			
+			// store in temporary db
+			field_names = std::vector<std::string>{"timestamp","name","values","data"};
+			error_ret="";
+			get_ok = m_data->postgres.Insert("webpage",                   // table name
+			                                 field_names,                 // field names
+			                                 &error_ret,                  // error return string
+			                                 // variadic argument list of field values
+			                                 dbtimestamp,                 // timestamp
+			                                 "dark_subtracted_data_in",   // name
+			                                 gd_data_inside_absregion,    // values (jsonb)
+			                                 ledname);                    // data (bytea)
+			if(!get_ok){
+				Log("SaveToDB::MarcusAnalysis failed to insert dark subtracted data withinin "
+				    "absorption region into database with error '"+error_ret+"'",v_error,verbosity);
+			}
+			error_ret="";
+			get_ok = m_data->postgres.Insert("webpage",                   // table name
+			                                 field_names,                 // field names
+			                                 &error_ret,                  // error return string
+			                                 // variadic argument list of field values
+			                                 dbtimestamp,                 // timestamp
+			                                 "dark_subtracted_data_out",  // name
+			                                 gd_data_outside_absregion,   // values (jsonb)
+			                                 ledname);                    // data (bytea)
+			if(!get_ok){
+				Log("SaveToDB::MarcusAnalysis failed to insert dark subtracted data outside "
+				    "absorption region into database with error '"+error_ret+"'",v_error,verbosity);
+			}
+			// retain only the last N entries from the website table
+			query_string = "DELETE FROM webpage WHERE name LIKE 'dark_subtracted_data_%' "
+			               "AND data = '"+ledname+"' AND id NOT IN (SELECT id FROM webpage WHERE "
+			               "name LIKE 'dark_subtracted_data_%' ORDER BY id DESC LIMIT "
+			               +std::to_string(max_webpage_records*2)+");";
+			get_ok = m_data->postgres.ExecuteQuery(query_string);
+			if(not get_ok){
+				Log("SaveToDB::MarcusAnalysis failed to delete old dark_subtracted_data records "
+				    "from webpage table",v_error,verbosity);
+			}
+			
+		}
+		
+		// 2. store reference pure trace before scaling
+		// for persistent db storage, just record the reference ID of the data for this trace & measurement
+		Log("SaveToDB::MarcusAnalysis saving pure reference trace ID",v_debug,verbosity);
+		std::string pureID;
+		std::string key = "purerefID_"+ledname;
+		get_ok = m_data->CStore.Get(key, pureID);
+		std::string pureref_json = "{\"ID\":\""+pureID+"\"}";
+		if(not get_ok){
+			Log("SaveToDB::MarcusAnalysis failed to get pure reference ID for led "+ledname+" from CStore!",
+			    v_error,verbosity);
+		} else {
+			// store to database
+			field_names = std::vector<std::string>{"run","measurement","timestamp","ledname","tool","name","values"};
+			error_ret="";
+			get_ok = m_data->postgres.Insert("data",                      // table name
+			                                 field_names,                 // field names
+			                                 &error_ret,                  // error return string
+			                                 // variadic argument list of field values
+			                                 runnum,                      // run
+			                                 measurementnum,              // measurement
+			                                 dbtimestamp,                 // timestamp
+			                                 ledname,                     // ledname
+			                                 "MarcusAnalysis",            // tool
+			                                 "pure_curve_ID",             // name
+			                                 pureref_json);               // values (jsonb)
+			if(!get_ok){
+				Log("SaveToDB::MarcusAnalysis failed to save pure water reference ID "
+				    "into database with error '"+error_ret+"'",v_error,verbosity);
+			}
+		}
+		
+		// for website we'll temporarily store the pure water trace itself, for plotting
+		// N.B. we could move this to an Initialise call, since the pure trace doesn't change.
+		Log("SaveToDB::MarcusAnalysis saving pure reference trace",v_debug,verbosity);
+		std::string datakey = "purerefData_"+ledname;
+		intptr_t dark_sub_purep;
+		get_ok = m_data->CStore.Get(datakey, dark_sub_purep);
+		TGraphErrors* dark_subtracted_pure = reinterpret_cast<TGraphErrors*>(dark_sub_purep);
+		// convert to json
+		std::string dark_sub_pure = BuildJson(dark_subtracted_pure);
+		// delete any existing entry so we don't keep accumulating them
+		query_string = "DELETE FROM webpage WHERE name = 'dark_subtracted_pure' AND data = '"+ledname+"'";
+		get_ok = m_data->postgres.ExecuteQuery(query_string);
+		if(not get_ok){
+			Log("SaveToDB::MarcusAnalysis failed to delete existing dark_subtracted_pure record "
+			    "from webpage table",v_error,verbosity);
+		}
+		// insert a new record
+		field_names = std::vector<std::string>{"timestamp","name","values","data"};
+		error_ret="";
+		get_ok = m_data->postgres.Insert("webpage",
+		                                 field_names,
+		                                 &error_ret,
+		                                 dbtimestamp,
+		                                 "dark_subtracted_pure",
+		                                 dark_sub_pure,
+		                                 ledname);
+		if(!get_ok){
+			Log("SaveToDB::MarcusAnalysis failed to insert new 'dark_subtracted_pure' "
+			    "record into webpage table with error "+error_ret,v_error,verbosity);
+		}
+		
+		
+		// store reference pure trace after scaling to fit the Gd data in the lobes of the LED peak
+		Log("SaveToDB::MarcusAnalysis saving scaled pure reference trace",v_debug,verbosity);
+		intptr_t pure_scaled_p;
+		get_ok = m_data->CStore.Get("purefit",pure_scaled_p);
+		if(!get_ok){
+			Log("SaveToDB::MarcusAnalysis failed to get scaled pure function from CStore!",
+			    v_error,verbosity);
+		} else {
+			TGraphErrors* pure_scaled = reinterpret_cast<TGraphErrors*>(pure_scaled_p);
+			// convert to json
+			std::string pure_scaled_json = BuildJson(pure_scaled);
+			// delete any existing entry so we don't keep accumulating them
+			query_string = "DELETE FROM webpage WHERE name = 'pure_scaled' AND data = '"+ledname+"'";
+			get_ok = m_data->postgres.ExecuteQuery(query_string);
+			if(not get_ok){
+				Log("SaveToDB::MarcusAnalysis failed to delete existing pure_scaled entry "
+				    "from webpage table",v_error,verbosity);
+			}
+			// insert new record in its place
+			field_names = std::vector<std::string>{"timestamp","name","values"};
+			error_ret="";
+			get_ok = m_data->postgres.Insert("webpage",                   // table name
+			                                 field_names,                 // field names
+			                                 &error_ret,                  // error return string
+			                                 // variadic argument list of field values
+			                                 dbtimestamp,                 // timestamp
+			                                 "pure_scaled",               // name
+			                                 pure_scaled_json,            // values (jsonb)
+			                                 ledname);                    // data (bytea)
+			if(!get_ok){
+				Log("SaveToDB::MarcusAnalysis failed to insert new scaled pure data "
+				    "into database with error '"+error_ret+"'",v_error,verbosity);
+			}
+		}
+		
+		// get the pure fit TFitResultPtr, for parameters and errors
+		intptr_t purefitresptrp;
+		get_ok = m_data->CStore.Get("purefitresptr",purefitresptrp);
+		if(!get_ok){
+			Log("SaveToDB::MarcusAnalysis failed to get pure fit result pointer from CStore",
+			    v_error,verbosity);
+		} else {
+			TFitResultPtr* purefitresptr = reinterpret_cast<TFitResultPtr*>(purefitresptrp);
+			
+			// build json from fit parameters and errors
+			Log("SaveToDB::MarcusAnalysis saving pure fit parameters",v_debug,verbosity);
+			std::string pure_fit_pars = BuildJson(*purefitresptr,false);
+			
+			// store to db. These get stored persistently, not just temporarily for the webpage
+			field_names = std::vector<std::string>
+			            {"run","measurement","timestamp","ledname","tool","name","values"};
+			error_ret="";
+			get_ok = m_data->postgres.Insert("data",                      // table name
+				                             field_names,                 // field names
+				                             &error_ret,                  // error return string
+				                             // variadic argument list of field values
+				                             runnum,                      // run
+				                             measurementnum,              // measurement
+				                             dbtimestamp,                 // timestamp
+				                             ledname,                     // ledname
+				                             "MarcusAnalysis",            // tool
+				                             "pure_fit_pars",             // name
+				                             pure_fit_pars);              // values (jsonb)
+			if(!get_ok){
+				Log("SaveToDB::MarcusAnalysis failed to insert new pure data fit parameters "
+					"into database with error '"+error_ret+"'",v_error,verbosity);
+			}
+			
+			// Get info on fit success status and goodness
+			Log("SaveToDB::MarcusAnalysis pure fit result",v_debug,verbosity);
+			std::string fit_status = BuildJson(*purefitresptr,true);
+			// store to database
+			field_names = std::vector<std::string>
+			             {"run","measurement","timestamp","ledname","tool","name","values"};
+			error_ret="";
+			get_ok = m_data->postgres.Insert("data",                      // table name
+			                                 field_names,                 // field names
+			                                 &error_ret,                  // error return string
+			                                 // variadic argument list of field values
+			                                 runnum,                      // run
+			                                 measurementnum,              // measurement
+			                                 dbtimestamp,                 // timestamp
+			                                 ledname,                     // ledname
+			                                 "MarcusAnalysis",            // tool
+			                                 "pure_fit_status",           // name
+			                                 fit_status);                 // values (jsonb)
+			if(!get_ok){
+				Log("SaveToDB::MarcusAnalysis failed to insert new pure data fit status "
+				    "into database with error '"+error_ret+"'",v_error,verbosity);
+			}
+		}
+		
+		// 3. absorption trace: log10 of fraction of transmitted light. Two peaks.
+		Log("SaveToDB::MarcusAnalysis saving absorbance trace",v_debug,verbosity);
+		intptr_t absorbance_p;
+		get_ok = m_data->CStore.Get("absorbance",absorbance_p);
+		if(not get_ok){
+			Log("SaveToDB::MarcusAnalysis failed to get absorbance data from CStore!",v_error,verbosity);
+		} else {
+			TGraphErrors* absorbance = reinterpret_cast<TGraphErrors*>(absorbance_p);
+			// convert to json
+			std::string absorbance_json = BuildJson(absorbance);
+			// delete any existing entry so we don't keep accumulating them
+			field_names = std::vector<std::string>{"timestamp","name","values","data"};
+			error_ret="";
+			get_ok = m_data->postgres.Insert("webpage",                   // table name
+			                                 field_names,                 // field names
+			                                 &error_ret,                  // error return string
+			                                 // variadic argument list of field values
+			                                 dbtimestamp,                 // timestamp
+			                                 "absorbance_trace",          // name
+			                                 absorbance_json,             // values (jsonb)
+			                                 ledname);                    // data (bytea)
+			if(!get_ok){
+				Log("SaveToDB::MarcusAnalysis failed to insert absorbance trace "
+				    "into database with error '"+error_ret+"'",v_error,verbosity);
+			}
+			// retain only the last N entries from the website table
+			query_string = "DELETE FROM webpage WHERE name='absorbance_trace' AND data = '"
+			               +ledname+"' AND id NOT IN (SELECT id FROM webpage WHERE name='absorbance_trace' "
+			               "ORDER BY id DESC LIMIT "+std::to_string(max_webpage_records)+");";
+			get_ok = m_data->postgres.ExecuteQuery(query_string);
+			if(not get_ok){
+				Log("SaveToDB::MarcusAnalysis failed to delete old absorbance_trace records "
+					"from webpage table",v_error,verbosity);
+			}
+		}
+		
+		// 4. gaussians fit to absorption peaks
+		std::map<std::string, BoostStore>* results;
+		intptr_t resultsp;
+		Log("SaveToDB::MarcusAnalysis getting absorbance fit",v_debug,verbosity);
+		get_ok = m_data->CStore.Get("results",resultsp);
+		if(!get_ok){
+			Log("SaveToDB::MarcusAnalysis found no results in CStore",v_error,verbosity);
+		} else {
+		
+			// each absorption graph may be fit with several functions,
+			// yielding several gd concentrations. They're packaged up into
+			// a map of BoostStores, one entry per fitting method.
+			std::map<std::string, BoostStore>* results = 
+				   reinterpret_cast<std::map<std::string, BoostStore>*>(resultsp);
+			
+			// loop over fitting methods used:
+			std::string all_absorptionfits_json="[";
+			for(auto&& amethod : *results){
+				
+				std::string methodname = amethod.first;
+				BoostStore& result = amethod.second;
+				
+				std::vector<TFitResultPtr>* fitinfo;
+				intptr_t fitinfop;
+				std::pair<double,double> peak_posns;
+				std::pair<double,double> peak_heights;
+				std::pair<double,double> peak_errs;
+				std::string calibID;
+				std::string formula_str;
+				std::string params_str;
+				std::pair<double,double> conc_and_err;
+				
+				bool got_fit_results = result.Get("fitresultptrs", fitinfop);
+				bool got_peak_pos = result.Get("peak_posns", peak_posns);
+				bool got_peak_heights = result.Get("peak_heights", peak_heights);
+				bool got_peak_errs = result.Get("peak_errs", peak_errs);
+				bool got_cal_id = result.Get("calcurveID",calibID);
+				bool got_cal_func = result.Get("calcurveFunc",formula_str);
+				bool got_cal_pars = result.Get("calcurvePars",params_str);
+				bool got_conc = result.Get("conc_and_err", conc_and_err);
+				
+				std::string thismethodjson = "{\"method\":\""+methodname+"\"";
+				
+				// store results of absorption fit
+				if(!got_fit_results){
+					Log("SaveToDB::MarcusAnalysis failed to get fit results for method "+methodname
+					    +", led "+ledname,v_error,verbosity);
+				} else {
+					
+					// the absorption curve may be fit with one or several functions,
+					// depending on the method. We may therefore have one or more
+					// TFitResultPtrs to describe the status, parameters and errors
+					// of each of these fits. Loop over them and combine them into a json.
+					fitinfo = reinterpret_cast<std::vector<TFitResultPtr>*>(fitinfop);
+					std::string absorpfitsjson = "[";
+					for(int fit_i=0; fit_i<fitinfo->size(); ++fit_i){
+						
+						TFitResultPtr& afit = fitinfo->at(fit_i);
+						// get name of this fit function
+						std::string funcname = afit->GetName();
+						std::string fitparsjson = BuildJson(afit, false);    // parameters
+						std::string fitstatusjson = BuildJson(afit, false);  // fit status
+						
+						std::string fitjsonobject = 
+						        "{\"function\":\""+funcname+"\":"
+						        "{\"fitpars\":"+fitparsjson+", \"fitstatus\":"+fitstatusjson+"} }";
+						
+						if(fit_i>0) absorpfitsjson += ", ";
+						absorpfitsjson += fitjsonobject;
+					}
+					absorpfitsjson += "]";
+					
+					thismethodjson += ", \"absorption_fits\":"+absorpfitsjson;
+				}
+				
+				if(!got_peak_pos){
+					Log("SaveToDB::MarcusAnalysis failed to get peak positions for method "
+					    +methodname+", led "+ledname,v_error,verbosity);
+				} else {
+					
+					std::string peakposnsjson = "["+std::to_string(peak_posns.first)
+					                          +", "+std::to_string(peak_posns.second)+"]";
+					thismethodjson += ", \"peak_posns\":"+peakposnsjson;
+				}
+				
+				if(!got_peak_heights){
+					Log("SaveToDB::MarcusAnalysis failed to get peak heights for method "
+					    +methodname+", led "+ledname,v_error,verbosity);
+				} else {
+					
+					std::string peakheightsjson = "["+std::to_string(peak_heights.first)
+					                          +", "+std::to_string(peak_heights.second)+"]";
+					thismethodjson += ", \"peak_heights\":"+peakheightsjson;
+				}
+				
+				if(!got_peak_errs){
+					Log("SaveToDB::MarcusAnalysis failed to get peak height errors for method "
+					    +methodname+", led "+ledname,v_error,verbosity);
+				} else {
+					
+					std::string peakerrsjson = "["+std::to_string(peak_errs.first)
+					                          +", "+std::to_string(peak_errs.second)+"]";
+					thismethodjson += ", \"peak_errs\":"+peakerrsjson;
+				}
+				
+				if(!got_cal_id){
+					Log("SaveToDB::MarcusAnalysis failed to get calibration curve ID for method "
+					    +methodname+", led "+ledname,v_error,verbosity);
+				} else {
+					thismethodjson += ", \"calibID\":"+calibID;
+					// this may a database entry ID or "Local", in which case we should also have
+					// a calibration function string and csv list of parameters
+					if(calibID=="Local"){
+						if(!got_cal_func){
+							Log("SaveToDB::MarcusAnalysis failed to get local calibration function "
+							    " for method "+methodname+", led "+ledname,v_error,verbosity);
+						} else {
+							thismethodjson += ", \"calib_func\":\""+formula_str+"\"";
+						}
+						if(!got_cal_pars){
+							Log("SaveToDB::MarcusAnalysis failed to get local calibration parameters "
+							    " for method "+methodname+", led "+ledname,v_error,verbosity);
+						} else {
+							thismethodjson += ", \"calib_pars\":\""+params_str+"\"";
+						}
+					}
+				}
+				
+				if(!got_conc){
+					Log("SaveToDB::MarcusAnalysis failed to get gd concentration for method "
+					    +methodname+", led "+ledname,v_error,verbosity);
+				} else {
+					
+					std::string concjson = "["+std::to_string(conc_and_err.first)
+					                     +", "+std::to_string(conc_and_err.second)+"]";
+					thismethodjson += ", \"conc_and_err\":"+concjson;
+				}
+				
+				thismethodjson +="}";
+				
+				// store to db. These get stored persistently, not just temporarily for the webpage
+				Log("SaveToDB::MarcusAnalysis saving method "+methodname+" results: '"+thismethodjson
+				    +"'",v_debug,verbosity);
+				
+				field_names = std::vector<std::string>
+				      {"run","measurement","timestamp","ledname","tool","name","values"};
+				error_ret="";
+				get_ok = m_data->postgres.Insert("data",                      // table name
+				                                 field_names,                 // field names
+				                                 &error_ret,                  // error return string
+				                                 // variadic argument list of field values
+				                                 runnum,                      // run
+				                                 measurementnum,              // measurement
+				                                 dbtimestamp,                 // timestamp
+				                                 ledname,                     // ledname
+				                                 "MarcusAnalysis",            // tool
+				                                 "gdconcmeasure",             // name
+				                                 thismethodjson);             // values (jsonb)
+				if(!get_ok){
+					Log("SaveToDB::MarcusAnalysis failed to insert absorption peak fit results "
+					    "for method "+methodname+", led "+ledname+" into database with error '"
+					    +error_ret+"'",v_error,verbosity);
+				}
+				
+			} // loop over absorption fit methods
+			
+		}  // else no results map in CStore
+		
+	} else {
+		get_ok = true;   // no new measurement, nothing to save
+	}
+	
+	return get_ok;
+	
+}
+
 bool SaveToDB::BenPower(){
 	bool all_ok = true;
 	
@@ -1198,15 +1739,26 @@ std::string SaveToDB::BuildJson(std::vector<std::string> arr){
 	return jsonstring;
 }
 
-std::string SaveToDB::BuildJson(TFitResultPtr& fitresptr){
-	// TODO better estimates of goodness of fit and resulting uncertainty ?
-	std::string fit_status = std::string("{\"fitValid\":") + ((fitresptr->IsValid()) ? "1, " : "0, ")
-	                      +  std::string("\"fitEmpty\":")  + ((fitresptr->IsEmpty()) ? "1, " : "0, ")
-	                      +  std::string("\"fitStatus\":") + std::to_string(fitresptr->Status())+", "
-	                      +  std::string("\"fitNDF\":")    + std::to_string(fitresptr->Ndf())+", "
-	                      +  std::string("\"fitChi2\":")   + std::to_string(fitresptr->Chi2())+", "
-	                      +  std::string("\"fitProb\":")   + std::to_string(fitresptr->Prob())+"}";
-	return fit_status;
+std::string SaveToDB::BuildJson(TFitResultPtr& fitresptr, bool params_or_status){
+	std::string thejson;
+	if(!params_or_status){
+		// build json encapsulating parameter values and their errors
+		// ugh, we need to cast away constness for some reason
+		const double* params = fitresptr->GetParams();
+		const double* errs = fitresptr->GetErrors();
+		thejson = BuildJson(const_cast<double*>(params), const_cast<double*>(errs), fitresptr->NPar());
+		
+	} else {
+		// build json encapsulating fit success status and other stats
+		// TODO better estimates of goodness of fit and resulting uncertainty ?
+		thejson = std::string("{\"fitValid\":") + ((fitresptr->IsValid()) ? "1, " : "0, ")
+		       +  std::string("\"fitEmpty\":")  + ((fitresptr->IsEmpty()) ? "1, " : "0, ")
+		       +  std::string("\"fitStatus\":") + std::to_string(fitresptr->Status())+", "
+		       +  std::string("\"fitNDF\":")    + std::to_string(fitresptr->Ndf())+", "
+		       +  std::string("\"fitChi2\":")   + std::to_string(fitresptr->Chi2())+", "
+		       +  std::string("\"fitProb\":")   + std::to_string(fitresptr->Prob())+"}";
+	}
+	return thejson;
 }
 
 std::string SaveToDB::CastJsonb(std::string& in){

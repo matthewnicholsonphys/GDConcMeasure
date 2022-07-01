@@ -40,6 +40,7 @@ if (tool=="LivePlotter") ret=new LivePlotter;
 if (tool=="SaveToDB") ret=new SaveToDB;
 if (tool=="PGTool") ret=new PGTool;
 if (tool=="LoadOldFiles") ret=new LoadOldFiles;
+if (tool=="MarcusAnalysis") ret=new MarcusAnalysis;
 return ret;
 }
 

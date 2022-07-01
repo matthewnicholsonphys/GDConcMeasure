@@ -1,0 +1,25 @@
+wait 900
+start_loop
+
+valve open
+measure dark
+measure dark
+measure dark
+measure dark
+valve close
+wait 30
+
+measure dark
+measure 260
+measure dark
+measure 275
+
+analyse 260
+
+wait 30
+
+save March1stCalib.root
+
+loop
+
+quit

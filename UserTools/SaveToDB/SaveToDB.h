@@ -20,6 +20,7 @@ class SaveToDB: public Tool {
 	
 	// one method per Tool to put that Tool's results into the DB
 	bool MatthewAnalysis();
+	bool MarcusAnalysis();
 	bool BenPower();
 	bool Valve();
 	bool BenLED();
@@ -37,7 +38,7 @@ class SaveToDB: public Tool {
 	std::string BuildJson(double* arr, int n);
 	std::string BuildJson(int* arr, int n);
 	std::string BuildJson(std::vector<std::string> arr);
-	std::string BuildJson(TFitResultPtr& fitresptr);
+	std::string BuildJson(TFitResultPtr& fitresptr, bool params_or_status=false);
 	std::string CastJsonb(std::string& in);
 	std::string CastJsonb(int in);
 	
@@ -48,6 +49,10 @@ class SaveToDB: public Tool {
 	std::string query_string;
 	int runnum=-1;
 	int RunConfig=-1;
+	
+	// for identifying measurements stored in the database
+	boost::posix_time::ptime last_measurement_time;
+	int measurementnum=-1;
 	
 	bool get_ok;
 	int verbosity=1;

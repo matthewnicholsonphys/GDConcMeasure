@@ -1,0 +1,24 @@
+verbosity 10
+ledToAnalyse 275_A
+pureref_ver 0         # DB pure trace ID
+
+# may have several methods for fitting absorption curve
+# all will be used and their corresponding gd concentrations saved
+Method_0 raw          # absorption graph fitting method
+Calib_0 0             # DB calibration curve ID
+
+# alternatively one may specify a local calibration curve
+# for example (not an actual calibration curve)
+#Calib_0 Local
+#CalibFunc_0 pol3
+#CalibNpar_0 4
+#CalibPar_0_0 -2.2420182e-05
+#CalibPar_0_1 2.4347342
+#CalibPar_0_2 -10.671675
+#CalibPar_0_3 25.117418
+
+Method_1 simple
+Calib_1 0
+Method_2 complex
+Calib_2 0
+

@@ -243,8 +243,9 @@ bool MatthewAnalysis::RetrieveCalibrationCurveDB(){
   
   // use version number to lookup formula from database
   std::string formula_str="";
-  std::string query_string = "SELECT values->'formula' FROM data WHERE name='calibration_curve' "
-                             "AND values->'version'=" + m_data->postgres.pqxx_quote(calib_version);
+  std::string query_string = "SELECT values->'formula' FROM data WHERE name='calibration_curve'"
+                             " AND values->'formula' IS NOT NULL AND values->'version' IS NOT NULL"
+                             " AND values->'version'=" + m_data->postgres.pqxx_quote(calib_version);
   bool success = m_data->postgres.ExecuteQuery(query_string, formula_str);
   if(formula_str==""){
     Log("MatthewAnalysis::RetrieveCalibrationCurveDB obtained empty formula "
@@ -255,8 +256,9 @@ bool MatthewAnalysis::RetrieveCalibrationCurveDB(){
   formula_str = formula_str.substr(1,formula_str.length()-2);
   
   // another query for the curve parameters
-  query_string = "SELECT values->'params' FROM data WHERE name='calibration_curve' "
-                 "AND values->'version'=" + m_data->postgres.pqxx_quote(calib_version);
+  query_string = "SELECT values->>'params' FROM data WHERE name='calibration_curve'"
+                 " AND values->'params' IS NOT NULL' AND values->'version' IS NOT NULL"
+                 " AND values->'version'=" + m_data->postgres.pqxx_quote(calib_version);
   std::string params_str;
   success &= m_data->postgres.ExecuteQuery(query_string, params_str);
   

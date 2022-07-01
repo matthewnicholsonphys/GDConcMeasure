@@ -1,14 +1,22 @@
 start
 power up
+#wait 5
+#pump on
 #wait 10
-#valve open
+#valve outlet open
+#valve inlet open
 #wait 10
-#valve close
+#valve inlet close
+#valve outlet close
+#wait 5
 measure Dark
-measure 275
-analyse 275
+measure 275_A
+analyse 275_A
 #measure Dark
 #measure 260
 #analyse 260
-save dbtestout.root
+save dbtestout
+#pump off
+#wait 2
+power down
 quit
