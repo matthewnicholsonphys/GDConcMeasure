@@ -1,6 +1,9 @@
 #include "MatthewTransparency.h"
 
+#include <sys/stat.h>
+
 #include <memory>
+#include <chrono>
 #include <time.h>
 #include <vector>
 #include <string>
@@ -63,8 +66,6 @@ bool MatthewTransparency::Execute(){
       transparency_values.push_back(dark_sub_sum.at(i) / pure_sum.at(i));
     }
 
-    //  m_data->transparency = transparency_values;
-
     Transparency t{transparency_values, GetDateTimeVec()};
     SaveToMonthlyFile(t);
   }  
@@ -110,54 +111,40 @@ std::vector<double> MatthewTransparency::RetrievePureValues(int pureref_ver, std
 }
 
 void MatthewTransparency::SaveToMonthlyFile(Transparency t) const {
-  // TODO:check if file exists
-  // multiple LED support
   
-  std::string fname{std::string{"transparency_"}+t.date_time.at(0)+"_"+t.date_time.at(1)+".root"};
-  std::unique_ptr<TFile> file(TFile::Open(fname.c_str(), "UPDATE"));
-  std::unique_ptr<TTree> tree(new TTree("tree", "transparency"));
+  const std::vector<double>* v_ptr = &(t.values);
+  const std::vector<int>* t_ptr = &(t.date_time);
 
-  tree->Branch("values", &(t.values));
-  tree->Branch("date_time", &(t.date_time));
+  const std::string transp_str{"transparency"}, val_str{"values"}, dt_str{"date_time"};
+  const std::string fname{transp_str + "_" + t.date_time.at(0) + "_" + t.date_time.at(1) + ".root"};
 
-  tree->Fill();
-  tree->Write();
-    
+  struct stat s;
+  if (stat(fname.c_str(), &s)==0) {
+    std::unique_ptr<TFile> file(TFile::Open(fname.c_str(), "UPDATE"));
+    TTree* tree = (TTree*) file->Get(transp_str.c_str());
+    tree->SetBranchAddress(val_str.c_str(), &v_ptr);
+    tree->SetBranchAddress(dt_str.c_str(), &t_ptr);
+    tree->Fill();
+    file->Write("*", TObject::kOverwrite);
+  }
+  else {
+    std::unique_ptr<TFile> file(TFile::Open(fname.c_str(), "RECREATE"));
+    std::unique_ptr<TTree> tree(new TTree(transp_str.c_str(), transp_str.c_str()));
+    tree->Branch(val_str.c_str(), &v_ptr);
+    tree->Branch(dt_str.c_str(), &t_ptr);
+    tree->Fill();
+    file->Write();
+  }
 }
 
 
 std::vector<int> MatthewTransparency::GetDateTimeVec() const{
-  // TODO: refactor to use std::chrono
-  // add time
-  // get into one while loop
+  const auto now = std::chrono::system_clock::now();
+  const std::time_t t = std::chrono::system_clock::to_time_t(now);
+  tm local_tm = *localtime(&t);
   
-  time_t rawtime;
-  struct tm * timeinfo;
-
-  time(&rawtime);
-  timeinfo = localtime (&rawtime);
-
-  std::string time_s = asctime(timeinfo);
-
-  std::stringstream ss(time_s);
-  std::vector<std::string> time_v;
-  std::string tmp;
-
-  while(std::getline(ss, tmp, ' ')){
-    time_v.push_back(tmp);
-  }
-
-  std::map<std::string, int> month_table = {{"Jan", 1}, {"Feb", 2}, {"Mar", 3},
-					    {"Apr", 4}, {"May", 5}, {"Jun", 6},
-					    {"Jul", 7}, {"Aug", 8}, {"Sep", 9},
-					    {"Oct", 10}, {"Nov", 11}, {"Dec", 12}};
-  
-  const int year{stoi(time_v.at(5))};
-  const int month{month_table[time_v.at(1)]};
-  const int day{stoi(time_v.at(3))};
-  
-  return {year, month, day};
-
+  return {local_tm.tm_year+1900, local_tm.tm_mon+1, local_tm.tm_mday+1,
+	  local_tm.tm_hour, local_tm.tm_min, local_tm.tm_sec};
 }
 
 bool MatthewTransparency::Ready() const {
