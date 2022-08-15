@@ -116,7 +116,9 @@ public:
 
   std::vector<std::pair<double,double>> concs_and_errs;
   std::vector<std::pair<double,double>> peakdiffs_and_errs;
-  
+
+  std::vector<double> transparency_values;
+  std::vector<int> transparency_date_time;
   /*
     state mode;	//state for scheduler
     
