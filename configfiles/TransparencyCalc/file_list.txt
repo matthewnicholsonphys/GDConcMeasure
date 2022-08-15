@@ -1,0 +1,5 @@
+data/2022/07/00117_12July22Calib_00081.root 275_A 117
+data/2022/07/00117_12July22Calib_00081.root 275_B 117
+data/2022/07/00117_12July22Calib_00081.root Dark 117
+data/2022/07/00117_12July22Calib_00081.root R_G_B 117
+data/2022/07/00117_12July22Calib_00081.root White_385 117

@@ -1,0 +1,2 @@
+myLoadOldFiles LoadOldFiles /home/pi/GDConcMeasure/configfiles/TransparencyCalc/LoadOldFilesConfig
+myMatthewTransparency MatthewTransparency NULL

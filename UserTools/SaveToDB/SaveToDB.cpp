@@ -878,7 +878,7 @@ bool SaveToDB::MarcusAnalysis(){
 		// gd concentration calculation proceeds as follows:
 		// 1. do dark subtraction, split into absorption and sideband regions
 		// 2. fit pure water reference to this plot
-		// 3. calculate absorption as log of the ratio between the scaled pure water and data
+		// 3 calculate absorption as log of the ratio between the scaled pure water and data
 		// 4. fit the absorbance with one of potentially multiple fitting methods
 		// 5. convert difference in amplitudes to concentration using a corresponding calibration curve
 		// we'll show results from various intermediate steps
@@ -1991,6 +1991,24 @@ bool SaveToDB::RoutineCalibration(){
 //		peakW	???
 	return true;
 }
+
+bool SaveToDB::MatthewTransparency(){
+	const std::vector<double> t_values = m_data->transparency_values;
+	const std::vector<int> t_datetime = m_data->transparency_date_time;
+	
+	const std::string t_values_str = [t_values, t_datetime]() {
+				     std::string result{"{ \"transp_vals\":[ "};
+				     for (const auto& val : t_values){
+				       result += std::to_string(val) + ",";
+				     }
+				     result.back()=']';
+				     return result;
+				   }();
+				
+	return true;
+}
+
+
 
 // helper functions for converting data to JSON
 

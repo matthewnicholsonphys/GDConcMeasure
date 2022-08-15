@@ -19,11 +19,15 @@ class MatthewTransparency: public Tool {
   bool Finalise();
 
  private:
-
-  std::vector<double> RetrievePureValues(int, std::string) const;
-  void SaveToMonthlyFile(Transparency) const;
+  
+  std::vector<double> RetrievePureValues(const int, const std::string) const;
+  std::vector<double> RetrievePureValuesFromFile(const std::string&, const std::string&) const;
+  void SaveToMonthlyFile(const Transparency&) const;
   std::vector<int> GetDateTimeVec() const;
   bool Ready() const;
+  void PlaceInDataModel(const Transparency&) const;
+
+  void MakeQuickPlot(const std::vector<double>, const std::vector<double>) const;
 };
 
 
