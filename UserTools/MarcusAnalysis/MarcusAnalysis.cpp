@@ -40,16 +40,24 @@ bool MarcusAnalysis::Initialise(std::string configfile, DataModel &data){
 	if(!get_ok) return false;
 	
 	// Retrieve pure water reference trace
-	int pureref_ver=0;
-	get_ok = m_variables.Get("pureref_ver",pureref_ver);
-	if(!get_ok){
-		Log(m_unique_name+" No pure reference version given!",v_error,verbosity);
-		return false;
+	// first see if we have a local filename
+	std::string pureref_file;
+	get_ok = m_variables.Get("pureref_file",pureref_file);
+	if(get_ok){
+		get_ok = GetPureRef(pureref_file);
+	} else {
+		// if no filename, see if we have a version number
+		// for a database entry
+		int pureref_ver=0;
+		get_ok = m_variables.Get("pureref_ver",pureref_ver);
+		if(!get_ok){
+			// neither given - no pure reference trace!
+			Log(m_unique_name+" No pure reference given!",v_error,verbosity);
+			return false;
+		}
+		get_ok = GetPureRefDB(pureref_ver);
 	}
-	// TODO check if pureref_ver is a string, and if so treat as a filepath
-	// to a file containing a TGraphErrors, as per MatthewAnalysis,
-	// for more flexiblity / backward compatibility
-	get_ok = GetPureRefDB(pureref_ver);
+	// if pure reference getter failed, return
 	if(!get_ok) return false;
 	
 	// construct a TF1 from the pure trace
@@ -237,7 +245,7 @@ bool MarcusAnalysis::GetPureRefDB(int pureref_ver){
 	std::string pureref_json="";
 	get_ok = m_data->postgres.ExecuteQuery(query_string, pureref_json);
 	if(!get_ok || pureref_json==""){
-		Log(m_unique_name+" GetPureRef obtained empty y array for led "+ledToAnalyse+
+		Log(m_unique_name+" GetPureRefDB obtained empty y array for led "+ledToAnalyse+
 		    ", pure reference version "+std::to_string(pureref_ver),v_error,verbosity);
 		return false;
 	}
@@ -252,14 +260,14 @@ bool MarcusAnalysis::GetPureRefDB(int pureref_ver){
 		char* endptr = &tmp[0];
 		double nextval = strtod(tmp.c_str(),&endptr);
 		if(endptr==&tmp[0]){
-			Log(m_unique_name+" GetPureRef failed to parse y values array for led "
+			Log(m_unique_name+" GetPureRefDB failed to parse y values array for led "
 			    +ledToAnalyse+" pure ref version "+std::to_string(pureref_ver),v_error,verbosity);
 			return false;
 		}
 		pureref_yvals.push_back(nextval);
 	}
 	if(pureref_yvals.size()==0){
-		Log(m_unique_name+" GetPureRef parsed no y values for led "
+		Log(m_unique_name+" GetPureRefDB parsed no y values for led "
 			    +ledToAnalyse+" pure ref version "+std::to_string(pureref_ver),v_error,verbosity);
 		return false;
 	}
@@ -273,7 +281,7 @@ bool MarcusAnalysis::GetPureRefDB(int pureref_ver){
 	pureref_json="";
 	get_ok = m_data->postgres.ExecuteQuery(query_string, pureref_json);
 	if(!get_ok || pureref_json==""){
-		Log(m_unique_name+" GetPureRef obtained empty x array for led "+ledToAnalyse+
+		Log(m_unique_name+" GetPureRefDB obtained empty x array for led "+ledToAnalyse+
 		    ", pure reference version "+std::to_string(pureref_ver),v_error,verbosity);
 		return false;
 	}
@@ -288,14 +296,14 @@ bool MarcusAnalysis::GetPureRefDB(int pureref_ver){
 		char* endptr = &tmp[0];
 		double nextval = strtod(tmp.c_str(),&endptr);
 		if(endptr==&tmp[0]){
-			Log(m_unique_name+" GetPureRef failed to parse y values array for led "
+			Log(m_unique_name+" GetPureRefDB failed to parse y values array for led "
 			    +ledToAnalyse+" pure ref version "+std::to_string(pureref_ver),v_error,verbosity);
 			return false;
 		}
 		pureref_xvals.push_back(nextval);
 	}
 	if(pureref_xvals.size()==0){
-		Log(m_unique_name+" GetPureRef parsed no y values for led "
+		Log(m_unique_name+" GetPureRefDB parsed no y values for led "
 			    +ledToAnalyse+" pure ref version "+std::to_string(pureref_ver),v_error,verbosity);
 		return false;
 	}
@@ -307,7 +315,7 @@ bool MarcusAnalysis::GetPureRefDB(int pureref_ver){
 	
 	// put the version number used in the CStore for later tools
 	std::string idkey = "purerefID_"+ledToAnalyse;
-	m_data->CStore.Set(idkey, pureref_ver);
+	m_data->CStore.Set(idkey, std::to_string(pureref_ver));
 	
 	// also store a pointer to the graph for plotting on the webpage
 	std::string datakey = "purerefData_"+ledToAnalyse;
@@ -317,6 +325,37 @@ bool MarcusAnalysis::GetPureRefDB(int pureref_ver){
 	
 	return true;
 }
+
+// ==============================
+
+bool MarcusAnalysis::GetPureRef(std::string filename){
+	// get pure reference trace from a local file
+	
+	TFile* puref = TFile::Open(filename.c_str());
+	if(puref==nullptr || puref->IsZombie()){
+		std::cerr<<"Error opening pure reference file "<<filename<<std::endl;
+		return false;
+	}
+	TGraph* dark_subtracted_pure_p = (TGraph*)puref->Get("Graph");
+	puref->Close();
+	delete puref;
+	dark_subtracted_pure = *dark_subtracted_pure_p;
+	std::string purename="g_pureref_"+ledToAnalyse;
+	dark_subtracted_pure.SetName(purename.c_str());
+	dark_subtracted_pure.SetTitle(purename.c_str());
+	
+	// put the version number used in the CStore for later tools
+	std::string idkey = "purerefID_"+ledToAnalyse;
+	m_data->CStore.Set(idkey, filename);
+	
+	// also store a pointer to the graph for plotting on the webpage
+	std::string datakey = "purerefData_"+ledToAnalyse;
+	intptr_t puregraphp = reinterpret_cast<intptr_t>(&dark_subtracted_pure);
+	m_data->CStore.Set(datakey, puregraphp);
+	
+	return true;
+}
+
 
 // ==============================
 

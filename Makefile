@@ -1,6 +1,6 @@
 ToolDAQPath=ToolDAQ
 
-CPPFLAGS=" -Wno-psabi"
+CPPFLAGS= -Wno-psabi
 
 ZMQLib= -L $(ToolDAQPath)/zeromq-4.0.7/lib -lzmq
 ZMQInclude= -I $(ToolDAQPath)/zeromq-4.0.7/include/
@@ -25,7 +25,7 @@ all: lib/libStore.so lib/libLogging.so lib/libDataModel.so include/Tool.h lib/li
 
 GAD_ToolChain: src/main.cpp | lib/libMyTools.so lib/libStore.so lib/libLogging.so lib/libToolChain.so lib/libDataModel.so lib/libServiceDiscovery.so
 	@echo -e "\n*************** Making " $@ "****************"
-	g++ -g src/main.cpp -o $@ -I include -L lib -lStore -lMyTools -lToolChain -lDataModel -lLogging -lServiceDiscovery -lpthread $(DataModelInclude) $(DataModelib) $(MyToolsInclude)  $(MyToolsLib) $(ZMQLib) $(ZMQInclude)  $(BoostLib) $(BoostInclude)
+	g++ -g $(CPPFLAGS) src/main.cpp -o $@ -I include -L lib -lStore -lMyTools -lToolChain -lDataModel -lLogging -lServiceDiscovery -lpthread $(DataModelInclude) $(DataModelib) $(MyToolsInclude)  $(MyToolsLib) $(ZMQLib) $(ZMQInclude)  $(BoostLib) $(BoostInclude)
 
 
 lib/libStore.so: $(ToolDAQPath)/ToolDAQFramework/src/Store/*
@@ -45,7 +45,7 @@ lib/libToolChain.so: $(ToolDAQPath)/ToolDAQFramework/src/ToolChain/* | lib/libLo
 	@echo -e "\n*************** Making " $@ "****************"
 	#cp $(ToolDAQPath)/ToolDAQFramework/UserTools/Factory/*.h include/
 	cp $(ToolDAQPath)/ToolDAQFramework/src/ToolChain/*.h include/
-	g++ -g -fPIC -shared $(ToolDAQPath)/ToolDAQFramework/src/ToolChain/ToolChain.cpp -I include -lpthread -L lib -lStore -lDataModel -lServiceDiscovery -lLogging -lMyTools -o lib/libToolChain.so $(DataModelInclude) $(DataModelib) $(ZMQLib) $(ZMQInclude) $(MyToolsInclude)  $(BoostLib) $(BoostInclude)
+	g++ -g $(CPPFLAGS) -fPIC -shared $(ToolDAQPath)/ToolDAQFramework/src/ToolChain/ToolChain.cpp -I include -lpthread -L lib -lStore -lDataModel -lServiceDiscovery -lLogging -lMyTools -o lib/libToolChain.so $(DataModelInclude) $(DataModelib) $(ZMQLib) $(ZMQInclude) $(MyToolsInclude)  $(BoostLib) $(BoostInclude)
 
 
 clean:
@@ -59,13 +59,13 @@ clean:
 lib/libDataModel.so: DataModel/* lib/libLogging.so | lib/libStore.so
 	@echo -e "\n*************** Making " $@ "****************"
 	cp DataModel/*.h include/
-	g++ -g -fPIC -shared DataModel/*.cpp -I include -L lib -lStore  -lLogging  -o lib/libDataModel.so $(DataModelInclude) $(DataModelLib) $(ZMQLib) $(ZMQInclude)  $(BoostLib) $(BoostInclude) $(PostgresInclude) $(PostgresLib)
+	g++ -g $(CPPFLAGS) -fPIC -shared DataModel/*.cpp -I include -L lib -lStore  -lLogging  -o lib/libDataModel.so $(DataModelInclude) $(DataModelLib) $(ZMQLib) $(ZMQInclude)  $(BoostLib) $(BoostInclude) $(PostgresInclude) $(PostgresLib)
 
 lib/libMyTools.so: UserTools/*/* UserTools/* | include/Tool.h lib/libDataModel.so lib/libLogging.so lib/libStore.so
 	@echo -e "\n*************** Making " $@ "****************"
 	cp UserTools/*/*.h include/
 	cp UserTools/Factory/*.h include/
-	g++ -g -fPIC -shared  UserTools/Factory/Factory.cpp -I include -L lib -lStore -lDataModel -lLogging -o lib/libMyTools.so $(MyToolsInclude) $(MyToolsLib) $(DataModelInclude) $(DataModelib) $(ZMQLib) $(ZMQInclude) $(BoostLib) $(BoostInclude)
+	g++ -g $(CPPFLAGS) -fPIC -shared  UserTools/Factory/Factory.cpp -I include -L lib -lStore -lDataModel -lLogging -o lib/libMyTools.so $(MyToolsInclude) $(MyToolsLib) $(DataModelInclude) $(DataModelib) $(ZMQLib) $(ZMQInclude) $(BoostLib) $(BoostInclude)
 
 RemoteControl:
 	cd $(ToolDAQPath)/ToolDAQFramework/ && make RemoteControl

@@ -1,11 +1,17 @@
 #!/bin/bash
 
+# Saves the directory where this script is located to the ToolDAQapp
+# variable. This method isn't foolproof. See
+# https://stackoverflow.com/a/246128/4081973 if you need something more robust
+# for edge cases (e.g., you're calling the script using symlinks).
+TOPDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
 init=1
 tooldaq=1
 boostflag=1
 zmq=1
 final=1
-rootflag=0
+rootflag=1
 eigen=1
 seabreeze=1
 libpqxx=1
@@ -90,19 +96,18 @@ done
 if [ $init -eq 1 ]
 then
     
-    mkdir ToolDAQ
+    mkdir ${TOPDIR}/ToolDAQ
 fi
-
-cd ToolDAQ
 
 if [ $tooldaq -eq 1 ]
 then
-
-git clone https://github.com/ToolDAQ/ToolDAQFramework.git
+    cd ${TOPDIR}/ToolDAQ
+    git clone https://github.com/ToolDAQ/ToolDAQFramework.git
 fi
 
 if [ $zmq -eq 1 ]
 then
+    cd ${TOPDIR}/ToolDAQ
     git clone https://github.com/ToolDAQ/zeromq-4.0.7.git
     
     cd zeromq-4.0.7
@@ -118,6 +123,7 @@ fi
 
 if [ $eigen -eq 1 ]
 then
+    cd ${TOPDIR}/ToolDAQ
     wget https://gitlab.com/libeigen/eigen/-/archive/3.3.7/eigen-3.3.7.tar.gz
     tar -zxf eigen-3.3.7.tar.gz
     rm eigen-3.3.7.tar.gz
@@ -125,11 +131,15 @@ fi
 
 if [ $seabreeze -eq 1 ]
 then
-    echo "please unpack seabreeze sourcefiles into ToolDAQ folder" # TODO add to git repo
+    cd ${TOPDIR}/ToolDAQ
+    git clone git@github.com:GDconcentration/SeaBreeze.git seabreeze-3.0.11
+    cd seabreeze-3.0.11/SeaBreeze
+    make
 fi
 
 if [ $libpqxx -eq 1 ]
 then
+    cd ${TOPDIR}/ToolDAQ
     wget https://github.com/jtv/libpqxx/archive/refs/tags/6.4.7.tar.gz
     tar -xzf 6.4.7.tar.gz
     rm 6.4.7.tar.gz
@@ -144,6 +154,7 @@ fi
 if [ $boostflag -eq 1 ]
 then
     
+    cd ${TOPDIR}/ToolDAQ
     git clone https://github.com/ToolDAQ/boost_1_66_0.git
     #wget http://downloads.sourceforge.net/project/boost/boost/1.66.0/boost_1_66_0.tar.gz
     
@@ -165,6 +176,7 @@ fi
 if [ $rootflag -eq 1 ]
 then
     
+    cd ${TOPDIR}/ToolDAQ
     wget https://root.cern.ch/download/root_v6.14.06.source.tar.gz
     tar zxf root_v6.14.06.source.tar.gz
     rm -rf root_v6.14.06.source.tar.gz
@@ -182,7 +194,7 @@ then
     
 fi
 
-cd ../
+cd ${TOPDIR}
 
 if [ $final -eq 1 ]
 then

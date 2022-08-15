@@ -19,6 +19,7 @@ class MarcusAnalysis: public Tool {
 	private:
 	
 	bool GetPureRefDB(int pureref_ver);
+	bool GetPureRef(std::string filename);
 	static double PureScaledPlusExtras(double* x, double* par);
 	bool GetPureScaledPlusExtras();
 	bool GetCalibrations();
