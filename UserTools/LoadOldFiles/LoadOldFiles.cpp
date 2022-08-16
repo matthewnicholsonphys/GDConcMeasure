@@ -31,43 +31,59 @@ bool LoadOldFiles::Initialise(std::string configfile, DataModel &data){
 
 bool LoadOldFiles::Execute(){
 	
-	std::string filename = next_file_iter->filename;
-	std::string treename = next_file_iter->treename;
-	int runnum = next_file_iter->runnum;
-	Log("LoadOldFiles processing file "+filename+", tree "+treename+", run "+std::to_string(runnum),v_debug,verbosity);
+	bool got_file=false;
+	std::string filename;
+	std::string treename;
+	while(true){
+		std::string filename = next_file_iter->filename;
+		std::string treename = next_file_iter->treename;
+		int runnum = next_file_iter->runnum;
+		Log("LoadOldFiles: processing file "+filename+", tree "+treename+", run "+std::to_string(runnum),v_debug,verbosity);
+		
+		// set run number to use in database
+		m_data->CStore.Set("dbrunnum",runnum);
+		
+		++next_file_iter;
+		if(next_file_iter==files.end()){
+			Log("LoadOldFiles: no more files",v_warning,verbosity);
+			m_data->vars.Set("StopLoop",1);
+		}
+		
+		// try to open the file
+		Log("LoadOldFiles: opening file",v_debug,verbosity);
+		if(nextfile) nextfile->Close();
+		if(darkTreeNew) delete darkTreeNew;
+		nextfile = TFile::Open(filename.c_str(),"READ");
+		if(nextfile==nullptr || nextfile->IsZombie()){
+			Log(std::string("LoadOldFiles failed to open file '")+filename+"'",v_error,verbosity);
+			continue;
+		}
 	
-	++next_file_iter;
-	if(next_file_iter==files.end()){
-		m_data->vars.Set("StopLoop",1);
+		// get the led-on tree
+		Log("LoadOldFiles: getting ledtree",v_debug,verbosity);
+		ledTree = (TTree*)nextfile->Get(treename.c_str());
+		if(ledTree==nullptr){
+			Log("LoadOldFiles failed to find specified tree '"+treename+"' in file '"+filename+"'",v_error,verbosity);
+			continue;
+		}
+		
+		// under normal operation, each measurement results in a TTree with one entry... probably not very efficient.
+		// the MatthewAnalysis tool analyses led Tree entry 0, so warn if there are others
+		Log("LoadOldFiles: checking one entry",v_debug,verbosity);
+		if(ledTree->GetEntries()==0){
+			Log("LoadOldFiles found no entries in tree '"+treename+"' in file '"+filename+"!",v_warning,verbosity);
+			continue;
+		} else if(ledTree->GetEntries()>1){
+			Log("LoadOldFiles found more than one entry in tree '"+treename
+				+"' in file '"+filename+"! Only entry 0 will be analysed!",v_warning,verbosity);
+		}
+		
+		got_file=true;
+		break;
 	}
 	
-	// set run number to use in database
-	m_data->CStore.Set("dbrunnum",runnum);
-	
-	// open next file
-	Log("LoadOldFiles: opening file",v_debug,verbosity);
-	if(nextfile) nextfile->Close();
-	if(darkTreeNew) delete darkTreeNew;
-	nextfile = TFile::Open(filename.c_str(),"READ");
-	
-	// get the led-on tree
-	Log("LoadOldFiles: getting ledtree",v_debug,verbosity);
-	ledTree = (TTree*)nextfile->Get(treename.c_str());
-	if(ledTree==nullptr){
-		Log("LoadOldFiles failed to find specified tree '"+treename+"' in file '"+filename+"'",v_error,verbosity);
-		return false;
-	}
-	
-	// under normal operation, each measurement results in a TTree with one entry... probably not very efficient.
-	// the MatthewAnalysis tool analyses led Tree entry 0, so warn if there are others
-	Log("LoadOldFiles: checking one entry",v_debug,verbosity);
-	if(ledTree->GetEntries()==0){
-		Log("LoadOldFiles found no entries in tree '"+treename+"' in file '"+filename+"!",v_warning,verbosity);
-		return false;
-	} else if(ledTree->GetEntries()>1){
-		Log("LoadOldFiles found more than one entry in tree '"+treename
-			+"' in file '"+filename+"! Only entry 0 will be analysed!",v_warning,verbosity);
-	}
+	// check we managed to load a file successfully
+	if(!got_file) return false;
 	
 	// while each LED gets saved to a different file, the dark traces for all LED measurements are currently saved
 	// in one common file. It is also currently the case that several unused dark traces are taken between measurements
@@ -108,7 +124,7 @@ bool LoadOldFiles::Execute(){
 		darkTree = (TTree*)nextfile->Get("dark");
 	}
 	if(darkTree==nullptr){
-		Log("LoadOldFiles failed to find dark tree in file '"+filename+"'",v_error,verbosity);
+		Log(std::string("LoadOldFiles failed to find dark tree in file '")+filename+"'",v_error,verbosity);
 		return false;
 	}
 	
@@ -142,6 +158,7 @@ bool LoadOldFiles::Execute(){
 		if(numsecs<0 && darkentry<0) break;
 		darkentry=i;
 	}
+	Log("LoadOldFiles: dark entry number = "+std::to_string(darkentry),v_debug,verbosity);
 	
 	// make a new TTree with just the dark entry we're intersted in
 	// because TTrees must attach to a file, attach it to a temporary file
@@ -150,6 +167,10 @@ bool LoadOldFiles::Execute(){
 	tmpfile->cd();
 	// copy the branch structure and addresses from the input tree
 	darkTreeNew = darkTree->CloneTree(0);
+	if(darkTreeNew==nullptr){
+		Log("LoadOldFiles: cloned tree is null!",v_error,verbosity);
+		return false;
+	}
 	curdir->cd();
 	
 	// load the desired entry to copy

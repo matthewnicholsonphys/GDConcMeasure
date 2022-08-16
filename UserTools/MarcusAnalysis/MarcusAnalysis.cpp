@@ -10,8 +10,11 @@ bool MarcusAnalysis::Initialise(std::string configfile, DataModel &data){
 	// Retrieve configuration options from the postgres database
 	int RunConfig=-1;
 	m_data->vars.Get("RunConfig",RunConfig);
+	Log(m_unique_name+" getting RunConfig from ToolChain",v_debug,verbosity);
 	if(RunConfig>=0){
 		std::string configtext;
+		Log(m_unique_name+" getting tool configuration from database for runconfig "
+		    +std::to_string(RunConfig),v_debug,verbosity);
 		bool get_ok = m_data->postgres_helper.GetToolConfig(m_unique_name, configtext);
 		if(!get_ok){
 			Log(m_unique_name+" Failed to get Tool config from database!",v_error,verbosity);
@@ -22,6 +25,7 @@ bool MarcusAnalysis::Initialise(std::string configfile, DataModel &data){
 	}
 	
 	//overide with any variables in local file
+	Log(m_unique_name+" reading local overrides from config file "+configfile,v_debug,verbosity);
 	if(configfile!="") m_variables.Initialise(configfile);
 	
 	//m_variables.Print();
@@ -34,6 +38,7 @@ bool MarcusAnalysis::Initialise(std::string configfile, DataModel &data){
 		Log(m_unique_name+" has no ledToAnalyse!",v_error,verbosity);
 		return false;
 	}
+	Log(m_unique_name+" will analyse LED "+ledToAnalyse,v_debug,verbosity);
 	
 	// get calibration cofficients from local file and/or DB
 	get_ok = GetCalibrations();
@@ -99,18 +104,22 @@ bool MarcusAnalysis::Execute(){
 		ReInit();
 		
 		// get pointers to the led-on and dark TTrees
+		Log(m_unique_name+" getting input data",v_debug,verbosity);
 		get_ok = FindDarkAndLEDTrees();
 		if(not get_ok) return false;
 		
 		// get led-on data
+		Log(m_unique_name+" doing dark-subtraction",v_debug,verbosity);
 		get_ok = GetDarkSubTrace();
 		if(!get_ok) return false;
 		
 		// fit pure reference to data in sideband
+		Log(m_unique_name+" fitting LED reference trace",v_debug,verbosity);
 		get_ok = FitPure();
 		if(!get_ok) return false;
 		
 		// calculate absorbance from log10(transmitted / received) light
+		Log(m_unique_name+" calculating absorbance",v_debug,verbosity);
 		get_ok = CalculateAbsorbance();
 		if(not get_ok) return false;
 		
@@ -330,6 +339,8 @@ bool MarcusAnalysis::GetPureRefDB(int pureref_ver){
 
 bool MarcusAnalysis::GetPureRef(std::string filename){
 	// get pure reference trace from a local file
+	Log(m_unique_name+" loading pure reference trace from local file "+filename,v_debug,verbosity);
+
 	
 	TFile* puref = TFile::Open(filename.c_str());
 	if(puref==nullptr || puref->IsZombie()){
@@ -337,6 +348,11 @@ bool MarcusAnalysis::GetPureRef(std::string filename){
 		return false;
 	}
 	TGraph* dark_subtracted_pure_p = (TGraph*)puref->Get("Graph");
+	if(dark_subtracted_pure_p==nullptr){
+		Log(m_unique_name+" failed to find pure reference TGraph 'Graph' "
+		    "in file "+filename,v_error,verbosity);
+		return false;
+	}
 	puref->Close();
 	delete puref;
 	dark_subtracted_pure = *dark_subtracted_pure_p;
@@ -353,6 +369,9 @@ bool MarcusAnalysis::GetPureRef(std::string filename){
 	intptr_t puregraphp = reinterpret_cast<intptr_t>(&dark_subtracted_pure);
 	m_data->CStore.Set(datakey, puregraphp);
 	
+	Log(m_unique_name+" loaded pure reference trace of "+dark_subtracted_pure.GetN()
+	    +" points",v_debug,verbosity);
+	
 	return true;
 }
 
@@ -364,6 +383,7 @@ bool MarcusAnalysis::GetCalibrations(){
 	// scan for calibration curves. Numbering must be consecutive.
 	int method_i=0;
 	get_ok = false;  // must be overridden by at least one successfully loaded calib function
+	Log(m_unique_name+" getting calibration method...",v_debug,verbosity);
 	while(true){
 		
 		// terminate on last method
@@ -378,18 +398,21 @@ bool MarcusAnalysis::GetCalibrations(){
 			get_ok = false;
 			break;
 		}
+		Log(m_unique_name+" adding calibration method "+std::to_string(method_i)
+		   +", "+methodname,v_debug,verbosity);
 		
 		// each abosorption fitting method yields a difference in peak heights;
 		// we need a calibration curve to map this to concentration. For DB lookup
 		// this can be an ID number, but the user may also override in the local
 		// config file by specifying an ID of "Local"
 		std::string calibID;
-		// first check for a local config file override
 		if(!(m_variables.Get("Calib_"+std::to_string(method_i), calibID))){
 			Log(m_unique_name+" no calibration ID for method "+methodname,v_error,verbosity);
 			get_ok = false;
 			break;
 		}
+		Log(m_unique_name+" method "+std::to_string(method_i)+" using calibration "+calibID,
+		    v_debug,verbosity);
 		
 		// initialise results map
 		results[methodname].Set("method",methodname);
@@ -399,12 +422,14 @@ bool MarcusAnalysis::GetCalibrations(){
 		// check for local override
 		if(calibID == "Local"){
 			// load function and parameters from local file
+			Log(m_unique_name+" loading calibration parameters from local file",v_debug,verbosity);
 			get_ok = GetCalCurve(methodname, method_i);
 			if(not get_ok) break;
 			++method_i;
 			
 		} else {
 			// get the version id and query the curve parameters from the DB
+			Log(m_unique_name+" loading calibration parameters from database",v_debug,verbosity);
 			get_ok &= GetCalCurveDB(methodname, calibID);
 			if(not get_ok) break;
 			++method_i;
@@ -416,6 +441,7 @@ bool MarcusAnalysis::GetCalibrations(){
 	if(method_i==0){
 		Log(m_unique_name+" No calibration curves given!",v_error,verbosity);
 	}
+	Log(m_unique_name+" loaded "+std::to_string(method_i)+" calibration methods",v_debug,verbosity);
 	
 	// put in datamodel for database
 	intptr_t calib_curves_ptr = reinterpret_cast<intptr_t>(&calib_curves);
@@ -445,6 +471,8 @@ bool MarcusAnalysis::GetCalCurve(std::string method, int method_i){
 		    v_error, verbosity);
 		return false;
 	}
+	Log(m_unique_name+" calibration method "+std::to_string(method_i)+" corresponds to function "
+	    +calfunc+" which has "+calnparstr+" parameters",v_debug,verbosity);
 	
 	// retrieve calibration coefficients from config file
 	double calib_coefficients[npars];
@@ -454,6 +482,8 @@ bool MarcusAnalysis::GetCalCurve(std::string method, int method_i){
 		get_ok &= m_variables.Get(calib_prefix + std::to_string(i), calib_coefficients[i]);
 		params_str += std::to_string(calib_coefficients[i]);
 		if(i<(npars-1)) params_str += ", ";
+		Log(m_unique_name+" parameter "+std::to_string(i)+" = "
+		    +std::to_string(calib_coefficients[i]),v_debug,verbosity);
 	}
 	if(!get_ok){
 		Log(m_unique_name+" did not find "+std::to_string(npars)
@@ -475,6 +505,7 @@ bool MarcusAnalysis::GetCalCurve(std::string method, int method_i){
 		calib_curves.erase(method);
 		return false;
 	}
+	Log(m_unique_name+" constructed function successfully",v_debug,verbosity);
 	
 	results[method].Set("calcurveFunc",formula_str);
 	results[method].Set("calcurvePars",params_str);
@@ -568,18 +599,22 @@ bool MarcusAnalysis::GetCalCurveDB(std::string method, std::string calibID){
 
 bool MarcusAnalysis::GetPureScaledPlusExtras(){
 	
-	// construct functional fit. We'll scale and add a linear background.
-	// limit the pure function to a region in which we have light - no point fitting outside this region
+	// construct functional fit.
+	Log(m_unique_name+" constructing functional fit TF1 from pure reference trace",v_debug,verbosity);
+	
+	// We'll scale and add a linear background. We'll also limit the pure function
+	// to the region in which we have light - no point fitting outside this region
 	std::string name="f_purefit_"+ledToAnalyse;
 	const int wave_min = 260, wave_max = 300, numb_of_fitting_parameters = 8;
 	
 	// pure_fct is a TF1 built from a C++ function representing a transformed version
-	// of the pure reference data. 
+	// of the pure reference data.
 	// if we use a member as the c++ function it must be static, but then can only access static members
 	// (which isn't suitable as pure reference is specific to this tool instance).
 	// if in anonymous namespace, the resulting function is not a member, so cannot access any members
 	// at all (including the pure reference data).
-	// the easiest thing is a lambda that captures a pointer to the pure reference TGraph member 
+	// the easiest thing is a lambda that captures a pointer to the pure reference TGraph member
+	Log(m_unique_name+" constructing functional TF1",v_debug,verbosity);
 	TGraph* dark_subtracted_purep = &dark_subtracted_pure;
 	pure_fct = new TF1(name.c_str(),
 		[dark_subtracted_purep](double* x, double* par) -> double {
@@ -608,6 +643,8 @@ bool MarcusAnalysis::GetPureScaledPlusExtras(){
 		Log(m_unique_name+" GetPureScaledPlusExtras failed to construct TF1 from pure reference data",
 		    v_error,verbosity);
 		return false;
+	} else {
+		Log(m_unique_name+" functional fit TF1 constructed",v_debug,verbosity);
 	}
 	
 	return true;
@@ -679,13 +716,15 @@ bool MarcusAnalysis::FitTwoGaussians(std::pair<double,double>& simple_peaks, std
 
 bool MarcusAnalysis::GetFourGaussianFunc(){
 	// to really have a reasonable fit to data we in fact need *four* gaussians.
+	Log(m_unique_name+" constructing 4-gaussian fit",v_debug,verbosity);
+	
 	std::string tpname = "f_fourgaussianfunc_"+ledToAnalyse;
 	if(fourgaussianfunc) delete fourgaussianfunc;
 	fourgaussianfunc = new TF1(tpname.c_str()," [0]*exp(-0.5*TMath::Sq((x[0]-[1])/[2]))"
-	                                   "+[3]*[0]*exp(-0.5*TMath::Sq((x[0]-[4])/[5]))"
-	                                   "+[6]*[0]*exp(-0.5*TMath::Sq((x[0]-[7])/[8]))"
-	                                   "+[0]*[9]*exp(-0.5*TMath::Sq((x[0]-[10])/[11]))",
-	                                   270,277);
+	                                          "+[3]*[0]*exp(-0.5*TMath::Sq((x[0]-[4])/[5]))"
+	                                          "+[6]*[0]*exp(-0.5*TMath::Sq((x[0]-[7])/[8]))"
+	                                          "+[0]*[9]*exp(-0.5*TMath::Sq((x[0]-[10])/[11]))",
+	                                          270,277);
 	
 	// we may wish to make the amplitudes of all peaks relative to the amplitude of peak 1
 	// by limiting the amplitudes 0-1, this ensures peak 1 is the largest, which helps
@@ -747,6 +786,8 @@ bool MarcusAnalysis::GetFourGaussianFunc(){
 	if(!fourgaussianfunc->IsValid()){
 		Log(m_unique_name+" Error constructing four gaussian fit!",v_error,verbosity);
 		return false;
+	} else {
+		Log(m_unique_name+" 4-gaussian fit constructed",v_debug,verbosity);
 	}
 	
 	return ReInitFourGaussians();
