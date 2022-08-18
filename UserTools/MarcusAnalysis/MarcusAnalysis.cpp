@@ -7,6 +7,8 @@ bool MarcusAnalysis::Initialise(std::string configfile, DataModel &data){
 	
 	m_data = &data;
 	
+	verbosity=v_debug;
+	
 	// Retrieve configuration options from the postgres database
 	int RunConfig=-1;
 	m_data->vars.Get("RunConfig",RunConfig);
@@ -29,6 +31,8 @@ bool MarcusAnalysis::Initialise(std::string configfile, DataModel &data){
 	if(configfile!="") m_variables.Initialise(configfile);
 	
 	//m_variables.Print();
+	
+	m_variables.Get("verbosity",verbosity);
 	
 	// basically to make handling configurations easier, each instance of MarcusAnalysis
 	// will only analyse one LED - but with potentially several calibration curves
@@ -111,6 +115,7 @@ bool MarcusAnalysis::Execute(){
 		// and convert to concentration. Store the results BoostStore map.
 		// some of these fits may fail, but we won't abort at this point...
 		for(auto&& method : calib_curves){
+			Log(m_unique_name+" calculating concentration with method "+method.first,v_debug,verbosity);
 			get_ok &= CalculateConcentration(method.first);
 		}
 		if(!get_ok){
@@ -118,6 +123,7 @@ bool MarcusAnalysis::Execute(){
 		}
 		
 		// place results into DataModel for storage
+		Log(m_unique_name+" updating DataModel",v_debug,verbosity);
 		UpdateDataModel();
 		
 		// Inform downstream tools that a new measurement is available
@@ -128,6 +134,9 @@ bool MarcusAnalysis::Execute(){
 		// else no data to Analyse
 		m_data->CStore.Remove("NewMarcusMeasurement");
 	}
+
+	Log(m_unique_name+" done",v_debug,verbosity);
+
 	
 	return true;
 }
@@ -142,7 +151,6 @@ bool MarcusAnalysis::ReadyToAnalyse(){
 	m_data->CStore.Get("ledToAnalyse", currentLED);
 	if (analyse == "Analyse" && currentLED == ledToAnalyse){
 		m_data->CStore.Remove("Analyse");
-		analyse.clear();
 		ready = true;
 	}
 	return ready;
@@ -486,7 +494,7 @@ bool MarcusAnalysis::GetCalCurve(std::string method, int method_i){
 		return false;
 	}
 	Log(m_unique_name+" calibration method "+std::to_string(method_i)+" corresponds to function "
-	    +calfunc+" which has "+calnparstr+" parameters",v_debug,verbosity);
+	    +formula_str+" which has "+std::to_string(npars)+" parameters",v_debug,verbosity);
 	
 	// retrieve calibration coefficients from config file
 	double calib_coefficients[npars];
@@ -695,8 +703,8 @@ bool MarcusAnalysis::FitTwoGaussians(std::pair<double,double>& peak_heights, std
 	gaus2.SetParLimits(2,0.3,1.);
 	
 	// fit the two gaussians
-	fitresptrs[0] = g_absorb.Fit("gaus1","NRQS");
-	fitresptrs[1] = g_absorb.Fit("gaus2","NRQS");
+	fitresptrs[0] = g_absorb.Fit(name1.c_str(),"NRQS");
+	fitresptrs[1] = g_absorb.Fit(name2.c_str(),"NRQS");
 	// set names of the TFitResultPtrs so they retain info about which function they relate to
 	fitresptrs[0]->SetName(name1.c_str());
 	fitresptrs[1]->SetName(name2.c_str());
@@ -719,18 +727,18 @@ bool MarcusAnalysis::FitTwoGaussians(std::pair<double,double>& peak_heights, std
 	get_ok = 1;
 	if(fitresptrs[0]->IsEmpty() || !fitresptrs[0]->IsValid() || fitresptrs[0]->Status()!=0){
 		std::string fitstat;
-		fitstat += "IsEmpty=" + std::to_string(fitresptrs[0]->IsEmpty());
-		fitstat += "IsValid=" + std::to_string(fitresptrs[0]->IsValid());
-		fitstat += "Status=" + std::to_string(fitresptrs[0]->Status());
+		fitstat += " IsEmpty=" + std::to_string(fitresptrs[0]->IsEmpty());
+		fitstat += " IsValid=" + std::to_string(fitresptrs[0]->IsValid());
+		fitstat += " Status=" + std::to_string(fitresptrs[0]->Status());
 		Log(m_unique_name+" Two gaussian fit gaus1 fit failed: "+fitstat,v_error,verbosity);
 		// this is not a robust check of a bad fit
 		//get_ok = 0;
 	}
 	if(fitresptrs[1]->IsEmpty() || !fitresptrs[1]->IsValid() || fitresptrs[1]->Status()!=0){
 		std::string fitstat;
-		fitstat += "IsEmpty=" + std::to_string(fitresptrs[1]->IsEmpty());
-		fitstat += "IsValid=" + std::to_string(fitresptrs[1]->IsValid());
-		fitstat += "Status=" + std::to_string(fitresptrs[1]->Status());
+		fitstat += " IsEmpty=" + std::to_string(fitresptrs[1]->IsEmpty());
+		fitstat += " IsValid=" + std::to_string(fitresptrs[1]->IsValid());
+		fitstat += " Status=" + std::to_string(fitresptrs[1]->Status());
 		Log(m_unique_name+" Two gaussian fit gaus2 fit failed: "+fitstat,v_error,verbosity);
 		// this is not a robust check of a bad fit
 		//get_ok = 0;
@@ -872,9 +880,9 @@ bool MarcusAnalysis::FitFourGaussians(std::pair<double,double>& peak_heights, st
 	fitresptrs[0]->SetName(fourgaussianfunc->GetName());
 	if(fitresptrs[0]->IsEmpty() || !fitresptrs[0]->IsValid() || fitresptrs[0]->Status()!=0){
 		std::string fitstat;
-		fitstat += "IsEmpty=" + std::to_string(fitresptrs[0]->IsEmpty());
-		fitstat += "IsValid=" + std::to_string(fitresptrs[0]->IsValid());
-		fitstat += "Status=" + std::to_string(fitresptrs[0]->Status());
+		fitstat += " IsEmpty=" + std::to_string(fitresptrs[0]->IsEmpty());
+		fitstat += " IsValid=" + std::to_string(fitresptrs[0]->IsValid());
+		fitstat += " Status=" + std::to_string(fitresptrs[0]->Status());
 		Log(m_unique_name+" Four gaussian fit failed: "+fitstat,v_error,verbosity);
 		// this is not a robust check of a bad fit
 		//get_ok = false;
@@ -894,13 +902,29 @@ bool MarcusAnalysis::FitFourGaussians(std::pair<double,double>& peak_heights, st
 		get_ok = false;
 	}
 	
-	logmessage << m_unique_name<<"complex peaks at: "<<peak_posns.first<<":"<<peak_posns.second
-	           <<" are "<<peak_heights.first<<" and "<<peak_heights.first
+	logmessage.str("");
+	logmessage.clear();
+	logmessage << m_unique_name<<"complex peaks at: "<<peak_posns.first<<", "<<peak_posns.second
+	           <<" are "<<peak_heights.first<<" and "<<peak_heights.second
 	           <<" with diff "<<peak_heights.first-peak_heights.second
 	           <<" and ratio "<<peak_heights.first/peak_heights.second<<std::endl;
 	Log(logmessage.str(),v_debug,verbosity);
 	
 	peak_errs = CalculateError(peak_posns.first, peak_posns.second);
+	
+	/*
+	static int imagenum=0;
+	imagenum++;
+	TCanvas c_ttmp("c__tmp","c__tmp",1024,800);
+	g_absorb.Draw("AXL*");
+	fourgaussianfunc->Draw("same");
+	c_ttmp.Modified();
+	c_ttmp.Update();
+	std::string filename="fourgausfit_"+std::to_string(imagenum)+".png";
+	c_ttmp.SaveAs(filename.c_str());
+	*/
+	
+	return get_ok;
 }
 
 std::pair<double,double> MarcusAnalysis::CalculateError(double peak1_pos, double peak2_pos){
@@ -1038,6 +1062,11 @@ bool MarcusAnalysis::GetDarkSubTrace(){
 		return false;
 	}
 	
+	// do dark subtraction
+	for(int i=0; i<led_values.size(); ++i){
+		led_values.at(i) -= dark_values.at(i);
+	}
+	
 	// split into regions: in-band (absorption region)
 	// sideband (fit region), and other (ignored region)
 	// we do dark subtraction here while we're at it
@@ -1056,7 +1085,7 @@ bool MarcusAnalysis::GetDarkSubTrace(){
 	for(int j=0; j<number_of_points; ++j){
 		if(wavelengths.at(j)>270 && wavelengths.at(j)<280){
 			// in band
-			inband_values.push_back(led_values.at(j) - dark_values.at(j));
+			inband_values.push_back(led_values.at(j));
 			inband_wls.push_back(wavelengths.at(j));
 			inband_errors.push_back(sqrt(led_errors[j]*led_errors[j] + dark_errors[j]*dark_errors[j]));
 		} else if(wavelengths.at(j)>260 && wavelengths.at(j)<300){
@@ -1112,8 +1141,8 @@ bool MarcusAnalysis::GetDarkSubTrace(){
 	for(int i=0; i<number_of_points; ++i){
 		tmphist.Fill(dark_values.at(i));
 	}
-	std::string options = (verbosity<v_debug) ? "Q" : "";
-	tmphist.Fit("gaus",options.c_str());
+	//std::string options = (verbosity<v_debug) ? "Q" : "";
+	tmphist.Fit("gaus","Q");
 	double dark_mean = tmphist.GetFunction("gaus")->GetParameter(1);
 	double dark_sigma = tmphist.GetFunction("gaus")->GetParameter(2);
 	m_data->CStore.Set("dark_mean",dark_mean);
@@ -1134,13 +1163,13 @@ bool MarcusAnalysis::GetDarkSubTrace(){
 bool MarcusAnalysis::FitPure(){
 	
 	// fit sideband with pure function to account for led power fluctuations and remove background
-	purefitresptr = g_sideband.Fit(pure_fct,"RNQ");
+	purefitresptr = g_sideband.Fit(pure_fct,"RNQS");
 	bool fit_ok = true;
 	if(purefitresptr->IsEmpty() || !purefitresptr->IsValid() || purefitresptr->Status()!=0){
 		std::string fitstat;
-		fitstat += "IsEmpty=" + std::to_string(purefitresptr->IsEmpty());
-		fitstat += "IsValid=" + std::to_string(purefitresptr->IsValid());
-		fitstat += "Status=" + std::to_string(purefitresptr->Status());
+		fitstat += " IsEmpty=" + std::to_string(purefitresptr->IsEmpty());
+		fitstat += " IsValid=" + std::to_string(purefitresptr->IsValid());
+		fitstat += " Status=" + std::to_string(purefitresptr->Status());
 		Log(m_unique_name+" pure fit to sideband region failed: "+fitstat,v_error,verbosity);
 		// do not return false, these are not robust checks of a bad fit.
 		//fit_ok = false;
@@ -1149,11 +1178,11 @@ bool MarcusAnalysis::FitPure(){
 	// make a TGraph of the scaled pure fit for the website....
 	double wlerr = g_inband.GetEX()[0];
 	g_purefit.Set(g_inband.GetN()+g_sideband.GetN());
-	for (int i = 0, j=0, k=0; i < g_inband.GetN()+g_sideband.GetN(); ++k){
+	for (int i = 0, j=0, k=0; k < g_inband.GetN()+g_sideband.GetN(); ++k){
 		double next_inband_wl = g_inband.GetX()[i];
 		double next_sideband_wl = g_sideband.GetX()[j];
 		double next_wl;
-		if(next_inband_wl < next_sideband_wl){
+		if(next_inband_wl < next_sideband_wl && i < g_inband.GetN() ){
 			next_wl = next_inband_wl;
 			++i;
 		} else {
@@ -1165,6 +1194,18 @@ bool MarcusAnalysis::FitPure(){
 		g_purefit.SetPointError(k, wlerr, fiterr);
 	}
 	
+	/*
+	TCanvas c_ttmp("c_ttmp","c_ttmp",1024,800);
+	g_sideband.SetMarkerColor(kBlue);
+	g_inband.SetMarkerColor(kRed);
+	pure_fct->SetLineWidth(1);
+	pure_fct->SetLineColor(kBlack);
+	g_sideband.Draw("AX*");
+	g_inband.Draw("same X*");
+	pure_fct->Draw("same");
+	c_ttmp.SaveAs("purefit.png");
+	*/
+
 	return fit_ok;
 }
 
@@ -1192,7 +1233,7 @@ bool MarcusAnalysis::CalculateAbsorbance(){
 		double err_on_ratio = sqrt(TMath::Sq(error_on_data/dataval)
 		                          +TMath::Sq(error_on_fitval/fitval));
 		double err_on_ratio_over_ratio = err_on_ratio / (fitval/dataval);
-		g_absorb.SetPointError(i, wavelength_errors.at(0)/2., err_on_ratio_over_ratio*(1./log(10.)));
+		g_absorb.SetPointError(i, g_inband.GetEX()[0]/2., err_on_ratio_over_ratio*(1./log(10.)));
 	}
 	
 	return true;
@@ -1201,9 +1242,11 @@ bool MarcusAnalysis::CalculateAbsorbance(){
 bool MarcusAnalysis::CalculateConcentration(std::string method){
 	
 	// extract the peak heights and errors
+	Log(m_unique_name+" calculating peak heights for method "+method,v_debug,verbosity);
 	get_ok = CalculatePeakHeights(method);
 	
 	// convert to gd concentration based on specified calibration curve
+	Log(m_unique_name+" calculating concentration for method "+method,v_debug,verbosity);
 	if(get_ok) get_ok = PeakDiffToConcentration(method);
 	
 	return get_ok;
@@ -1243,9 +1286,13 @@ bool MarcusAnalysis::CalculatePeakHeights(std::string method){
 		get_ok = FitFourGaussians(peak_heights, peak_errs, peak_posns, fitresptrs);
 	}
 	
+	Log(m_unique_name+" peak heights for "+method+" are "+
+	    std::to_string(peak_heights.first)+", "+std::to_string(peak_heights.second),
+	    v_debug,verbosity);
+
 	result.Set("peak_posns", peak_posns);
 	result.Set("peak_heights", peak_heights);
-	result.Set("peak_errs", peak_errs);
+	result.Set("peak_errors", peak_errs);
 	//result.Set("fitresultptrs",fitresptrs);
 	// ughhh can't do that because TFitResultPtr isn't serialisable
 	result.Set("fitresultptrs", reinterpret_cast<intptr_t>(&resultsmap[method]));
@@ -1270,6 +1317,8 @@ bool MarcusAnalysis::PeakDiffToConcentration(std::string method){
 	// solve for concentration (x) from absorbance (y), with 0.01 < x < 0.21
 	TF1& calib_curve = calib_curves.at(method);
 	double conc = calib_curve.GetX(peakheightdiff, 0.001, 0.25);
+	Log(m_unique_name+" concentration for method "+method+" is "+std::to_string(conc),v_debug,verbosity);
+
 	
 	// FIXME TODO
 	// we have errors on the two peak heights but they may be correlated...

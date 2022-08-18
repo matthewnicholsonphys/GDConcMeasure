@@ -35,8 +35,8 @@ bool LoadOldFiles::Execute(){
 	std::string filename;
 	std::string treename;
 	while(true){
-		std::string filename = next_file_iter->filename;
-		std::string treename = next_file_iter->treename;
+		filename = next_file_iter->filename;
+		treename = next_file_iter->treename;
 		int runnum = next_file_iter->runnum;
 		Log("LoadOldFiles: processing file "+filename+", tree "+treename+", run "+std::to_string(runnum),v_debug,verbosity);
 		
