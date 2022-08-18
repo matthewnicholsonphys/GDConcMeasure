@@ -39,10 +39,14 @@ class MarcusAnalysis: public Tool {
 	bool PeakDiffToConcentration(std::string method);
 	void UpdateDataModel();
 	
-	// CalculatePeakHeights for simple method defers to:
-	bool FitTwoGaussians(std::pair<double,double>& simple_peaks, std::pair<double,double>& simple_errs, std::pair<double,double>& peak_posns, std::vector<TFitResultPtr>& fitresptrs);
+	// CalculatePeakHeights for simple method
+	bool FitTwoGaussians(std::pair<double,double>& peak_heights, std::pair<double,double>& peak_errs, std::pair<double,double>& peak_posns, std::vector<TFitResultPtr>& fitresptrs);
+	// CalculatePeakHeights for complex method
 	
-	// CalculatePeakHeights for complex method also makes use of:
+	bool FitFourGaussians(std::pair<double,double>& peak_heights, std::pair<double,double>& peak_errs, std::pair<double,double>& peak_posns, std::vector<TFitResultPtr>& fitresptrs);
+	
+	// calculating errors on peak heights for complex method is a tricky business
+	// due to correlations between the fits
 	std::pair<double,double> CalculateError(double peak1_pos, double peak2_pos);
 	
 	std::string ledToAnalyse="";
@@ -69,7 +73,7 @@ class MarcusAnalysis: public Tool {
 	TFitResultPtr purefitresptr;
 	
 	// abosorption calculated from pure_fct and dark_subtracted_data
-	TGraph g_absorb;                  // g_abs_ledname
+	TGraphErrors g_absorb;                  // g_abs_ledname
 	
 	// used by 'raw' fitting method - the data sample from the inband array
 	// at which the 273 and 276 nm absorption peaks are centered

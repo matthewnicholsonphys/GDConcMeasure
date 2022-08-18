@@ -44,25 +44,8 @@ bool MarcusAnalysis::Initialise(std::string configfile, DataModel &data){
 	get_ok = GetCalibrations();
 	if(!get_ok) return false;
 	
-	// Retrieve pure water reference trace
-	// first see if we have a local filename
-	std::string pureref_file;
-	get_ok = m_variables.Get("pureref_file",pureref_file);
-	if(get_ok){
-		get_ok = GetPureRef(pureref_file);
-	} else {
-		// if no filename, see if we have a version number
-		// for a database entry
-		int pureref_ver=0;
-		get_ok = m_variables.Get("pureref_ver",pureref_ver);
-		if(!get_ok){
-			// neither given - no pure reference trace!
-			Log(m_unique_name+" No pure reference given!",v_error,verbosity);
-			return false;
-		}
-		get_ok = GetPureRefDB(pureref_ver);
-	}
-	// if pure reference getter failed, return
+	// get pure water reference
+	get_ok = GetPureTrace();
 	if(!get_ok) return false;
 	
 	// construct a TF1 from the pure trace
@@ -217,6 +200,12 @@ void MarcusAnalysis::ReInit(){
 	g_purefit.Set(0);
 	g_absorb.Set(0);
 	
+	// clear characteristic values
+	m_data->CStore.Set("dark_mean",-1);
+	m_data->CStore.Set("dark_sigma",-1);
+	m_data->CStore.Set("raw_absregion_max",-1);
+	m_data->CStore.Set("raw_absregion_min",-1);
+	
 	// remake TFitResultPtrs
 	purefitresptr = TFitResultPtr();
 	
@@ -236,6 +225,31 @@ void MarcusAnalysis::ReInit(){
 	}
 	
 	UpdateDataModel();
+}
+
+// ==============================
+
+bool MarcusAnalysis::GetPureTrace(){
+	// Retrieve pure water reference trace
+	// first see if we have a local filename
+	std::string pureref_file;
+	get_ok = m_variables.Get("pureref_file",pureref_file);
+	if(get_ok){
+		// if so read in the TGraph from that file
+		get_ok = GetPureRef(pureref_file);
+	} else {
+		// if no filename, see if we have a version number
+		// for a database entry
+		int pureref_ver=0;
+		get_ok = m_variables.Get("pureref_ver",pureref_ver);
+		if(!get_ok){
+			// neither given - no pure reference trace!
+			Log(m_unique_name+" No pure reference given!",v_error,verbosity);
+			return false;
+		}
+		get_ok = GetPureRefDB(pureref_ver);
+	}
+	return get_ok;
 }
 
 // ==============================
@@ -494,7 +508,7 @@ bool MarcusAnalysis::GetCalCurve(std::string method, int method_i){
 	
 	// construct a TF1 in the map from the formula and parameters given
 	std::string calib_name = "f_cal_"+ledToAnalyse+"_"+method;
-	calib_curves.insert({method, {calib_name.c_str(), formula_str.c_str(), 0, 0.4}});
+	calib_curves.insert({method, {calib_name.c_str(), formula_str.c_str(), 0, 0.25}});
 	calib_curves.at(method).SetParameters(calib_coefficients);
 	
 	// check the TF1 constructed successfully
@@ -651,7 +665,7 @@ bool MarcusAnalysis::GetPureScaledPlusExtras(){
 	
 }
 
-bool MarcusAnalysis::FitTwoGaussians(std::pair<double,double>& simple_peaks, std::pair<double,double>& simple_errs, std::pair<double,double>& peak_posns, std::vector<TFitResultPtr>& fitresptrs){
+bool MarcusAnalysis::FitTwoGaussians(std::pair<double,double>& peak_heights, std::pair<double,double>& peak_errs, std::pair<double,double>& peak_posns, std::vector<TFitResultPtr>& fitresptrs){
 	// given the absorption graph, fit the two main peaks at 273 and 275nm
 	// with gaussians, but only over a narrow region around the peak centre,
 	// where a gaussian approximation is reasonable
@@ -698,19 +712,39 @@ bool MarcusAnalysis::FitTwoGaussians(std::pair<double,double>& simple_peaks, std
 	double gaus1pos = gaus1.GetParameter(1);
 	double gaus2pos = gaus2.GetParameter(1);
 	
-	simple_peaks = std::pair<double,double>{gausamp1,gausamp2};
-	simple_errs = std::pair<double,double>{gaus1amperr,gaus2amperr};
 	peak_posns = std::pair<double,double>{gaus1pos,gaus2pos};
+	peak_heights = std::pair<double,double>{gausamp1,gausamp2};
+	peak_errs = std::pair<double,double>{gaus1amperr,gaus2amperr};
 	
 	get_ok = 1;
 	if(fitresptrs[0]->IsEmpty() || !fitresptrs[0]->IsValid() || fitresptrs[0]->Status()!=0){
-		Log(m_unique_name+" Two gaussian fit gaus1 fit failed",v_error,verbosity);
-		get_ok = 0;
+		std::string fitstat;
+		fitstat += "IsEmpty=" + std::to_string(fitresptrs[0]->IsEmpty());
+		fitstat += "IsValid=" + std::to_string(fitresptrs[0]->IsValid());
+		fitstat += "Status=" + std::to_string(fitresptrs[0]->Status());
+		Log(m_unique_name+" Two gaussian fit gaus1 fit failed: "+fitstat,v_error,verbosity);
+		// this is not a robust check of a bad fit
+		//get_ok = 0;
 	}
 	if(fitresptrs[1]->IsEmpty() || !fitresptrs[1]->IsValid() || fitresptrs[1]->Status()!=0){
-		Log(m_unique_name+" Two gaussian fit gaus2 fit failed",v_error,verbosity);
-		get_ok = 0;
+		std::string fitstat;
+		fitstat += "IsEmpty=" + std::to_string(fitresptrs[1]->IsEmpty());
+		fitstat += "IsValid=" + std::to_string(fitresptrs[1]->IsValid());
+		fitstat += "Status=" + std::to_string(fitresptrs[1]->Status());
+		Log(m_unique_name+" Two gaussian fit gaus2 fit failed: "+fitstat,v_error,verbosity);
+		// this is not a robust check of a bad fit
+		//get_ok = 0;
 	}
+	
+	if(TMath::IsNaN(peak_heights.first)||TMath::IsNaN(peak_heights.second)){
+		Log(m_unique_name+" Two gaussian fit peak heights are NaN",v_error,verbosity);
+		// not sure how the database deals with NaN: make life easier by just using 0
+		if(TMath::IsNaN(peak_heights.first)) peak_heights.first=0;
+		if(TMath::IsNaN(peak_heights.second)) peak_heights.second=0;
+		// this IS a robust indicator of a bad fit!
+		get_ok = false;
+	}
+	
 	return get_ok;
 }
 
@@ -721,8 +755,8 @@ bool MarcusAnalysis::GetFourGaussianFunc(){
 	std::string tpname = "f_fourgaussianfunc_"+ledToAnalyse;
 	if(fourgaussianfunc) delete fourgaussianfunc;
 	fourgaussianfunc = new TF1(tpname.c_str()," [0]*exp(-0.5*TMath::Sq((x[0]-[1])/[2]))"
-	                                          "+[3]*[0]*exp(-0.5*TMath::Sq((x[0]-[4])/[5]))"
-	                                          "+[6]*[0]*exp(-0.5*TMath::Sq((x[0]-[7])/[8]))"
+	                                          "+[0]*[3]*exp(-0.5*TMath::Sq((x[0]-[4])/[5]))"
+	                                          "+[0]*[6]*exp(-0.5*TMath::Sq((x[0]-[7])/[8]))"
 	                                          "+[0]*[9]*exp(-0.5*TMath::Sq((x[0]-[10])/[11]))",
 	                                          270,277);
 	
@@ -824,6 +858,51 @@ bool MarcusAnalysis::ReInitFourGaussians(){
 	return true;
 }
 
+bool MarcusAnalysis::FitFourGaussians(std::pair<double,double>& peak_heights, std::pair<double,double>& peak_errs, std::pair<double,double>& peak_posns, std::vector<TFitResultPtr>& fitresptrs){
+	ReInitFourGaussians();
+	
+	// initialise starting values of peak heights with the results
+	// from the raw method, but coerced to a minimum of 0.
+	peak_heights.first=std::max(0.,peak_heights.first);
+	peak_heights.second=std::max(0.,peak_heights.second);
+	
+	fourgaussianfunc->SetParameter("peak 1 amp",peak_heights.first);
+	fourgaussianfunc->SetParameter("peak 2 amp",peak_heights.second/peak_heights.first);
+	fitresptrs[0] = g_absorb.Fit(fourgaussianfunc,"RQNS");
+	fitresptrs[0]->SetName(fourgaussianfunc->GetName());
+	if(fitresptrs[0]->IsEmpty() || !fitresptrs[0]->IsValid() || fitresptrs[0]->Status()!=0){
+		std::string fitstat;
+		fitstat += "IsEmpty=" + std::to_string(fitresptrs[0]->IsEmpty());
+		fitstat += "IsValid=" + std::to_string(fitresptrs[0]->IsValid());
+		fitstat += "Status=" + std::to_string(fitresptrs[0]->Status());
+		Log(m_unique_name+" Four gaussian fit failed: "+fitstat,v_error,verbosity);
+		// this is not a robust check of a bad fit
+		//get_ok = false;
+	}
+	
+	// get the height of the peaks as the maximum of the curve around the peak location
+	peak_posns.first = fourgaussianfunc->GetMaximumX(272.5,273.5);
+	peak_posns.second = fourgaussianfunc->GetMaximumX(275.,276.);
+	peak_heights.first  = fourgaussianfunc->Eval(peak_posns.first);
+	peak_heights.second  = fourgaussianfunc->Eval(peak_posns.second);
+	if(TMath::IsNaN(peak_heights.first)||TMath::IsNaN(peak_heights.second)){
+		Log(m_unique_name+" Four gaussian peak heights are NaN",v_error,verbosity);
+		// not sure how the database deals with NaN: make life easier by just using 0
+		if(TMath::IsNaN(peak_heights.first)) peak_heights.first=0;
+		if(TMath::IsNaN(peak_heights.second)) peak_heights.second=0;
+		// this IS a robust indicator of a bad fit!
+		get_ok = false;
+	}
+	
+	logmessage << m_unique_name<<"complex peaks at: "<<peak_posns.first<<":"<<peak_posns.second
+	           <<" are "<<peak_heights.first<<" and "<<peak_heights.first
+	           <<" with diff "<<peak_heights.first-peak_heights.second
+	           <<" and ratio "<<peak_heights.first/peak_heights.second<<std::endl;
+	Log(logmessage.str(),v_debug,verbosity);
+	
+	peak_errs = CalculateError(peak_posns.first, peak_posns.second);
+}
+
 std::pair<double,double> MarcusAnalysis::CalculateError(double peak1_pos, double peak2_pos){
 	
 	// ok so we have multiple (4) contributions to the function at each peak.
@@ -905,6 +984,19 @@ std::pair<double,double> MarcusAnalysis::CalculateError(double peak1_pos, double
 bool MarcusAnalysis::GetDarkSubTrace(){
 	// Takes the dark and led trees and returns a TGraphErrors of the dark subtracted trace
 	
+	TTree* darkTree = light_and_dark_trees.first;
+	TTree* ledTree = light_and_dark_trees.second;
+	
+	// sanity check
+	if(darkTree->GetEntries()==0){
+		Log(m_unique_name+" no entries in dark tree!",v_error,verbosity);
+		return false;
+	}
+	if(ledTree->GetEntries()==0){
+		Log(m_unique_name+" no entries in led-on tree!",v_error,verbosity);
+		return false;
+	}
+	
 	// retrieve data from TTrees
 	std::vector<double> led_values, wavelengths, led_errors;
 	std::vector<double> dark_values, dark_errors;
@@ -914,9 +1006,6 @@ bool MarcusAnalysis::GetDarkSubTrace(){
 	std::vector<double>* led_errorsp = &led_errors;
 	std::vector<double>* dark_valuesp = &dark_values;
 	std::vector<double>* dark_errorsp = &dark_errors;
-	
-	TTree* darkTree = light_and_dark_trees.first;
-	TTree* ledTree = light_and_dark_trees.second;
 	
 	Log(m_unique_name+" setting branch addresses to retrieve data",v_debug,verbosity);
 	bool failure=false;
@@ -1029,16 +1118,11 @@ bool MarcusAnalysis::GetDarkSubTrace(){
 	double dark_sigma = tmphist.GetFunction("gaus")->GetParameter(2);
 	m_data->CStore.Set("dark_mean",dark_mean);
 	m_data->CStore.Set("dark_sigma",dark_sigma);
+	
 	// for the raw LED-on trace we'll record the maximum and minimum value of the trace
-	// within the absorption region of 270-280nm.
-	double led_on_max = 0;
-	double led_on_min = std::numeric_limits<double>::max();
-	for(int i=0; i<number_of_points; ++i){
-		if(wavelengths.at(i) > 270 && wavelengths.at(i) < 280){
-			if(led_values.at(i) > led_on_max) led_on_max = led_values.at(i);
-			if(led_values.at(i) < led_on_min) led_on_min = led_values.at(i);
-		}
-	}
+	// within the absorption region.
+	double led_on_max = *std::max_element(inband_values.begin(), inband_values.end());
+	double led_on_min = *std::min_element(inband_values.begin(), inband_values.end());
 	m_data->CStore.Set("raw_absregion_max",led_on_max);
 	m_data->CStore.Set("raw_absregion_min",led_on_min);
 	
@@ -1051,9 +1135,15 @@ bool MarcusAnalysis::FitPure(){
 	
 	// fit sideband with pure function to account for led power fluctuations and remove background
 	purefitresptr = g_sideband.Fit(pure_fct,"RNQ");
+	bool fit_ok = true;
 	if(purefitresptr->IsEmpty() || !purefitresptr->IsValid() || purefitresptr->Status()!=0){
-		Log(m_unique_name+" failed to fit pure reference to sideband region",v_error,verbosity);
-		return false;
+		std::string fitstat;
+		fitstat += "IsEmpty=" + std::to_string(purefitresptr->IsEmpty());
+		fitstat += "IsValid=" + std::to_string(purefitresptr->IsValid());
+		fitstat += "Status=" + std::to_string(purefitresptr->Status());
+		Log(m_unique_name+" pure fit to sideband region failed: "+fitstat,v_error,verbosity);
+		// do not return false, these are not robust checks of a bad fit.
+		//fit_ok = false;
 	}
 	
 	// make a TGraph of the scaled pure fit for the website....
@@ -1071,11 +1161,11 @@ bool MarcusAnalysis::FitPure(){
 			++ j;
 		}
 		g_purefit.SetPoint(k, next_wl, pure_fct->Eval(next_wl));
-		double fiterr = 0.05; // TODO FIXME how do we calculate this
+		double fiterr = 0.00; // TODO FIXME how do we calculate this
 		g_purefit.SetPointError(k, wlerr, fiterr);
 	}
 	
-	return true;
+	return fit_ok;
 }
 
 bool MarcusAnalysis::CalculateAbsorbance(){
@@ -1087,6 +1177,22 @@ bool MarcusAnalysis::CalculateAbsorbance(){
 		g_inband.GetPoint(i, wlval, dataval);
 		double fitval = pure_fct->Eval(wlval);
 		g_absorb.SetPoint(i, wlval, log10(fitval/dataval));
+		
+		// error on ratio is sqrt((Δa/a)²+(Δb/b)²)
+		// https://www.statisticshowto.com/error-propagation/
+		// error on logY(X) is (ΔX/X)*(1/ln(Y))
+		// https://physics.stackexchange.com/questions/95254/the-error-of-the-natural-logarithm/95278#95278
+		// at least in the regime where ΔX<<X. if outside this regime the non-linear
+		// nature of logs means the errors will be asymmetric. In this case one can use
+		// as a rough guide ΔY = log(X-ΔX) -> log(X+ΔX).
+		double error_on_data = g_inband.GetEY()[i];
+		// uhhh what's the error on the extrapolated fit value - i.e. transmitted intensity.
+		// no idea. Let's assume it's of the same order as the data??? FIXME
+		double error_on_fitval = error_on_data;
+		double err_on_ratio = sqrt(TMath::Sq(error_on_data/dataval)
+		                          +TMath::Sq(error_on_fitval/fitval));
+		double err_on_ratio_over_ratio = err_on_ratio / (fitval/dataval);
+		g_absorb.SetPointError(i, wavelength_errors.at(0)/2., err_on_ratio_over_ratio*(1./log(10.)));
 	}
 	
 	return true;
@@ -1109,7 +1215,8 @@ bool MarcusAnalysis::CalculatePeakHeights(std::string method){
 	std::pair<double,double> peak_posns;
 	std::pair<double,double> peak_heights;
 	std::pair<double,double> peak_errs;
-	std::vector<TFitResultPtr> fitresptrs;
+	resultsmap[method] = std::vector<TFitResultPtr>{};
+	std::vector<TFitResultPtr>& fitresptrs = resultsmap[method];
 	get_ok = true;
 	
 	// raw peaks: just the graph value at the peak wavelengths
@@ -1118,51 +1225,22 @@ bool MarcusAnalysis::CalculatePeakHeights(std::string method){
 		g_absorb.GetPoint(sample_276, peak_posns.second, peak_heights.second);
 		
 		// if peaks are negative, coerce to 0
-		peak_heights.first=std::max(0.,peak_heights.first);
-		peak_heights.second=std::max(0.,peak_heights.second);
+		//peak_heights.first=std::max(0.,peak_heights.first);
+		//peak_heights.second=std::max(0.,peak_heights.second);
 		
-		peak_errs = std::pair<double,double>{0.1,0.1}; // FIXME
+		peak_errs = std::pair<double,double>{g_absorb.GetEY()[sample_273],g_absorb.GetEY()[sample_276]};
 	}
 	
 	// simple peaks: fit the peaks with gaussians
 	if(method=="simple"){
 		fitresptrs.resize(2);
 		get_ok = FitTwoGaussians(peak_heights, peak_errs, peak_posns, fitresptrs);
-		if(!get_ok){
-			Log(m_unique_name+" Two gaussian fit failed",v_error,verbosity);
-		}
 	}
 	
 	// complex peaks: fit entire region with a combination of 4 gaussians
 	if(method=="complex"){
-		ReInitFourGaussians();
-		fourgaussianfunc->SetParameter("peak 1 amp",peak_heights.first);
-		fourgaussianfunc->SetParameter("peak 2 amp",peak_heights.second/peak_heights.first);
 		fitresptrs.resize(1);
-		fitresptrs[0] = g_absorb.Fit(fourgaussianfunc,"RQNS");
-		fitresptrs[0]->SetName(fourgaussianfunc->GetName());
-		if(fitresptrs[0]->IsEmpty() || !fitresptrs[0]->IsValid() || fitresptrs[0]->Status()!=0){
-			get_ok = false;
-			Log(m_unique_name+" Four gaussian fit failed",v_error,verbosity);
-		}
-		
-		// get the height of the peaks as the maximum of the curve around the peak location
-		peak_posns.first = fourgaussianfunc->GetMaximumX(272.5,273.5);
-		peak_posns.second = fourgaussianfunc->GetMaximumX(275.,276.);
-		peak_heights.first  = fourgaussianfunc->Eval(peak_posns.first);
-		peak_heights.second  = fourgaussianfunc->Eval(peak_posns.second);
-		if(TMath::IsNaN(peak_heights.first)||TMath::IsNaN(peak_heights.second)){
-			get_ok = false;
-			Log(m_unique_name+" Four gaussian peak heights are NaN",v_error,verbosity);
-		}
-		
-		logmessage << m_unique_name<<"complex peaks at: "<<peak_posns.first<<":"<<peak_posns.second
-		           <<" are "<<peak_heights.first<<" and "<<peak_heights.first
-		           <<" with diff "<<peak_heights.first-peak_heights.second
-		           <<" and ratio "<<peak_heights.first/peak_heights.second<<std::endl;
-		Log(logmessage.str(),v_debug,verbosity);
-		
-		peak_errs = CalculateError(peak_posns.first, peak_posns.second);
+		get_ok = FitFourGaussians(peak_heights, peak_errs, peak_posns, fitresptrs);
 	}
 	
 	result.Set("peak_posns", peak_posns);
@@ -1170,7 +1248,6 @@ bool MarcusAnalysis::CalculatePeakHeights(std::string method){
 	result.Set("peak_errs", peak_errs);
 	//result.Set("fitresultptrs",fitresptrs);
 	// ughhh can't do that because TFitResultPtr isn't serialisable
-	resultsmap[method] = fitresptrs;
 	result.Set("fitresultptrs", reinterpret_cast<intptr_t>(&resultsmap[method]));
 	
 	return get_ok;
@@ -1188,11 +1265,10 @@ bool MarcusAnalysis::PeakDiffToConcentration(std::string method){
 		    v_error,verbosity);
 		return false;
 	}
-	
-	TF1& calib_curve = calib_curves.at(method);
+	double peakheightdiff = peak_heights.first - peak_heights.second;
 	
 	// solve for concentration (x) from absorbance (y), with 0.01 < x < 0.21
-	double peakheightdiff = peak_heights.first - peak_heights.second;
+	TF1& calib_curve = calib_curves.at(method);
 	double conc = calib_curve.GetX(peakheightdiff, 0.001, 0.25);
 	
 	// FIXME TODO
