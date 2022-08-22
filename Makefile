@@ -1,6 +1,6 @@
 ToolDAQPath=ToolDAQ
 
-CPPFLAGS= -Wno-psabi
+CPPFLAGS= -Wno-psabi -std=c++14
 
 ZMQLib= -L $(ToolDAQPath)/zeromq-4.0.7/lib -lzmq
 ZMQInclude= -I $(ToolDAQPath)/zeromq-4.0.7/include/
