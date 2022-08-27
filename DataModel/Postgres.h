@@ -241,13 +241,14 @@ class Postgres {
 				// no connection to batabase -> abort
 				return false;
 			}
+			std::string query_string;
 			try{
 				// open a transaction to interact with the database
 				//pqxx::work(*conn);
 				pqxx::nontransaction txn(*conn);
 				
 				// form the query
-				std::string query_string = "INSERT INTO " + tablename + "( ";
+				query_string = "INSERT INTO " + tablename + "( ";
 				for(auto&& afield : fields) query_string += afield +", ";
 				query_string = query_string.substr(0, query_string.length()-2); // pop trailing comma
 				query_string += ") VALUES (";
@@ -263,8 +264,24 @@ class Postgres {
 				return true;
 			}
 			catch (const pqxx::broken_connection &e){
-				// if our connection is broken after all, disconnect, reconnect and retry
-				if(tries==0){
+				// annoyingly this exception is also thrown on bad syntax for Insert
+				// (and what else?) - manually check if our connection is actually ok
+				std::string openerr;
+				if(OpenConnection(&openerr)!=nullptr){
+					// just a syntax error, not a connection error. Ugh.
+					// can we repackage it as a pqxx::sql_error and re-throw? probably not easily.
+					// moreover a pqxx::broken_connection object doesn't even have the same
+					// members describing what the real syntax error was: all we have is e.what().
+					std::stringstream errmsg;
+					errmsg << e.what() << "When executing query: " << query_string << " with args: ";
+					Print(errmsg, std::forward<Rest>(args)...);
+					std::cerr<<errmsg.str()<<std::endl;
+					if(err) *err = errmsg.str();
+				} else if(tries==0){
+					// our connection is broken after all: disconnect, reconnect and retry
+					// however, i will note that even with a good connection this did not succeed.
+					std::cerr<<"Postgres Connection error:"
+					         <<" trying to close and re-open connection"<<std::endl;
 					CloseConnection();
 					delete conn; conn=nullptr;
 					continue;

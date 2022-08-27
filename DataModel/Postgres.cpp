@@ -63,9 +63,7 @@ pqxx::connection* Postgres::OpenConnection(std::string* err){
 }
 
 bool Postgres::CloseConnection(std::string* err){
-	if(verbosity>v_debug){
-		std::cout<<"Closing connection"<<std::endl;
-	}
+	if(verbosity>v_debug) std::cout<<"Closing connection"<<std::endl;
 	if(conn==nullptr){
 		if(verbosity>v_debug) std::cout<<"No connection to close"<<std::endl;
 		return true;
@@ -99,7 +97,9 @@ Postgres::~Postgres(){
 	if(conn) delete conn;
 }
 
-Postgres::Postgres(){}
+Postgres::Postgres(){
+	Init();
+}
 
 void Postgres::Init(std::string hostname_in, std::string hostip_in, int port_in,
                std::string user_in, std::string password_in, std::string dbname_in){
@@ -115,6 +115,36 @@ void Postgres::Init(std::string hostname_in, std::string hostip_in, int port_in,
 	dbuser=user_in;
 	dbname=dbname_in;
 	dbpasswd=password_in;
+	
+	// if no connection details given try to get them from the environment
+	std::string empty = "";
+	if(hostname==""){
+		char* pghost = getenv("PGHOST");
+		if(pghost!=nullptr) hostname = std::string(pghost);
+	}
+	if(hostaddr==""){
+		char* pghostaddr = getenv("PGHOSTADDR");
+		if(pghostaddr!=nullptr) hostaddr = std::string(pghostaddr);
+	}
+	if(port<0){
+		char* pgport = getenv("PGPORT");
+		if(pgport!=nullptr) port = atoi(pgport);
+	}
+	if(dbname==""){
+		char* pgdbname = getenv("PGDATABASE");
+		if(pgdbname!=nullptr) dbname = std::string(pgdbname);
+	}
+	if(dbuser==""){
+		char* pguser = getenv("PGUSER");
+		if(pguser!=nullptr) dbuser = std::string(pguser);
+	}
+	// could we theoretically parse $HOME/.pgpass if it exists and set dbpasswd?
+	// do we need to do that, or will libpqxx already use it?
+	// (it doesn't seem to automatically use environmental variables....)
+	if(verbosity > v_debug){
+		std::cout<<"host name is "<<hostname<<", host addr is "<<hostaddr
+		         <<", port is "<<port<<", database is "<<dbname<<", user is "<<dbuser<<std::endl;
+	}
 }
 
 // XXX reminder that pqxx::result is a reference-counting wrapper and is not thread-safe! XXX
@@ -190,12 +220,22 @@ bool Postgres::Query(std::string query, int nret, pqxx::result* res, pqxx::row* 
 		}
 		catch (const pqxx::broken_connection &e){
 			// if our connection is broken after all, disconnect, reconnect and retry
-			if(tries==0){
+			// sometimes however this is actually thrown by an sql syntax error??
+			// so check our connection before we try to reset it.
+			if(OpenConnection()!=nullptr){
+				// ok not actually a broken connection
+				std::string msg = e.what();
+				            msg += "When executing query: " + query;
+				std::cerr<<msg<<std::endl;
+				if(err) *err = msg;
+			} else if(tries==0){
+				std::cerr<<", trying to close connection and reconnect"<<std::endl;
 				CloseConnection();
 				delete conn; conn=nullptr;
 				continue;
 			} else {
 				std::cerr<<"Postgres::Query error - broken connection, failed to re-establish it"<<std::endl;
+				std::cerr<<e.what()<<std::endl;
 				if(err) *err=e.what();
 			}
 		}

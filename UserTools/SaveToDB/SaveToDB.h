@@ -51,7 +51,7 @@ class SaveToDB: public Tool {
 	int RunConfig=-1;
 	
 	// for identifying measurements stored in the database
-	boost::posix_time::ptime last_measurement_time;
+	std::string last_measurement_time;
 	int measurementnum=-1;
 	
 	bool get_ok;

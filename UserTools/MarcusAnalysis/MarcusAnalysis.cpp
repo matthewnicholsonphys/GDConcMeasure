@@ -7,7 +7,7 @@ bool MarcusAnalysis::Initialise(std::string configfile, DataModel &data){
 	
 	m_data = &data;
 	
-	verbosity=v_debug;
+	verbosity=v_warning;
 	
 	// Retrieve configuration options from the postgres database
 	int RunConfig=-1;
@@ -1132,7 +1132,6 @@ bool MarcusAnalysis::GetDarkSubTrace(){
 	g_other.SetTitle(othertitle.c_str());
 	g_other.SetName(othertitle.c_str());
 	
-	
 	// for stability monitoring we'll record some characteristic information about the raw data
 	// in the database. The dark trace should be pretty flat, so we'll histogram it,
 	// fit it with a gaussian, and record the mean and sigma.
@@ -1241,13 +1240,17 @@ bool MarcusAnalysis::CalculateAbsorbance(){
 
 bool MarcusAnalysis::CalculateConcentration(std::string method){
 	
+	BoostStore& result = results[method];
+	
 	// extract the peak heights and errors
 	Log(m_unique_name+" calculating peak heights for method "+method,v_debug,verbosity);
 	get_ok = CalculatePeakHeights(method);
+	result.Set("absfit_success", get_ok);
 	
 	// convert to gd concentration based on specified calibration curve
 	Log(m_unique_name+" calculating concentration for method "+method,v_debug,verbosity);
 	if(get_ok) get_ok = PeakDiffToConcentration(method);
+	result.Set("conc_fit_success",get_ok);
 	
 	return get_ok;
 }
@@ -1289,7 +1292,7 @@ bool MarcusAnalysis::CalculatePeakHeights(std::string method){
 	Log(m_unique_name+" peak heights for "+method+" are "+
 	    std::to_string(peak_heights.first)+", "+std::to_string(peak_heights.second),
 	    v_debug,verbosity);
-
+	
 	result.Set("peak_posns", peak_posns);
 	result.Set("peak_heights", peak_heights);
 	result.Set("peak_errors", peak_errs);
@@ -1308,30 +1311,32 @@ bool MarcusAnalysis::PeakDiffToConcentration(std::string method){
 	get_ok = result.Get("peak_heights", peak_heights);
 	get_ok &= result.Get("peak_errors", peak_errors);
 	if(!get_ok){
+		
 		Log(m_unique_name+" Absorbance fit result did not contain peak heights and errors",
 		    v_error,verbosity);
-		return false;
+		
+	} else {
+		
+		double peakheightdiff = peak_heights.first - peak_heights.second;
+		
+		// solve for concentration (x) from absorbance (y), with 0.01 < x < 0.21
+		TF1& calib_curve = calib_curves.at(method);
+		double conc = calib_curve.GetX(peakheightdiff, 0.001, 0.25);
+		Log(m_unique_name+" concentration for method "+method+" is "+std::to_string(conc),v_debug,verbosity);
+		
+		// FIXME TODO
+		// we have errors on the two peak heights but they may be correlated...
+		// so calculation of the errors is probably going to require functions specialised
+		// for the corresponding fit method
+		// as a rough first estimate, assume uncorrelated
+		double peakheightdifferr = TMath::Sqrt(TMath::Sq(peak_errors.first)+TMath::Sq(peak_errors.second));
+		// error on concentration is error on height difference times gradient at that point.
+		double conc_err = peakheightdifferr * calib_curve.Derivative(peakheightdiff);
+		
+		std::pair<double,double> conc_and_err{conc, conc_err};
+		result.Set("conc_and_err", conc_and_err);
 	}
-	double peakheightdiff = peak_heights.first - peak_heights.second;
 	
-	// solve for concentration (x) from absorbance (y), with 0.01 < x < 0.21
-	TF1& calib_curve = calib_curves.at(method);
-	double conc = calib_curve.GetX(peakheightdiff, 0.001, 0.25);
-	Log(m_unique_name+" concentration for method "+method+" is "+std::to_string(conc),v_debug,verbosity);
-
-	
-	// FIXME TODO
-	// we have errors on the two peak heights but they may be correlated...
-	// so calculation of the errors is probably going to require functions specialised
-	// for the corresponding fit method
-	// as a rough first estimate, assume uncorrelated
-	double peakheightdifferr = TMath::Sqrt(TMath::Sq(peak_errors.first)+TMath::Sq(peak_errors.second));
-	// error on concentration is error on height difference times gradient at that point.
-	double conc_err = peakheightdifferr * calib_curve.Derivative(peakheightdiff);
-	
-	std::pair<double,double> conc_and_err{conc, conc_err};
-	result.Set("conc_and_err", conc_and_err);
-	
-	return true;
+	return get_ok;
 }
 

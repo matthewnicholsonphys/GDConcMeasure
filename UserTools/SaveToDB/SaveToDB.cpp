@@ -31,6 +31,7 @@ bool SaveToDB::Initialise(std::string configfile, DataModel &data){
 	
 	m_variables.Get("max_webpage_records",max_webpage_records);
 	m_variables.Get("verbosity",verbosity);
+	if(verbosity>100) m_data->postgres.SetVerbosity(v_debug);  // this can be a bit much
 	
 	// until we have a better definition, each execution of the ToolChain
 	// will consitute a new run and will result in a new entry in the run database,
@@ -732,7 +733,8 @@ bool SaveToDB::MarcusAnalysis(){
 		
 		// Get this measurement number. This ties together database entries from the same spectrometer readout pair
 		// (dark+light), since we may have several associated concentration entries, from different methods.
-		if(m_data->measurment_time != last_measurement_time){
+		if(dbtimestamp != last_measurement_time){
+			last_measurement_time = dbtimestamp;
 			++measurementnum;
 		}
 		Log("SaveToDB::MarcusAnalysis measurement number for this measurement database entry "
@@ -770,7 +772,7 @@ bool SaveToDB::MarcusAnalysis(){
 			std::string dark_json = "{ \"mean\":"+std::to_string(dark_mean)
 			                      + ", \"width\":"+std::to_string(dark_sigma)+"}";
 			// store to database
-			field_names = std::vector<std::string>{"run","measurement","timestamp","ledname","tool","name","values", "data"};
+			field_names = std::vector<std::string>{"run","measurement","timestamp","ledname","tool","name","values"};
 			error_ret="";
 			get_ok = m_data->postgres.Insert("data",                      // table name
 			                                 field_names,                 // field names
@@ -915,7 +917,7 @@ bool SaveToDB::MarcusAnalysis(){
 		std::string datakey = "purerefData_"+ledname;
 		intptr_t dark_sub_purep;
 		get_ok = m_data->CStore.Get(datakey, dark_sub_purep);
-		TGraphErrors* dark_subtracted_pure = reinterpret_cast<TGraphErrors*>(dark_sub_purep);
+		TGraph* dark_subtracted_pure = reinterpret_cast<TGraph*>(dark_sub_purep);
 		// convert to json
 		std::string dark_sub_pure = BuildJson(dark_subtracted_pure);
 		// delete any existing entry so we don't keep accumulating them
@@ -960,7 +962,7 @@ bool SaveToDB::MarcusAnalysis(){
 				    "from webpage table",v_error,verbosity);
 			}
 			// insert new record in its place
-			field_names = std::vector<std::string>{"timestamp","name","values"};
+			field_names = std::vector<std::string>{"timestamp","name","values","data"};
 			error_ret="";
 			get_ok = m_data->postgres.Insert("webpage",                   // table name
 			                                 field_names,                 // field names
@@ -993,7 +995,7 @@ bool SaveToDB::MarcusAnalysis(){
 			field_names = std::vector<std::string>
 			            {"run","measurement","timestamp","ledname","tool","name","values"};
 			error_ret="";
-			get_ok = m_data->postgres.Insert("data",                      // table name
+			get_ok = m_data->postgres.Insert("data",                          // table name
 				                             field_names,                 // field names
 				                             &error_ret,                  // error return string
 				                             // variadic argument list of field values
@@ -1069,7 +1071,7 @@ bool SaveToDB::MarcusAnalysis(){
 			}
 		}
 		
-		// 4. gaussians fit to absorption peaks
+		// 4. get fit(s) to absorption peaks
 		std::map<std::string, BoostStore>* results;
 		intptr_t resultsp;
 		Log("SaveToDB::MarcusAnalysis getting absorbance fit",v_debug,verbosity);
@@ -1093,26 +1095,38 @@ bool SaveToDB::MarcusAnalysis(){
 				
 				std::vector<TFitResultPtr>* fitinfo;
 				intptr_t fitinfop;
+				int absfit_ok;
 				std::pair<double,double> peak_posns;
 				std::pair<double,double> peak_heights;
 				std::pair<double,double> peak_errs;
 				std::string calibID;
 				std::string formula_str;
 				std::string params_str;
+				int conc_ok;
 				std::pair<double,double> conc_and_err;
 				
 				bool got_fit_results = result.Get("fitresultptrs", fitinfop);
+				bool got_absfit_ok = result.Get("absfit_success", absfit_ok);
 				bool got_peak_pos = result.Get("peak_posns", peak_posns);
 				bool got_peak_heights = result.Get("peak_heights", peak_heights);
-				bool got_peak_errs = result.Get("peak_errs", peak_errs);
+				bool got_peak_errs = result.Get("peak_errors", peak_errs);
 				bool got_cal_id = result.Get("calcurveID",calibID);
 				bool got_cal_func = result.Get("calcurveFunc",formula_str);
 				bool got_cal_pars = result.Get("calcurvePars",params_str);
+				bool got_conc_ok = result.Get("conc_fit_success",conc_ok);
 				bool got_conc = result.Get("conc_and_err", conc_and_err);
 				
 				std::string thismethodjson = "{\"method\":\""+methodname+"\"";
 				
-				// store results of absorption fit
+				// store overall result of absorption fit
+				if(!got_absfit_ok){
+					Log("SaveToDB::MarcusAnalysis failed to get abosorption fit status for method "+methodname
+					    +", led "+ledname,v_error,verbosity);
+				} else {
+					thismethodjson += ", \"absfit_success\":"+std::to_string(absfit_ok);
+				}
+				
+				// store results of individual absorption fits (may have more than one contributing fit)
 				if(!got_fit_results){
 					Log("SaveToDB::MarcusAnalysis failed to get fit results for method "+methodname
 					    +", led "+ledname,v_error,verbosity);
@@ -1130,11 +1144,12 @@ bool SaveToDB::MarcusAnalysis(){
 						// get name of this fit function
 						std::string funcname = afit->GetName();
 						std::string fitparsjson = BuildJson(afit, false);    // parameters
-						std::string fitstatusjson = BuildJson(afit, false);  // fit status
+						std::string fitstatusjson = BuildJson(afit, true);   // fit status
 						
 						std::string fitjsonobject = 
-						        "{\"function\":\""+funcname+"\":"
-						        "{\"fitpars\":"+fitparsjson+", \"fitstatus\":"+fitstatusjson+"} }";
+						        "{\"function\":\""+funcname+"\","
+						        "\"fitpars\":"+fitparsjson+","
+						        "\"fitstatus\":"+fitstatusjson+"}";
 						
 						if(fit_i>0) absorpfitsjson += ", ";
 						absorpfitsjson += fitjsonobject;
@@ -1178,7 +1193,7 @@ bool SaveToDB::MarcusAnalysis(){
 					Log("SaveToDB::MarcusAnalysis failed to get calibration curve ID for method "
 					    +methodname+", led "+ledname,v_error,verbosity);
 				} else {
-					thismethodjson += ", \"calibID\":"+calibID;
+					thismethodjson += ", \"calibID\":\""+calibID+"\"";
 					// this may a database entry ID or "Local", in which case we should also have
 					// a calibration function string and csv list of parameters
 					if(calibID=="Local"){
@@ -1192,9 +1207,17 @@ bool SaveToDB::MarcusAnalysis(){
 							Log("SaveToDB::MarcusAnalysis failed to get local calibration parameters "
 							    " for method "+methodname+", led "+ledname,v_error,verbosity);
 						} else {
-							thismethodjson += ", \"calib_pars\":\""+params_str+"\"";
+							thismethodjson += ", \"calib_pars\":["+params_str+"]";
 						}
 					}
+				}
+				
+				// store success status of absorption->concentration conversion
+				if(!got_conc_ok){
+					Log("SaveToDB::MarcusAnalysis failed to get concentration conversion status for method "+methodname
+					    +", led "+ledname,v_error,verbosity);
+				} else {
+					thismethodjson += ", \"concfit_success\":"+std::to_string(conc_ok);
 				}
 				
 				if(!got_conc){
@@ -1210,8 +1233,9 @@ bool SaveToDB::MarcusAnalysis(){
 				thismethodjson +="}";
 				
 				// store to db. These get stored persistently, not just temporarily for the webpage
-				Log("SaveToDB::MarcusAnalysis saving method "+methodname+" results: '"+thismethodjson
-				    +"'",v_debug,verbosity);
+				Log("SaveToDB::MarcusAnalysis saving method "+methodname+" results: "
+				//    "'"+thismethodjson+"'"    // bit too verbose for normal use.
+				    ,v_debug,verbosity);
 				
 				field_names = std::vector<std::string>
 				      {"run","measurement","timestamp","ledname","tool","name","values"};
@@ -1687,6 +1711,8 @@ std::string SaveToDB::BuildJson(TGraphErrors* gr){
 	double* yvals = gr->GetY();
 	double* xerrs = gr->GetEX();
 	double* yerrs = gr->GetEY();
+	if(xerrs==nullptr) std::cerr<<"no x errors on graph "<<gr->GetName()<<std::endl;
+	if(yerrs==nullptr) std::cerr<<"no y errors on graph "<<gr->GetName()<<std::endl;
 	std::string jsonstring = "{\"xvals\":" + BuildJson(xvals, npoints)
 	                       + ",\"yvals\":" + BuildJson(yvals, npoints)
 	                       + ",\"xerrs\":" + BuildJson(xerrs, npoints)
@@ -1705,11 +1731,12 @@ std::string SaveToDB::BuildJson(TGraph* gr){
 
 std::string SaveToDB::BuildJson(double* arr, double* err, int n){
 	std::string jsonstring = "{\"values\":"+BuildJson(arr,n)
-	                         +", \"errors\":"+BuildJson(err,n)+"}";
+	                         +",\"errors\":"+BuildJson(err,n)+"}";
 	return jsonstring;
 }
 
 std::string SaveToDB::BuildJson(double* arr, int n){
+	if(arr==nullptr) return "[]";
 	std::string jsonstring = "[";
 	for(int i=0; i<n; ++i){
 		if(i>0) jsonstring+=",";
