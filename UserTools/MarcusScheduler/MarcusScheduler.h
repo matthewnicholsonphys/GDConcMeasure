@@ -32,10 +32,11 @@ class MarcusScheduler: public Tool {
 	std::string measurement_name;
 	int overwrite_saves=1;
 	bool looping=false;
-	int loop_count=0;                   // flattened loop iteration counter, used for unique output file naming
+	int file_num=0;                     // incremented each time 'Save' is called to make a new file
 	std::vector<int> loop_starts;       // start command number for loops
 	std::vector<int> loop_iterations;   // total iterations for each loop
 	std::vector<int> loop_counts;       // number performed so far
+	int loop_count=0;                   // flattened loop iteration counter, unused
 	std::string break_loop_flagfile_name;
 	
 	std::map<std::string,int> LED_states{{"R",0}, {"G",0}, {"B",0}, {"White",0}, {"385",0}, {"275_A",0}, {"275_B",0}};
@@ -53,6 +54,7 @@ class MarcusScheduler: public Tool {
 	// individual handlers for automation commands
 	void DoSave(std::string the_command);
 	void DoAnalyse(std::string the_command);
+	void DoTransparency(std::string the_command);
 	void DoPower(std::string the_command);
 	void DoPump(std::string the_command);
 	void DoValves(std::string the_command);
@@ -62,6 +64,7 @@ class MarcusScheduler: public Tool {
 	void WaitForDuration(std::string wait_string);
 	void StartLoop(std::string the_command);
 	void EndLoop(std::string the_command);
+	void SetFile(std::string the_command);
 	
 	// helper functions
 	bool check_break_loop(std::string& the_command);

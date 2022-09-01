@@ -1,5 +1,5 @@
 verbosity 1
-ledToAnalyse 275_A
+ledToAnalyse 275_B
 pureref_ver 0         # DB pure trace ID
 #pureref_file ./pureDarkSubtracted_275_A_julcal2.root
 

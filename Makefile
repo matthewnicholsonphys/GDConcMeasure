@@ -96,3 +96,6 @@ update:
 	cd $(ToolDAQPath)/ToolDAQFramework; git pull
 	cd $(ToolDAQPath)/zeromq-4.0.7; git pull
 	git pull
+
+make_pure_ref:
+	g++ -std=c++11 make_pure_ref.cpp `root-config --cflags --libs` -o make_pureref_DB_entry

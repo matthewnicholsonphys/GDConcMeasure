@@ -63,6 +63,12 @@ class MarcusAnalysis: public Tool {
 	// pure reference used as part of fit, and saved to database
 	TGraph dark_subtracted_pure;       // g_pureref_ledname
 	
+	// values that go into the db webpage table
+	double dark_mean;
+	double dark_sigma;
+	double led_on_max;
+	double led_on_min;
+	
 	// function built from pure reference, fit to data in sidebands
 	TF1* pure_fct = nullptr;           // f_purefit_ledname
 	

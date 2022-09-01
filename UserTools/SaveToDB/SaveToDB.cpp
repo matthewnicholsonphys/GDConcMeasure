@@ -130,46 +130,55 @@ bool SaveToDB::Execute(){
 	// for each Tool in the ToolChain, execute the corresponding
 	// method to record its outputs to the database
 	bool all_ok=true;
+	
+	// the following tools ONLY populate the webpage table with transient information
+	// about the current sate of the measurement.
 	try{
-	get_ok = MarcusScheduler();
+		get_ok = MarcusScheduler();
 	} catch(...){ std::cerr<<"failed to save marcusscheduler"<<std::endl; all_ok = false; }
 	if(!get_ok) { std::cerr<<"failed to save marcusscheduler"<<std::endl; all_ok = false; }
 	try{
-	get_ok = BenPower();
+		get_ok = BenPower();
 	} catch(...){ std::cerr<<"failed to save benpower"<<std::endl; all_ok = false; }
 	if(!get_ok) { std::cerr<<"failed to save benpower"<<std::endl; all_ok = false; }
 	try{
-	get_ok = Valve();
+		get_ok = Valve();
 	} catch(...){ std::cerr<<"failed to save valve"<<std::endl; all_ok = false; }
 	if(!get_ok) { std::cerr<<"failed to save valve"<<std::endl; all_ok = false; }
 	try{
-	get_ok = BenLED();
+		get_ok = BenLED();
 	} catch(...){ std::cerr<<"failed to save benled"<<std::endl; all_ok = false; }
 	if(!get_ok) { std::cerr<<"failed to save benled"<<std::endl; all_ok = false; }
 	try{
-	get_ok = BenSpectrometer();
+		get_ok = BenSpectrometer();
 	} catch(...){ std::cerr<<"failed to save benspec"<<std::endl; all_ok = false; }
 	if(!get_ok) { std::cerr<<"failed to save benspec"<<std::endl; all_ok = false; }
 	try{
-	get_ok = TraceAverage();
+		get_ok = TraceAverage();
 	} catch(...){ std::cerr<<"failed to save traceav"<<std::endl; all_ok = false; }
 	if(!get_ok) { std::cerr<<"failed to save traceav"<<std::endl; all_ok = false; }
 	try{
-	get_ok = MatthewAnalysis();
+		get_ok = MatthewAnalysis();
 	} catch(...){ std::cerr<<"failed to save mattana"<<std::endl; all_ok = false; }
 	if(!get_ok) { std::cerr<<"failed to save mattana"<<std::endl; all_ok = false; }
 	try{
-	get_ok = MarcusAnalysis();
-	} catch(...){ std::cerr<<"failed to save mattana"<<std::endl; all_ok = false; }
-	if(!get_ok) { std::cerr<<"failed to save mattana"<<std::endl; all_ok = false; }
-	try{
-	get_ok = SaveTraces();
+		get_ok = SaveTraces();
 	} catch(...){ std::cerr<<"failed to save savetr"<<std::endl; all_ok = false; }
 	if(!get_ok) { std::cerr<<"failed to save savetr"<<std::endl; all_ok = false; }
 	try{
-	get_ok = RoutineCalibration();  // placeholder, Tool TODO
+		get_ok = RoutineCalibration();  // placeholder, Tool TODO
 	} catch(...){ std::cerr<<"failed to save routinecalib"<<std::endl; all_ok = false; }
 	if(!get_ok) { std::cerr<<"failed to save routinecalib"<<std::endl; all_ok = false; }
+	
+	// the following tools store information persistently into the database 'data' table
+	try{
+		get_ok = MarcusAnalysis();
+	} catch(...){ std::cerr<<"failed to save mattana"<<std::endl; all_ok = false; }
+	if(!get_ok) { std::cerr<<"failed to save mattana"<<std::endl; all_ok = false; }
+	try{
+		get_ok = MatthewTransparency();
+	} catch(...){ std::cerr<<"failed to save matthewtransp"<<std::endl; all_ok = false; }
+	if(!get_ok) { std::cerr<<"failed to save matthewtransp"<<std::endl; all_ok = false; }
 	
 	return get_ok;
 }
@@ -193,7 +202,7 @@ bool SaveToDB::Finalise(){
 		                                 // variadic argument list of criterion values
 		                                 runnum);                     // updat entry for current run
 		if(!get_ok){
-			Log("SaveToDB::BenPower failed to update end time of current run "
+			Log("SaveToDB::Finalise failed to update end time of current run "
 			    "in database with error '"+error_ret+"'",v_error,verbosity);
 		}
 	}
@@ -208,6 +217,10 @@ bool SaveToDB::MatthewAnalysis(){
 	get_ok = m_data->CStore.Get("NewMeasurement",new_measurement);
 	if(get_ok && new_measurement){
 		
+		Log("SaveToDB::MatthewAnalysis is deprecated and will make inconsistencies in the database!"
+			" Skipping SaveToDB::MatthewAnalysis",v_error,verbosity);
+		return false;
+		
 		Log("SaveToDB::MatthewAnalysis recording new measurement",v_debug,verbosity);
 		
 		// by default we'll use the current time as the timestamp for insertions/updates,
@@ -219,7 +232,8 @@ bool SaveToDB::MatthewAnalysis(){
 		// by default we'll use the current run as the run number for insertions/updates,
 		// but allow the user to override with a custom run number
 		get_ok = m_data->CStore.Get("dbrunnum",runnum);
-		Log("SaveToDB::MatthewAnalysis run number for this measurement will be "+std::to_string(runnum),v_debug,verbosity);
+		Log("SaveToDB::MatthewAnalysis run number for this measurement will be "
+		    +std::to_string(runnum),v_debug,verbosity);
 		
 		////////////////////////////////////////////////
 		// gd concentration calculation proceeds as follows:
@@ -711,34 +725,16 @@ bool SaveToDB::MatthewAnalysis(){
 
 bool SaveToDB::MarcusAnalysis(){
 	
+	bool all_ok = true;
+	
 	// see if we have new data to add to DB
 	bool new_measurement;
-	get_ok = m_data->CStore.Get("NewMarcusMeasurement",new_measurement);
+	get_ok = m_data->CStore.Get("NewMarcusAnalyse",new_measurement);
+	
+	// do we have a new measurement?
 	if(get_ok && new_measurement){
 		
 		Log("SaveToDB::MarcusAnalysis recording new measurement",v_debug,verbosity);
-		
-		// by default we'll use the time of the latest trace as the timestamp associated with the measurement
-		//std::string dbtimestamp = "now()";
-		std::string dbtimestamp=to_simple_string(m_data->measurment_time);
-		
-		// but allow the user to override with a custom timestamp (should be postgres compatible)
-		get_ok = m_data->CStore.Get("dbtimestamp",dbtimestamp);  // e.g "2020-09-16 15:54:00"
-		Log("SaveToDB::MarcusAnalysis timestamp for this measurement will be "+dbtimestamp,v_debug,verbosity);
-		
-		// by default we'll use the current run as the run number for insertions/updates,
-		// but allow the user to override with a custom run number
-		get_ok = m_data->CStore.Get("dbrunnum",runnum);
-		Log("SaveToDB::MarcusAnalysis run number for this measurement will be "+std::to_string(runnum),v_debug,verbosity);
-		
-		// Get this measurement number. This ties together database entries from the same spectrometer readout pair
-		// (dark+light), since we may have several associated concentration entries, from different methods.
-		if(dbtimestamp != last_measurement_time){
-			last_measurement_time = dbtimestamp;
-			++measurementnum;
-		}
-		Log("SaveToDB::MarcusAnalysis measurement number for this measurement database entry "
-		    +std::to_string(measurementnum),v_debug,verbosity);
 		
 		// get which LED was being measured
 		std::string ledname="";
@@ -746,6 +742,136 @@ bool SaveToDB::MarcusAnalysis(){
 		if(!get_ok){
 			Log("SaveToDB::MarcusAnalysis failed to find ledToAnalyse in CStore!",v_debug,verbosity);
 			// we could bail, but again we may be able to deduce which LED was on from the spectrum later.
+			all_ok = false;
+		}
+		
+		// by default we'll use the current run as the run number for insertions/updates,
+		// but allow the user to override with a custom run number for processing old data
+		get_ok = m_data->CStore.Get("dbrunnum",runnum);
+		Log("SaveToDB::MarcusAnalysis run number for this measurement will be "
+		    +std::to_string(runnum),v_debug,verbosity);
+		
+		// Get the raw file the underlying data is to be saved in
+		std::string rawfilename;
+		get_ok = m_data->CStore.Get("Filename",rawfilename);
+		if(!get_ok){
+			Log("SaveToDB::MarcusAnalysis failed to find 'Filename' in CStore describing "
+			    "what raw file these results are or will be saved in!",v_error,verbosity);
+			all_ok = false;
+		}
+		// XXX note that unless SaveTraces is called in this ToolChain without any subsequent
+		// setFile scheduler commands, we have no guarantee that this output file will be created
+		// or that it will contain the corresponding data for this DB entry.
+		
+		// Get the tree entries used for this measurement. By default
+		// we'll assume these are numbers of the last pair of entries in
+		// the TTrees, but again we'll let the user override if necessary
+		TTree* ledTree=nullptr;
+		std::pair<int,int> treeentrynums{-1,-1}; // light then dark
+		get_ok = m_data->CStore.Get("dbtreeentries",treeentrynums);
+		if(not get_ok){
+			// none provided by user, so pull the trees and count the number of entries
+			auto light_and_dark_trees = std::pair<TTree*, TTree*>{nullptr,nullptr};
+			for(std::pair<const std::string, TTree*>& atree : m_data->m_trees){
+				if (atree.first==ledname){light_and_dark_trees.first = atree.second;}
+				else if (boost::iequals(atree.first, "dark")){light_and_dark_trees.second = atree.second;}
+			}
+			if(light_and_dark_trees.first!=nullptr){
+				treeentrynums.first=light_and_dark_trees.first->GetEntries()-1;
+				ledTree = light_and_dark_trees.first;
+			} else {
+				Log("SaveToDB::MarcusAnalysis Failed to find tree "+ledname+" in m_data->m_trees!",
+					v_error,verbosity);
+				all_ok = false;
+			}
+			if(light_and_dark_trees.second!=nullptr){
+				treeentrynums.second=light_and_dark_trees.second->GetEntries()-1;
+			} else {
+				Log("SaveToDB::MarcusAnalysis Failed to find 'dark' tree in m_data->m_trees!",
+					v_error,verbosity);
+				all_ok = false;
+			}
+		}
+		
+		// by default we'll also use the timestamp of the corresponding led tree entry
+		// as the database entry timestamp. As always, allow a user override.
+		std::string dbtimestamp;
+		get_ok = m_data->CStore.Get("dbtimestamp",dbtimestamp);  // e.g "2020-09-16 15:54:00"
+		if(!get_ok && ledTree!=nullptr){
+			// no user value and we have a valid led tree; get timestamp of last entry
+			Short_t yr, mon, dy, hr, mn, sc;
+			ledTree->SetBranchAddress("year",&yr);
+			ledTree->SetBranchAddress("month",&mon);
+			ledTree->SetBranchAddress("day",&dy);
+			ledTree->SetBranchAddress("hour",&hr);
+			ledTree->SetBranchAddress("min",&mn);
+			ledTree->SetBranchAddress("sec",&sc);
+			Log("SaveToDB::MarcusAnalysis getting last entry timestamp",v_debug,verbosity);
+			ledTree->GetEntry(ledTree->GetEntries()-1);
+			struct tm ledtime;
+			ledtime.tm_year = yr - 1900;
+			ledtime.tm_mon = mon - 1;
+			ledtime.tm_mday = dy;
+			ledtime.tm_hour = hr;
+			ledtime.tm_min = mn;
+			ledtime.tm_sec = sc;
+			// format timestamp into postgres-compatible timestamp string
+			dbtimestamp.resize(19);
+			if(strftime(const_cast<char*>(dbtimestamp.c_str()),20,"%F %T",&ledtime)==0){
+				Log("SaveToDB::MarcusAnalysis failed to form timestamp string!",v_error,verbosity);
+				// fall back to the timestamp of the last measurement? shouldn't be needed
+				dbtimestamp=to_simple_string(m_data->measurment_time);
+			}
+		} else if(!get_ok){
+			// if we weren't given a timestamp and failed to find the led tree,
+			// fall back to the timestamp of the last measurement
+			dbtimestamp=to_simple_string(m_data->measurment_time);
+		}
+		if(dbtimestamp=="not-a-date-time"){
+			// fall back to now??
+			Log("SaveToDB::MarcusAnalysis no led Tree and no last measurement time!"
+			    "Falling back to timestamp 'now'",v_error,verbosity);
+			dbtimestamp="now()";
+		}
+		Log("SaveToDB::MarcusAnalysis timestamp for this measurement will be "+dbtimestamp,v_debug,verbosity);
+		
+		// the filename and tree entry numbers of the raw data will be mapped to a unique measurement number.
+		// As always, allow this to be specified by the user if desired.
+		get_ok = m_data->CStore.Get("dbmeasurementnum",measurementnum);
+		if(not get_ok){
+			// otherwise we'll increment the measurement number each time SaveToDB is called
+			// with a new trace timestamp, as this means the underlying data has changed.
+			if(dbtimestamp != last_measurement_time){
+				last_measurement_time = dbtimestamp;
+				++measurementnum;
+			}
+		}
+		Log("SaveToDB::MarcusAnalysis measurement number for this measurement database entry: "
+		    +std::to_string(measurementnum),v_debug,verbosity);
+		
+		// make the DB entry that maps the measurement number to root file and tree entry numbers
+		std::string rawfile_json = "{\"rawfile\": \""+rawfilename+"\", "
+		                           +"\"ledEntry\":" +std::to_string(treeentrynums.first)+", "
+		                           +"\"darkEntry\":"+std::to_string(treeentrynums.second)+"}";
+		Log("SaveToDB::MarcusAnalysis rawfile_json is: "+rawfile_json,v_debug,verbosity);
+		// store the mapping to the database
+		field_names = std::vector<std::string>{"run","measurement","timestamp","ledname","tool","name","values"};
+		error_ret="";
+		get_ok = m_data->postgres.Insert("data",                      // table name
+		                                 field_names,                 // field names
+		                                 &error_ret,                  // error return string
+		                                 // variadic argument list of field values
+		                                 runnum,                      // run
+		                                 measurementnum,              // measurement
+		                                 dbtimestamp,                 // timestamp
+		                                 ledname,                     // ledname
+		                                 "MarcusAnalysis",            // tool
+		                                 "rawfile",                   // name
+		                                 rawfile_json);               // values (jsonb)
+		if(!get_ok){
+			Log("SaveToDB::MarcusAnalysis failed to save measurement number to raw file mapping "
+			    "into database with error '"+error_ret+"'",v_error,verbosity);
+			all_ok = false;
 		}
 		
 		////////////////////////////////////////////////
@@ -768,6 +894,7 @@ bool SaveToDB::MarcusAnalysis(){
 		if(not get_ok){
 			Log("SaveToDB::MarcusAnalysis did not find dark trace mean or "
 			    "sigma in CStore!",v_error,verbosity);
+			all_ok = false;
 		} else {
 			std::string dark_json = "{ \"mean\":"+std::to_string(dark_mean)
 			                      + ", \"width\":"+std::to_string(dark_sigma)+"}";
@@ -788,6 +915,7 @@ bool SaveToDB::MarcusAnalysis(){
 			if(!get_ok){
 				Log("SaveToDB::MarcusAnalysis failed to save dark trace characteristics "
 				    "into database with error '"+error_ret+"'",v_error,verbosity);
+				all_ok = false;
 			}
 		}
 		
@@ -798,6 +926,7 @@ bool SaveToDB::MarcusAnalysis(){
 		get_ok &= m_data->CStore.Get("raw_absregion_min",led_on_min);
 		if(not get_ok){
 			Log("SaveToDB::MarcusAnalysis did not find raw trace min/max in CStore!",v_error,verbosity);
+			all_ok = false;
 		} else {
 			std::string rawtrace_json = "{ \"max\":"+std::to_string(led_on_max)
 			                          + ", \"min\":"+std::to_string(led_on_min)+"}";
@@ -818,6 +947,7 @@ bool SaveToDB::MarcusAnalysis(){
 			if(!get_ok){
 				Log("SaveToDB::MarcusAnalysis failed to save raw trace characteristics "
 					"into database with error '"+error_ret+"'",v_error,verbosity);
+				all_ok = false;
 			}
 		}
 		
@@ -877,7 +1007,6 @@ bool SaveToDB::MarcusAnalysis(){
 				Log("SaveToDB::MarcusAnalysis failed to delete old dark_subtracted_data records "
 				    "from webpage table",v_error,verbosity);
 			}
-			
 		}
 		
 		// 2. store reference pure trace before scaling
@@ -890,6 +1019,7 @@ bool SaveToDB::MarcusAnalysis(){
 		if(not get_ok){
 			Log("SaveToDB::MarcusAnalysis failed to get pure reference ID for led "+ledname+" from CStore!",
 			    v_error,verbosity);
+			all_ok = false;
 		} else {
 			// store to database
 			field_names = std::vector<std::string>{"run","measurement","timestamp","ledname","tool","name","values"};
@@ -908,6 +1038,7 @@ bool SaveToDB::MarcusAnalysis(){
 			if(!get_ok){
 				Log("SaveToDB::MarcusAnalysis failed to save pure water reference ID "
 				    "into database with error '"+error_ret+"'",v_error,verbosity);
+				all_ok = false;
 			}
 		}
 		
@@ -984,6 +1115,7 @@ bool SaveToDB::MarcusAnalysis(){
 		if(!get_ok){
 			Log("SaveToDB::MarcusAnalysis failed to get pure fit result pointer from CStore",
 			    v_error,verbosity);
+			all_ok = false;
 		} else {
 			TFitResultPtr* purefitresptr = reinterpret_cast<TFitResultPtr*>(purefitresptrp);
 			
@@ -1008,7 +1140,8 @@ bool SaveToDB::MarcusAnalysis(){
 				                             pure_fit_pars);              // values (jsonb)
 			if(!get_ok){
 				Log("SaveToDB::MarcusAnalysis failed to insert new pure data fit parameters "
-					"into database with error '"+error_ret+"'",v_error,verbosity);
+				    "into database with error '"+error_ret+"'",v_error,verbosity);
+				all_ok = false;
 			}
 			
 			// Get info on fit success status and goodness
@@ -1032,6 +1165,7 @@ bool SaveToDB::MarcusAnalysis(){
 			if(!get_ok){
 				Log("SaveToDB::MarcusAnalysis failed to insert new pure data fit status "
 				    "into database with error '"+error_ret+"'",v_error,verbosity);
+				all_ok = false;
 			}
 		}
 		
@@ -1078,6 +1212,7 @@ bool SaveToDB::MarcusAnalysis(){
 		get_ok = m_data->CStore.Get("results",resultsp);
 		if(!get_ok){
 			Log("SaveToDB::MarcusAnalysis found no results in CStore",v_error,verbosity);
+			all_ok = false;
 		} else {
 		
 			// each absorption graph may be fit with several functions,
@@ -1122,6 +1257,7 @@ bool SaveToDB::MarcusAnalysis(){
 				if(!got_absfit_ok){
 					Log("SaveToDB::MarcusAnalysis failed to get abosorption fit status for method "+methodname
 					    +", led "+ledname,v_error,verbosity);
+					all_ok = false;
 				} else {
 					thismethodjson += ", \"absfit_success\":"+std::to_string(absfit_ok);
 				}
@@ -1130,6 +1266,7 @@ bool SaveToDB::MarcusAnalysis(){
 				if(!got_fit_results){
 					Log("SaveToDB::MarcusAnalysis failed to get fit results for method "+methodname
 					    +", led "+ledname,v_error,verbosity);
+					all_ok = false;
 				} else {
 					
 					// the absorption curve may be fit with one or several functions,
@@ -1162,8 +1299,8 @@ bool SaveToDB::MarcusAnalysis(){
 				if(!got_peak_pos){
 					Log("SaveToDB::MarcusAnalysis failed to get peak positions for method "
 					    +methodname+", led "+ledname,v_error,verbosity);
+					all_ok = false;
 				} else {
-					
 					std::string peakposnsjson = "["+std::to_string(peak_posns.first)
 					                          +", "+std::to_string(peak_posns.second)+"]";
 					thismethodjson += ", \"peak_posns\":"+peakposnsjson;
@@ -1172,8 +1309,8 @@ bool SaveToDB::MarcusAnalysis(){
 				if(!got_peak_heights){
 					Log("SaveToDB::MarcusAnalysis failed to get peak heights for method "
 					    +methodname+", led "+ledname,v_error,verbosity);
+					all_ok = false;
 				} else {
-					
 					std::string peakheightsjson = "["+std::to_string(peak_heights.first)
 					                          +", "+std::to_string(peak_heights.second)+"]";
 					thismethodjson += ", \"peak_heights\":"+peakheightsjson;
@@ -1182,8 +1319,8 @@ bool SaveToDB::MarcusAnalysis(){
 				if(!got_peak_errs){
 					Log("SaveToDB::MarcusAnalysis failed to get peak height errors for method "
 					    +methodname+", led "+ledname,v_error,verbosity);
+					all_ok = false;
 				} else {
-					
 					std::string peakerrsjson = "["+std::to_string(peak_errs.first)
 					                          +", "+std::to_string(peak_errs.second)+"]";
 					thismethodjson += ", \"peak_errs\":"+peakerrsjson;
@@ -1192,6 +1329,7 @@ bool SaveToDB::MarcusAnalysis(){
 				if(!got_cal_id){
 					Log("SaveToDB::MarcusAnalysis failed to get calibration curve ID for method "
 					    +methodname+", led "+ledname,v_error,verbosity);
+					all_ok = false;
 				} else {
 					thismethodjson += ", \"calibID\":\""+calibID+"\"";
 					// this may a database entry ID or "Local", in which case we should also have
@@ -1200,12 +1338,14 @@ bool SaveToDB::MarcusAnalysis(){
 						if(!got_cal_func){
 							Log("SaveToDB::MarcusAnalysis failed to get local calibration function "
 							    " for method "+methodname+", led "+ledname,v_error,verbosity);
+							all_ok = false;
 						} else {
 							thismethodjson += ", \"calib_func\":\""+formula_str+"\"";
 						}
 						if(!got_cal_pars){
 							Log("SaveToDB::MarcusAnalysis failed to get local calibration parameters "
 							    " for method "+methodname+", led "+ledname,v_error,verbosity);
+							all_ok = false;
 						} else {
 							thismethodjson += ", \"calib_pars\":["+params_str+"]";
 						}
@@ -1216,6 +1356,7 @@ bool SaveToDB::MarcusAnalysis(){
 				if(!got_conc_ok){
 					Log("SaveToDB::MarcusAnalysis failed to get concentration conversion status for method "+methodname
 					    +", led "+ledname,v_error,verbosity);
+					all_ok = false;
 				} else {
 					thismethodjson += ", \"concfit_success\":"+std::to_string(conc_ok);
 				}
@@ -1223,8 +1364,8 @@ bool SaveToDB::MarcusAnalysis(){
 				if(!got_conc){
 					Log("SaveToDB::MarcusAnalysis failed to get gd concentration for method "
 					    +methodname+", led "+ledname,v_error,verbosity);
+					all_ok = false;
 				} else {
-					
 					std::string concjson = "["+std::to_string(conc_and_err.first)
 					                     +", "+std::to_string(conc_and_err.second)+"]";
 					thismethodjson += ", \"conc_and_err\":"+concjson;
@@ -1255,6 +1396,7 @@ bool SaveToDB::MarcusAnalysis(){
 					Log("SaveToDB::MarcusAnalysis failed to insert absorption peak fit results "
 					    "for method "+methodname+", led "+ledname+" into database with error '"
 					    +error_ret+"'",v_error,verbosity);
+					all_ok = false;
 				}
 				
 			} // loop over absorption fit methods
@@ -1265,7 +1407,7 @@ bool SaveToDB::MarcusAnalysis(){
 		get_ok = true;   // no new measurement, nothing to save
 	}
 	
-	return get_ok;
+	return all_ok;
 	
 }
 
@@ -1585,6 +1727,186 @@ bool SaveToDB::SaveTraces(){
 		Log("SaveToDB::SaveTraces failed to update active filename "
 		    "in database with error '"+error_ret+"'",v_error,verbosity);
 		all_ok = false;
+	}
+	
+	return all_ok;
+}
+
+bool SaveToDB::MatthewTransparency(){
+	
+	bool all_ok = true;
+	
+	bool newTranspMeas;
+	get_ok = m_data->CStore.Get("NewMatthewTransparency", newTranspMeas);
+	
+	if(get_ok && newTranspMeas){
+		
+		// get the auxiliary information; run number, measurement number, timestamp
+		get_ok = m_data->CStore.Get("dbrunnum",runnum);
+		
+		std::string dbtimestamp;
+		get_ok = m_data->CStore.Get("dbtimestamp",dbtimestamp);  // e.g "2020-09-16 15:54:00"
+		if(!get_ok){ dbtimestamp=to_simple_string(m_data->measurment_time); }
+		
+		get_ok = m_data->CStore.Get("dbmeasurementnum",measurementnum);
+		if(not get_ok){
+			if(dbtimestamp != last_measurement_time){
+				last_measurement_time = dbtimestamp;
+				++measurementnum;
+			}
+		}
+		
+		std::string rawfilename;
+		get_ok = m_data->CStore.Get("Filename",rawfilename);
+		if(!get_ok){
+			Log("SaveToDB::MatthewTransparency failed to find 'Filename' in CStore", v_error,verbosity);
+			all_ok = false;
+		}
+		
+		std::map<std::string,int> treeentrynums;
+		auto light_and_dark_trees = std::pair<TTree*, TTree*>{nullptr,nullptr};
+		for(std::pair<const std::string, TTree*>& atree : m_data->m_trees){
+			treeentrynums.emplace(atree.first, atree.second->GetEntries()-1);
+		}
+		
+		// make the DB entry that maps the measurement number to root file and tree entry numbers
+		std::string rawfile_json = "{\"rawfile\": \""+rawfilename+"\"";
+		std::string ledname="";
+		for(std::pair<const std::string, int>& atree : treeentrynums){
+			rawfile_json += ", \""+atree.first+"\":"+std::to_string(atree.second);
+			if(ledname!="") ledname += "+";
+			ledname += atree.first;
+		}
+		rawfile_json.push_back('}');
+		
+		// store the mapping to the database
+		field_names = std::vector<std::string>{"run","measurement","timestamp","ledname","tool","name","values"};
+		error_ret="";
+		get_ok = m_data->postgres.Insert("data",                      // table name
+		                                 field_names,                 // field names
+		                                 &error_ret,                  // error return string
+		                                 // variadic argument list of field values
+		                                 runnum,                      // run
+		                                 measurementnum,              // measurement
+		                                 dbtimestamp,                 // timestamp
+		                                 ledname,                     // ledname
+		                                 "MatthewTransparency",       // tool
+		                                 "rawfile",                   // name
+		                                 rawfile_json);               // values (jsonb)
+		if(!get_ok){
+			Log("SaveToDB::MatthewTransparency failed to save measurement number to raw file mapping "
+			    "into database with error '"+error_ret+"'",v_error,verbosity);
+			all_ok = false;
+		}
+		
+		
+		// get last filename to be written to with SaveTraces tool
+		std::string key = "purerefID_transparency";
+		std::string pureID;
+		get_ok = m_data->CStore.Get(key, pureID);
+		std::string pureref_json = "{\"ID\":\""+pureID+"\"}";
+		if(not get_ok){
+			Log("SaveToDB::MatthewTransparency failed to get pure reference ID from CStore!",
+			    v_error,verbosity);
+			all_ok = false;
+		} else {
+			// store to database
+			field_names = std::vector<std::string>{"run","measurement","timestamp","ledname","tool","name","values"};
+			error_ret="";
+			get_ok = m_data->postgres.Insert("data",                      // table name
+			                                 field_names,                 // field names
+			                                 &error_ret,                  // error return string
+			                                 // variadic argument list of field values
+			                                 runnum,                      // run
+			                                 measurementnum,              // measurement
+			                                 dbtimestamp,                 // timestamp
+			                                 ledname,                     // ledname
+			                                 "MatthewTransparency",       // tool
+			                                 "pure_curve_ID",             // name
+			                                 pureref_json);               // values (jsonb)
+			if(!get_ok){
+				Log("SaveToDB::MatthewTransparency failed to save pure water reference ID "
+				    "into database with error '"+error_ret+"'",v_error,verbosity);
+				all_ok = false;
+			}
+		}
+		
+		// get a few sample wavelengths to store persistently
+		std::map<std::string, std::pair<double,double>> samples;
+		get_ok = m_data->CStore.Get("transparency_samples",samples);
+		if(!get_ok){
+			Log("SaveToDB::MatthewTransparency failed to find 'transparency_samples' in CStore",v_error,verbosity);
+			all_ok = false;
+		} else {
+			
+			// turn into json string
+			std::string samplesjson = "";
+			for(auto&& asample : samples){
+				samplesjson += ",{\""+asample.first+"\": {\"wavelength\":"+std::to_string(asample.second.first)
+						   +", \"value\":" +std::to_string(asample.second.second)+"}";
+			}
+			samplesjson.front()='[';
+			samplesjson.push_back(']');
+			
+			// store to db. Save the samples persistently
+			Log("SaveToDB::MatthewTransparency saving transparency samples: ",v_debug,verbosity);
+			
+			field_names = std::vector<std::string>
+				  {"run","measurement","timestamp","ledname","tool","name","values"};
+			error_ret="";
+			get_ok = m_data->postgres.Insert("data",                      // table name
+					                         field_names,                 // field names
+					                         &error_ret,                  // error return string
+					                         // variadic argument list of field values
+					                         runnum,                      // run
+					                         measurementnum,              // measurement
+					                         dbtimestamp,                 // timestamp
+					                         ledname,                     // ledname
+					                         "MatthewTransparency",       // tool
+					                         "transparency_samples",      // name
+					                         samplesjson);                // values (jsonb)
+			if(!get_ok){
+				Log("SaveToDB::MatthewTransparency failed to insert transparency samples"
+					" into database with error '"+error_ret+"'",v_error,verbosity);
+				all_ok = false;
+			}
+		}
+		
+		// pull the complete transparency trace to save into the webpage table
+		std::vector<double> transparencytrace;
+		std::vector<double> transparencywls;
+		get_ok = m_data->CStore.Get("TransparencyTrace",transparencytrace);
+		get_ok &= m_data->CStore.Get("transparencyWls",transparencywls);
+		if(!get_ok){
+			Log("SaveToDB::MatthewTransparency failed to get transparency trace from CStore!",v_error,verbosity);
+			all_ok = false;
+		} else {
+			
+			std::string json_trace_y = BuildJson(transparencytrace.data(), transparencytrace.size());
+			std::string json_trace_x = BuildJson(transparencywls.data(), transparencywls.size());
+			std::string json_string = "{ \"xvals\":"+json_trace_x + ", \"yvals\":"+json_trace_y+"}";
+			
+			// store to database
+			field_names = std::vector<std::string>{"timestamp","values"};
+			criterions = std::vector<std::string>{"name"};
+			comparators = std::vector<char>{'='};
+			error_ret="";
+			get_ok = m_data->postgres.Update("webpage",               // table name
+					                         field_names,             // field names
+					                         criterions,              // fields we're applying SELECT on to match
+					                         comparators,             // comparison operator required by match
+					                         &error_ret,              // error return string
+					                         // variadic argument list of new field values
+					                         "now()",                 // timestamp
+					                         json_string,             // values
+					                         // variadic argument list of criterion values
+					                         "transparency_trace");   // name
+			if(!get_ok){
+				Log("SaveToDB::MatthewTransparency failed to update transparency trace "
+					"in database with error '"+error_ret+"'",v_error,verbosity);
+				all_ok = false;
+			}
+		}
 	}
 	
 	return all_ok;

@@ -438,8 +438,12 @@ void MarcusScheduler::ProcessCommand(std::string& the_command){
 		DoMeasure(the_command);
 		
 	} else if(the_command.substr(0,7) == "analyse"){
-		// calculate transparency from a given LED trace
+		// calculate gd concentration from a given LED trace
 		DoAnalyse(the_command);
+		
+	} else if(the_command.substr(0,12) == "transparency"){
+		// calculate transparency from all LED traces
+		DoTransparency(the_command);
 		
 	} else if(the_command.substr(0,4)=="save"){
 		// save traces to file
@@ -460,6 +464,9 @@ void MarcusScheduler::ProcessCommand(std::string& the_command){
 	} else if(the_command.substr(0,4)=="loop"){
 		// the end of a section to loop.
 		EndLoop(the_command);
+		
+	} else if(the_command.substr(0,7)=="setFile"){
+		SetFile(the_command);
 		
 	} else if(the_command.substr(0,5)=="dummy"){
 		// dummy command, do nothing
@@ -636,11 +643,25 @@ void MarcusScheduler::DoAnalyse(std::string the_command){
 
 // ««-------------- ≪ °◇◆◇° ≫ --------------»»
 
-void MarcusScheduler::DoSave(std::string the_command){
-	Log("Saving measurements",v_debug,verbosity);
+void MarcusScheduler::DoTransparency(std::string the_command){
+	Log("Calculating transparency",v_debug,verbosity);
 	
-	// get the filename to save it as
-	std::string filename = the_command.substr(5,std::string::npos);
+	// qeueue up the measure transparency action
+	std::string json_string = "{\"Transparency\":\"Transparency\"}";
+	Log(std::string("Queuing action: ")+json_string,v_debug,verbosity);
+	m_data->CStore.JsonParser(json_string);
+	
+	// advance to the next command
+	++current_command;
+}
+
+// ««-------------- ≪ °◇◆◇° ≫ --------------»»
+
+void MarcusScheduler::SetFile(std::string the_command){
+	// set the file the next `save` command will save to
+	
+	// strip off the preceding 'setFile' to get the file name base
+	std::string filename = the_command.substr(8,std::string::npos);
 	
 	// trim comments & trailing whitespace
 	filename = filename.substr(0,filename.find('#'));
@@ -648,20 +669,22 @@ void MarcusScheduler::DoSave(std::string the_command){
 	
 	// if we're looping and not overwriting save files, add the loop index to the output filename
 	std::string output_file = filename;
-	if(looping && overwrite_saves){
+	if(looping && !overwrite_saves){
 		std::string filenamesub = filename.substr(0,filename.find_last_of('.'));
-		std::string loop_count_padded;
-		char loop_count_buf[6];
-		int written = snprintf(loop_count_buf,6,"%05d",loop_count);
+		std::string file_num_padded;
+		char file_num_buf[6];
+		int written = snprintf(file_num_buf,6,"%05d",file_num);
 		if((written>=6) || (written<0)){
-			std::string logmessage="MarcusScheduler::DoSave error building filename for loop "
-			                       + std::to_string(loop_count) + " - too many loop iterations!";
+			std::string logmessage="MarcusScheduler::SetFile error building filename for loop "
+			                       + std::to_string(file_num) + " - too many loop iterations!";
 			Log(logmessage,v_error,verbosity);
-			loop_count_padded = std::to_string(loop_count);
+			file_num_padded = std::to_string(file_num);
 		} else {
-			loop_count_padded = std::string(loop_count_buf);
+			file_num_padded = std::string(file_num_buf);
 		}
-		output_file = filenamesub+"_"+loop_count_padded+".root";
+		output_file = filenamesub+"_"+file_num_padded+".root";
+		// increment each time we save a file
+		++file_num;
 	} else if(output_file.length()<6 || output_file.substr(output_file.length()-5,std::string::npos)!=".root"){
 		output_file+=".root";
 	}
@@ -685,7 +708,7 @@ void MarcusScheduler::DoSave(std::string the_command){
 	get_ok = SystemCall(cmd.c_str(), errmsg);
 	
 	if(get_ok!=0){
-		Log(std::string("MarcusScheduler::DoSave failed to make output directory ")
+		Log(std::string("MarcusScheduler::SetFile failed to make output directory ")
 		    +outputdir+" with error "+errmsg,0,0);
 		
 	} else {
@@ -705,13 +728,25 @@ void MarcusScheduler::DoSave(std::string the_command){
 		output_file = outputdir+"/"+output_file;
 		// combine components e.g. 'data/${YEAR}/${MONTH}/${RUNNUM}_${filename}_${loopindex}.root'
 		
-		// queue up the save action
-		std::string json_string = "{\"Save\":\"Save\",\"Filename\":\""+output_file
-			+"\",\"Overwrite\",\""+std::to_string(overwrite_saves)+"\"}";
-		Log(std::string("Queuing action: ")+json_string,v_debug,verbosity);
-		m_data->CStore.JsonParser(json_string);
-		
 	}
+	
+	// set it in the datamodel
+	m_data->CStore.Set("Filename",filename);
+	
+	// advance to the next command
+	++current_command;
+}
+
+// ««-------------- ≪ °◇◆◇° ≫ --------------»»
+
+void MarcusScheduler::DoSave(std::string the_command){
+	Log("Saving measurements",v_debug,verbosity);
+	
+	// queue up the save action
+	std::string json_string = "{\"Save\":\"Save\""
+		",\"Overwrite\",\""+std::to_string(overwrite_saves)+"\"}";
+	Log(std::string("Queuing action: ")+json_string,v_debug,verbosity);
+	m_data->CStore.JsonParser(json_string);
 	
 	// advance to the next command
 	++current_command;

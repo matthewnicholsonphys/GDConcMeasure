@@ -128,15 +128,14 @@ bool MarcusAnalysis::Execute(){
 		
 		// Inform downstream tools that a new measurement is available
 		// maybe we could use the value to indicate if the data is good?
-		m_data->CStore.Set("NewMarcusMeasurement",true);
+		m_data->CStore.Set("NewMarcusAnalyse",true);
 		
 	} else {
 		// else no data to Analyse
-		m_data->CStore.Remove("NewMarcusMeasurement");
+		m_data->CStore.Remove("NewMarcusAnalyse");
 	}
-
+	
 	Log(m_unique_name+" done",v_debug,verbosity);
-
 	
 	return true;
 }
@@ -186,6 +185,7 @@ bool MarcusAnalysis::FindDarkAndLEDTrees(){
 }
 
 void MarcusAnalysis::UpdateDataModel(){
+	
 	// update datamodel
 	m_data->CStore.Set("dark_subtracted_data_in",reinterpret_cast<intptr_t>(&g_inband));
 	m_data->CStore.Set("dark_subtracted_data_out",reinterpret_cast<intptr_t>(&g_sideband));
@@ -194,6 +194,11 @@ void MarcusAnalysis::UpdateDataModel(){
 	
 	m_data->CStore.Set("purefitresptr",reinterpret_cast<intptr_t>(&purefitresptr));
 	m_data->CStore.Set("results",reinterpret_cast<intptr_t>(&results));
+	
+	m_data->CStore.Set("dark_mean",dark_mean);
+	m_data->CStore.Set("dark_sigma",dark_sigma);
+	m_data->CStore.Set("raw_absregion_max",led_on_max);
+	m_data->CStore.Set("raw_absregion_min",led_on_min);
 	
 }
 
@@ -209,10 +214,10 @@ void MarcusAnalysis::ReInit(){
 	g_absorb.Set(0);
 	
 	// clear characteristic values
-	m_data->CStore.Set("dark_mean",-1);
-	m_data->CStore.Set("dark_sigma",-1);
-	m_data->CStore.Set("raw_absregion_max",-1);
-	m_data->CStore.Set("raw_absregion_min",-1);
+	dark_mean = -1;
+	dark_sigma = -1;
+	led_on_max = -1;
+	led_on_min = -1;
 	
 	// remake TFitResultPtrs
 	purefitresptr = TFitResultPtr();
@@ -266,12 +271,12 @@ bool MarcusAnalysis::GetPureRefDB(int pureref_ver){
 	// get reference trace representing the pure-water spectrum for this LED
 	
 	// new reference curve can be inserted with e.g.:
-	// psql -U postgres -d "rundb" -c "INSERT INTO data (timestamp, name, values) VALUES ('now()', 'pure_curve', '{\"led\":\"275_A\", \"version\":0, \"xvals\":[200.0, ..., 800.0], \"yvals\":[0.0079581671, ..., -29982.759] }' );"
+	// psql -U postgres -d "rundb" -c "INSERT INTO data (timestamp, name, ledname, values) VALUES ('now()', 'pure_curve', '275_A', '{\"version\":0, \"xvals\":[200.0, ..., 800.0], \"yvals\":[0.0079581671, ..., -29982.759] }' );"
 	
 	std::string query_string = "SELECT values->'yvals' FROM data WHERE name='pure_curve'"
-	                           " AND values->'yvals' IS NOT NULL AND values->'led' IS NOT NULL"
+	                           " AND values->'yvals' IS NOT NULL AND ledname IS NOT NULL"
 	                           " AND values->'version' IS NOT NULL"
-	                           " AND values->>'led'="+m_data->postgres.pqxx_quote(ledToAnalyse)+
+	                           " AND ledname="+m_data->postgres.pqxx_quote(ledToAnalyse)+
 	                           " AND values->'version'="+ m_data->postgres.pqxx_quote(pureref_ver);
 	std::string pureref_json="";
 	get_ok = m_data->postgres.ExecuteQuery(query_string, pureref_json);
@@ -305,9 +310,9 @@ bool MarcusAnalysis::GetPureRefDB(int pureref_ver){
 	
 	// repeat for the x-values
 	query_string = "SELECT values->'xvals' FROM data WHERE name='pure_curve'"
-	               " AND values->'xvals' IS NOT NULL AND values->'led' IS NOT NULL"
+	               " AND values->'xvals' IS NOT NULL AND ledname IS NOT NULL"
 	               " AND values->'version' IS NOT NULL"
-	               " AND values->>'led'="+m_data->postgres.pqxx_quote(ledToAnalyse)+
+	               " AND ledname="+m_data->postgres.pqxx_quote(ledToAnalyse)+
 	               " AND values->'version'="+ m_data->postgres.pqxx_quote(pureref_ver);
 	pureref_json="";
 	get_ok = m_data->postgres.ExecuteQuery(query_string, pureref_json);
@@ -539,13 +544,14 @@ bool MarcusAnalysis::GetCalCurveDB(std::string method, std::string calibID){
 	// Constructs calibration curve from parameters in the database
 	
 	// new calibration curve can be inserted with e.g.:
-	// psql -U postgres -d "rundb" -c "INSERT INTO data (timestamp, run, tool, name, values) VALUES ('now()', '0', 'MarcusAnalysis', 'calibration_curve', '{\"led\":\"275_A\", \"version\":0, \"formula\":\"pol6\", \"params\":[0.0079581671, 2.7415760, -31.591756, 478.69924, 18682.891, -29982.759] }' );"
+	// psql -U postgres -d "rundb" -c "INSERT INTO data (timestamp, tool, ledname, name, values) VALUES ('now()', 'MarcusAnalysis', '275_A', 'calibration_curve', '{\"version\":0, \"formula\":\"pol6\", \"params\":[0.0079581671, 2.7415760, -31.591756, 478.69924, 18682.891, -29982.759] }' );"
 	
 	// use version number to lookup formula from database
 	std::string formula_str="";
 	std::string query_string = "SELECT values->>'formula' FROM data WHERE name='calibration_curve'"
-	                           " AND values->'formula' IS NOT NULL"
-	                           " AND values->>'led'="+m_data->postgres.pqxx_quote(ledToAnalyse)+
+	                           " AND values->'formula' IS NOT NULL AND ledname IS NOT NULL"
+	                           " AND values->'method' IS NOT NULL AND values->'version' IS NOT NULL"
+	                           " AND ledname="+m_data->postgres.pqxx_quote(ledToAnalyse)+
 	                           " AND values->>'method'="+m_data->postgres.pqxx_quote(method)+
 	                           " AND values->'version'="+m_data->postgres.pqxx_quote(calibID);
 	get_ok = m_data->postgres.ExecuteQuery(query_string, formula_str);
@@ -561,9 +567,9 @@ bool MarcusAnalysis::GetCalCurveDB(std::string method, std::string calibID){
 	// when querying attributes from JSON fields, we need to explicitly ensure the checked
 	// attributes exist, or exclude the entry from the search, or the query will fail.
 	query_string = " SELECT values->'params' FROM data WHERE name='calibration_curve'"
-	               " AND values->'params' IS NOT NULL AND values->'led' IS NOT NULL"
+	               " AND values->'params' IS NOT NULL AND ledname IS NOT NULL"
 	               " AND values->'method' IS NOT NULL AND values->'version' IS NOT NULL"
-	               " AND values->>'led'="+m_data->postgres.pqxx_quote(ledToAnalyse)+
+	               " AND ledname="+m_data->postgres.pqxx_quote(ledToAnalyse)+
 	               " AND values->>'method'="+m_data->postgres.pqxx_quote(method)+
 	               " AND values->'version'=" + m_data->postgres.pqxx_quote(calibID);
 	std::string params_str;
@@ -1142,17 +1148,13 @@ bool MarcusAnalysis::GetDarkSubTrace(){
 	}
 	//std::string options = (verbosity<v_debug) ? "Q" : "";
 	tmphist.Fit("gaus","Q");
-	double dark_mean = tmphist.GetFunction("gaus")->GetParameter(1);
-	double dark_sigma = tmphist.GetFunction("gaus")->GetParameter(2);
-	m_data->CStore.Set("dark_mean",dark_mean);
-	m_data->CStore.Set("dark_sigma",dark_sigma);
+	dark_mean = tmphist.GetFunction("gaus")->GetParameter(1);
+	dark_sigma = tmphist.GetFunction("gaus")->GetParameter(2);
 	
 	// for the raw LED-on trace we'll record the maximum and minimum value of the trace
 	// within the absorption region.
-	double led_on_max = *std::max_element(inband_values.begin(), inband_values.end());
-	double led_on_min = *std::min_element(inband_values.begin(), inband_values.end());
-	m_data->CStore.Set("raw_absregion_max",led_on_max);
-	m_data->CStore.Set("raw_absregion_min",led_on_min);
+	led_on_max = *std::max_element(inband_values.begin(), inband_values.end());
+	led_on_min = *std::min_element(inband_values.begin(), inband_values.end());
 	
 	return true;
 }

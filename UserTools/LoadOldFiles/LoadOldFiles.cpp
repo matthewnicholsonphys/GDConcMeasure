@@ -86,7 +86,7 @@ bool LoadOldFiles::Execute(){
 	if(!got_file) return false;
 	
 	// while each LED gets saved to a different file, the dark traces for all LED measurements are currently saved
-	// in one common file. It is also currently the case that several unused dark traces are taken between measurements
+	// in one common file. It is also the case that several unused dark traces are taken between measurements
 	// to warm up the spectrometer. The result of this is that the MatthewAnalysis takes the last (most recent)
 	// entry from the Dark tree for its dark subtraction, but other dark traces may be taken after this.
 	// When reading from the file, we therefore need to be careful about picking the right Dark trace.
@@ -109,6 +109,11 @@ bool LoadOldFiles::Execute(){
 	ledtime.tm_min = mn;
 	ledtime.tm_sec = sc;
 	time_t ledtime_t = mktime(&ledtime);
+	// for some reason on the first toolchain Execute (perhaps just the first mktime call)
+	// this produces a timestamp one hour later than the passed ledtime, and even changes
+	// the ledtime.tm_hour to be one hour later. re-set the hour and regenerate.
+	ledtime.tm_hour = hr;
+	ledtime_t = mktime(&ledtime);
 	
 	// we can override the default "now()" timestamp passed to postgres by providing it explicitly
 	char dbtimestamp[20];
@@ -137,7 +142,7 @@ bool LoadOldFiles::Execute(){
 	darkTree->SetBranchAddress("sec",&sc);
 	
 	// loop over dark entries
-	int darkentry=-1;
+	int darkentry=0;
 	Log("LoadOldFiles: scanning "+std::to_string(darkTree->GetEntries())+" entries for closest timestamp",v_debug,verbosity);
 	for(int i=0; i<darkTree->GetEntries(); ++i){
 		darkTree->GetEntry(i);
@@ -155,7 +160,7 @@ bool LoadOldFiles::Execute(){
 		double numsecs = difftime(ledtime_t, darktime_t);
 		// do we use the closest in time dark, or the last dark before the led-on?
 		// what if someone decides to do the dark measurements after the led?
-		if(numsecs<0 && darkentry<0) break;
+		if(numsecs<0) break;
 		darkentry=i;
 	}
 	Log("LoadOldFiles: dark entry number = "+std::to_string(darkentry),v_debug,verbosity);
@@ -188,6 +193,7 @@ bool LoadOldFiles::Execute(){
 	m_data->m_trees[treename] = ledTree;
 	
 	m_data->CStore.Set("ledToAnalyse",treename);
+	m_data->CStore.Set("Filename",filename);
 	
 	// trigger the MatthewAnalysis
 	std::string analyse = "Analyse";

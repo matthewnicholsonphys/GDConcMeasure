@@ -29,6 +29,7 @@ class SaveToDB: public Tool {
 	bool SaveTraces();
 	bool MarcusScheduler();
 	bool RoutineCalibration();  // placeholder, Tool TODO
+	bool MatthewTransparency();
 	
 	// helper functions for converting data into json arrays / objects to store in DB
 	std::string BuildJson(TGraphErrors* gr, std::pair<double, double> range, bool inside_data);
