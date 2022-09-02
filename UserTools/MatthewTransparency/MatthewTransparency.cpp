@@ -1,88 +1,123 @@
 #include "MatthewTransparency.h"
-
 #include <sys/stat.h>
 
 #include <memory>
 #include <chrono>
 #include <time.h>
+#include <array>
 #include <vector>
 #include <string>
 #include <sstream>
 
 #include "TTree.h"
 #include "TFile.h"
-
-struct Transparency {
-  std::vector<double> values;
-  std::vector<int> date_time;
-};
-
+#include "TGraph.h"
+#include "TCanvas.h"
+#include "TH2D.h"
 
 MatthewTransparency::MatthewTransparency():Tool(){}
+
+//struct MatthewTransparency::Transparency;
 
 bool MatthewTransparency::Initialise(std::string configfile, DataModel &data){
 
   if(configfile!="")  m_variables.Initialise(configfile);
   //m_variables.Print();
   m_data= &data;
-  
+
   return true;
 }
 
 bool MatthewTransparency::Execute(){
-  if (true /*Ready()*/){
+  if (Ready()){
+    m_data->CStore.Set("NewMatthewTransparency", true);
 
-    const std::string pure_file_name{"~/GDConcMeasure/data/2022/07/00117_12July22Calib_00000.root"};
+    //const std::string pure_file_name{"~/GDConcMeasure/data/2022/07/00117_12July22Calib_00000.root"}; // for debug
     
-    const int pure_ref_ver{5}; //when DB support is ready
-  
-    std::vector<double> pure_dark_sub;
-    std::vector<double> dark_sub_sum(N), pure_sum(N), wavelengths(N);
+    int pure_ref_ver; //when DB support is ready
+    m_variables.Get("pure_ref_ver", pure_ref_ver);
+    m_data->CStore.Set("pure_refID_transparency", std::to_string(pure_ref_ver)); 
+    
+    std::array<double, N> dark_sub_sum{}, pure_dark_sub{}, pure_sum{}; 
 
     TTree *dark_tree_ptr = nullptr, *led_tree_ptr = nullptr;
+
     for (const auto& [tree_name, tree_ptr] : m_data->m_trees){
-      if (wavelengths.back() == 0){PopulateWavelength(tree_ptr);} 
-      if (tree_name != "Dark"){
-	led_tree_ptr = tree_ptr;
-	//pure_dark_sub = RetrievePureValues(pure_ref_ver, tree_name); //add this back in when database support is ready // TODO: only calculate once!
-	pure_dark_sub = RetrievePureValuesFromFile(pure_file_name, tree_name);
-      }
-      else {
+      if (wavelengths.back() == 0){wavelengths = PopulateWavelength(tree_ptr);}
+      if (tree_name == "Dark" || tree_name == "dark"){
 	dark_tree_ptr = tree_ptr;
       }
-      if (led_tree_ptr && dark_tree_ptr){
-	std::vector<double> dark_sub = DarkSubtract(led_tree_ptr, dark_tree_ptr);
+    }
+
+    for (const auto& [tree_name, tree_ptr] : m_data->m_trees){
+        if (tree_name != "Dark" && tree_name != "dark"){
+	  //pure_dark_sub = RetrievePureValuesFromFile(pure_file_name, tree_name); // for debug
+	pure_dark_sub = RetrievePureValues(pure_ref_ver, tree_name);
+	std::array<double, N> dark_sub = DarkSubtract(tree_ptr, dark_tree_ptr);
 	for (auto i = 0; i < N; ++i){
 	  pure_sum.at(i) += pure_dark_sub.at(i);
 	  dark_sub_sum.at(i) += dark_sub.at(i);
 	}
-	led_tree_ptr = nullptr;
-	dark_tree_ptr = nullptr;
+
       }
     }
-
-    const std::vector<double> transparency_values = [=](){
-						      std::vector<double> result;
-						      for (auto i = 0; i < N; ++i){
-							result.push_back(dark_sub_sum.at(i) / pure_sum.at(i));
-						      }
-						      return result;
-						    }();
+    
+    const auto transparency_values = [=](){
+				       std::array<double, N> result{};
+				       for (auto i = 0; i < N; ++i){
+					 //	 std::cout << i << std::endl;
+					 // std::cout << dark_sub_sum.at(i) << std::endl;
+					 // std::cout << pure_sum.at(i) << std::endl;
+					 result.at(i) = dark_sub_sum.at(i) / pure_sum.at(i) ;
+					 // std::cout << std::endl;
+				       }
+				       return result;
+				     }();
 
     const Transparency t{transparency_values, GetDateTimeVec()};
-    //SaveToMonthlyFile(t);
-    //PlaceInDataModel(t);
+    std::map<std::string, std::pair<double, double>> samples_map = CreateSamplesMap(t);
+    m_data->CStore.Set("transparency_samples", samples_map);
 
-    MakeQuickPlot(t.values, wavelengths);
+    std::vector<double> temp_values(t.values.begin(), t.values.end());
+    std::vector<double> temp_wav(wavelengths.begin(), wavelengths.end());
+    m_data->CStore.Set("TransparencyTrace",temp_values);
+    m_data->CStore.Set("TransparencyWls", temp_wav);
+    
+    SaveToMonthlyFile(t);
+    AmmendSetOfTraces(t);
+    MakeHeatMap(transparency_traces, wavelengths, "heat_map.root" );
+    
+    //    MakeQuickPlot(t.values, wavelengths, "trans_trans.root");
+    // MakeQuickPlot(dark_sub_sum, wavelengths, "trans_darksub.root");
+    //  MakeQuickPlot(pure_sum, wavelengths, "trans_pure.root");
+    //    MakeDoublePlot(pure_sum, dark_sub_sum, wavelengths, "trans_double.root");
   }
       
   return true;
 }
- 
-std::vector<double> MatthewTransparency::PopulateWavelength(TTree* tree){
+
+std::map<std::string, std::pair<double, double>> MatthewTransparency::CreateSamplesMap(const Transparency& t) const {
+  std::map<std::string, std::pair<double, double>> result;
+  const std::map<std::string, double> names_to_samples = {{"red", 620},
+							  {"green", 500},
+							  {"blue", 450}};
+
+  for (const auto& [name, wav] : names_to_samples){
+    result.emplace(std::make_pair(name, std::make_pair(wav, GetValAtWavelength(t, wav))));
+  }
+
+  return result;
+}
+
+bool MatthewTransparency::Finalise(){
+  std::cout << "you did it Jimmy! YOU DID IT!" << std::endl;
+  return true;
+}
+
+auto MatthewTransparency::PopulateWavelength(TTree* tree) const -> std::array<double, N> {
   // Takes a TTree* and returns an N sized vector with wavelength values, this is split from usual TTree reading since we only need to calculate wavelength vector once.
   
-    std::vector<double>* w_ptr = nullptr;
+  std::vector<double>* w_ptr = nullptr;
   tree->SetBranchAddress("wavelength", &w_ptr);
 
   if (w_ptr == nullptr){
@@ -94,14 +129,23 @@ std::vector<double> MatthewTransparency::PopulateWavelength(TTree* tree){
 
   const bool success = tree->GetEntry(0);
   const auto wav = [=](){
-		     std::vector<double> result;
-		     for (auto i = 0; i < N; ++i){result.push_back(w_ptr->at(i));}
+		     std::array<double, N> result;
+		     for (auto i = 0; i < N; ++i){result.at(i) = w_ptr->at(i);}
 		     return result;}();
   return wav;
 }
  
-std::vector<double> MatthewTransparency::DarkSubtract(TTree* led, TTree* dark) const {
+auto MatthewTransparency::DarkSubtract(TTree* led, TTree* dark) const -> std::array<double, N> {
   // Takes two TTree* and returns an N sized vector containing dark subtracted intensity values of the LED that TTree* led corresponds to. 
+
+  if (led == nullptr){
+    std::cout << "led pointer is null in dark subtract" << std::endl;
+  }
+
+  if (dark == nullptr){
+    std::cout << "dark pointer is null in dark subtract" << std::endl;
+  }
+
   std::vector<double> *led_v = nullptr, *dark_v = nullptr;
 
   led->SetBranchAddress("value", &led_v);
@@ -117,28 +161,23 @@ std::vector<double> MatthewTransparency::DarkSubtract(TTree* led, TTree* dark) c
   dark->GetEntry(0);
   
   const auto dark_sub = [=](){
-			       std::vector<double> result;
-			       for (auto i = 0; i < N; ++i){
-				 result.push_back(led_v->at(i) - dark_v->at(i));
-			       }
-			       return result;
-			     }();
+			  std::array<double, N> result;
+			  for (auto i = 0; i < N; ++i){
+			    result.at(i) = (led_v->at(i) - dark_v->at(i));
+			  }
+			  return result;
+			}();
   
   return dark_sub;
 }
 
-bool MatthewTransparency::Finalise(){
-
-  return true;
-}
-
-std::vector<double> MatthewTransparency::RetrievePureValues(const int pureref_ver, const std::string led) const {
+auto MatthewTransparency::RetrievePureValues(const int pureref_ver, const std::string led) const -> std::array<double, N> {
   // Retrieve dark subtracted pure values from database for a given LED
-  const  std::string query_string{"SELECT values->'yvals' FROM data WHERE name='pure_curve'"
-			   " AND values->'yvals' IS NOT NULL AND values->'led' IS NOT NULL"
-			   " AND values->'version' IS NOT NULL"
-			   " AND values->>'led'="+m_data->postgres.pqxx_quote(led)+
-			   " AND values->'version'="+ m_data->postgres.pqxx_quote(pureref_ver)};
+  const std::string query_string{"SELECT values->'yvals' FROM data WHERE name='pure_curve'"
+				 " AND values->'yvals' IS NOT NULL AND values->'led' IS NOT NULL"
+				 " AND values->'version' IS NOT NULL"
+				 " AND values->>'led'="+m_data->postgres.pqxx_quote(led)+
+				 " AND values->'version'="+ m_data->postgres.pqxx_quote(pureref_ver)};
   std::string pureref_json{""};
 
   m_data->postgres.ExecuteQuery(query_string, pureref_json);
@@ -146,35 +185,45 @@ std::vector<double> MatthewTransparency::RetrievePureValues(const int pureref_ve
 
   std::stringstream ss(pureref_json);
   std::string tmp;
-  std::vector<double> pureref_yvals;
+  std::array<double, N> pureref_yvals{};
+  auto i = 0;
   while(std::getline(ss,tmp,',')){
     char* endptr = &tmp[0];
-    pureref_yvals.push_back(strtod(tmp.c_str(), &endptr));
+    pureref_yvals.at(i) = strtod(tmp.c_str(), &endptr);
+    ++i;
   }
-  return pureref_yvals;
-  
+  return pureref_yvals;  
 }
 
-std::vector<double> MatthewTransparency::RetrievePureValuesFromFile(const std::string& fname, const std::string& led) const {
+auto MatthewTransparency::RetrievePureValuesFromFile(const std::string& fname, const std::string& led) const -> std::array<double, N> {
   // Until database integration is finished we'll just get the pure values from the first file in the calibration run. 
   std::unique_ptr<TFile> file(TFile::Open(fname.c_str()));
-    TTree *led_tree = nullptr, *dark_tree = nullptr;
+  TTree *led_tree = nullptr, *dark_tree = nullptr;
+  if (file->IsZombie()){
+    std::cout << "file not open" << std::endl;
+  }
     
-    led_tree = (TTree*) file->Get(led.c_str());
-    dark_tree = (TTree*) file->Get("Dark");
+  led_tree = (TTree*) file->Get(led.c_str());
 
-    if (led_tree == nullptr || dark_tree == nullptr){
-      std::cout << "couldn't get trees" << std::endl;
-    }
+  if (led_tree == nullptr){
+    std::cout << "couldn't get " << led << " tree"  << std::endl;
+  }
+
+  dark_tree = (TTree*) file->Get("Dark");
+  
+  if (dark_tree == nullptr){
+    std::cout << "couldn't get dark tree" << std::endl;
+  }
     
-    const std::vector<double> dark_sub = DarkSubtract(led_tree, dark_tree);
-    return dark_sub;
+  const std::array<double, N> dark_sub = DarkSubtract(led_tree, dark_tree);
+  
+  return dark_sub;
 }
 
 void MatthewTransparency::SaveToMonthlyFile(const Transparency& t) const {
   // Transparency values will be stored in a file that is newly generated once per month, 
-  const std::vector<double>* v_ptr = &(t.values);
-  const std::vector<int>* t_ptr = &(t.date_time);
+  const std::array<double, N>* v_ptr = &(t.values);
+  const std::array<int, 6>* t_ptr = &(t.date_time);
 
   const std::string transp_str{"transparency"}, val_str{"values"}, dt_str{"date_time"};
   const std::string fname{transp_str + "_" + t.date_time.at(0) + "_" + t.date_time.at(1) + ".root"};
@@ -206,12 +255,11 @@ bool MatthewTransparency::FileExists(std::string f) const {
   }
 }
   
-std::vector<int> MatthewTransparency::GetDateTimeVec() const{
+std::array<int, 6> MatthewTransparency::GetDateTimeVec() const{
   const auto now = std::chrono::system_clock::now();
   const std::time_t t = std::chrono::system_clock::to_time_t(now);
   tm local_tm = *localtime(&t);
-  
-  return {local_tm.tm_year+1900, local_tm.tm_mon+1, local_tm.tm_mday+1,
+  return {local_tm.tm_year+1900, local_tm.tm_mon+1, local_tm.tm_mday,
 	  local_tm.tm_hour, local_tm.tm_min, local_tm.tm_sec};
 }
 
@@ -227,15 +275,71 @@ bool MatthewTransparency::Ready() const {
   return ready;
 }
 
-void MatthewTransparency::PlaceInDataModel(const Transparency& t) const {
-  m_data->transparency_values = t.values;
-  m_data->transparency_date_time = t.date_time;
+void MatthewTransparency::AmmendSetOfTraces(const Transparency& t) {
+  
+  constexpr int numb_measurements_in_month{2688};
+  if (transparency_traces.size() ==  numb_measurements_in_month){
+    transparency_traces.pop_back();
+    transparency_times.pop_back();
+  }
+  transparency_traces.push_back(t.values);
+  transparency_times.push_back(t.date_time);
 }
 
-void MatthewTransparency::MakeQuickPlot(const std::vector<double> v, const std::vector<double> w) const {
-  TGraph g(v.size(), w.data(), w.data());
+double MatthewTransparency::GetValAtWavelength(const Transparency& t, const double wav) const {
+  auto it  = std::find_if(wavelengths.begin(), wavelengths.end(), [wav](double v){return v >= wav;});
+  return t.values.at(it - wavelengths.begin());
+}
+
+void MatthewTransparency::MakeQuickPlot(const std::array<double, N>& v, const std::array<double, N>& w, const std::string& f) const {
+  TGraph g(v.size(), w.data(), v.data());
   TCanvas c1("c1", "c1", 2000, 2000);
   g.Draw();
-  c1.SaveAs("/home/pi/GDConcMeasure/trans_plot.root");
+  c1.SaveAs(("/home/pi/GDConcMeasure/" + f).c_str());
   
 }
+
+void MatthewTransparency::MakeDoublePlot(const std::array<double, N>& v1, const std::array<double, N>& v2, const std::array<double, N>& w, const std::string& f) const {
+  TGraph g1(v1.size(), w.data(), v1.data());
+  TGraph g2(v2.size(), w.data(), v2.data());
+  TCanvas c1("c1", "c1", 2000, 2000);
+  g1.Draw();
+  g2.Draw("SAME");
+  c1.SaveAs(("/home/pi/GDConcMeasure/" + f).c_str());
+  
+}
+
+void MatthewTransparency::MakeHeatMap(const std::vector< std::array<double,N> >& traces, const std::array<double,N>& wav, const std::string& f) const {
+
+  //Just get this from data model and make wavelength a member variable.
+  TCanvas c1("c1", "c1", 2000, 2000);
+  const int numb_of_meas = traces.size();
+  int m{0};
+  TH2D heat_map("heat_map", "Transparency Measurement Heat Map", numb_of_meas, 0, numb_of_meas-1, N, wav.front(), wav.back());
+  for (const auto& trace : traces){
+    for (auto i = 0; i < N; ++i){
+      heat_map.SetBinContent(m, i, trace.at(i));
+    }
+    ++m;
+  }
+
+  std::string date_of_measure{""};
+  for (auto j = 0; j < m; ++j){
+    auto this_time = transparency_times.at(j);
+    if (date_of_measure != std::to_string(this_time.at(2))+"-"+std::to_string(this_time.at(1))+"-"+std::to_string(this_time.at(0))){
+      date_of_measure = std::to_string(this_time.at(2))+"-"+std::to_string(this_time.at(1))+"-"+std::to_string(this_time.at(0));
+      heat_map.GetXaxis()->SetBinLabel(j+1, date_of_measure.c_str());
+    }
+    else {
+      heat_map.GetXaxis()->SetBinLabel(j+1, "");
+    }
+  }
+
+  heat_map.GetXaxis()->SetTitle("date of measurement");
+  heat_map.GetYaxis()->SetTitle("wavelength / nm");  
+  
+  heat_map.Draw("COLZ");
+  heat_map.SaveAs(("/home/pi/GDConcMeasure/obj_" + f).c_str());
+  c1.SaveAs(("/home/pi/GDConcMeasure/" + f).c_str());
+}
+
