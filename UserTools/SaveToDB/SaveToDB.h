@@ -8,14 +8,14 @@
 
 class SaveToDB: public Tool {
 	
-public:
+	public:
 	
 	SaveToDB();
 	bool Initialise(std::string configfile,DataModel &data);
 	bool Execute();
 	bool Finalise();
 	
-private:
+	private:
 	int max_webpage_records=5;
 	
 	// one method per Tool to put that Tool's results into the DB
@@ -31,6 +31,18 @@ private:
 	bool RoutineCalibration();  // placeholder, Tool TODO
 	bool MatthewTransparency();
 	
+	// helper functions for converting data into json arrays / objects to store in DB
+	std::string BuildJson(TGraphErrors* gr, std::pair<double, double> range, bool inside_data);
+	std::string BuildJson(TGraphErrors* gr);
+	std::string BuildJson(TGraph* gr);
+	std::string BuildJson(double* arr, double* err, int n);
+	std::string BuildJson(double* arr, int n);
+	std::string BuildJson(int* arr, int n);
+	std::string BuildJson(std::vector<std::string> arr);
+	std::string BuildJson(TFitResultPtr& fitresptr, bool params_or_status=false);
+	std::string CastJsonb(std::string& in);
+	std::string CastJsonb(int in);
+	
 	std::vector<std::string> field_names;
 	std::vector<std::string> criterions;
 	std::vector<char> comparators;
@@ -38,10 +50,6 @@ private:
 	std::string query_string;
 	int runnum=-1;
 	int RunConfig=-1;
-	
-	// for identifying measurements stored in the database
-	boost::posix_time::ptime last_measurement_time;
-	int measurementnum=-1;
 	
 	// for identifying measurements stored in the database
 	std::string last_measurement_time;
