@@ -42,25 +42,24 @@ bool MatthewTransparency::Execute(){
 
     TTree *dark_tree_ptr = nullptr, *led_tree_ptr = nullptr;
 
-    for (const auto& [tree_name, tree_ptr] : m_data->m_trees){
-      if (wavelengths.back() == 0){wavelengths = PopulateWavelength(tree_ptr);}
-      if (tree_name == "Dark" || tree_name == "dark"){
-	dark_tree_ptr = tree_ptr;
+    for(std::pair<const std::string, TTree*>& atree : m_data->m_trees){
+      if (wavelengths.back() == 0){wavelengths = PopulateWavelength(atree.second);}
+      if (atree.first == "Dark" || atree.first == "dark"){
+          dark_tree_ptr = atree.second;
       }
     }
 
-    for (const auto& [tree_name, tree_ptr] : m_data->m_trees){
-        if (tree_name != "Dark" && tree_name != "dark"){
-	  //pure_dark_sub = RetrievePureValuesFromFile(pure_file_name, tree_name); // for debug
-	pure_dark_sub = RetrievePureValues(pure_ref_ver, tree_name);
-	std::array<double, N> dark_sub = DarkSubtract(tree_ptr, dark_tree_ptr);
-	for (auto i = 0; i < N; ++i){
-	  pure_sum.at(i) += pure_dark_sub.at(i);
-	  dark_sub_sum.at(i) += dark_sub.at(i);
+	for(std::pair<const std::string, TTree*>& atree : m_data->m_trees){
+		if(atree.first != "Dark" && atree.first != "dark"){
+			//pure_dark_sub = RetrievePureValuesFromFile(pure_file_name, atree.first); // for debug
+			pure_dark_sub = RetrievePureValues(pure_ref_ver, atree.first);
+			std::array<double, N> dark_sub = DarkSubtract(atree.second, dark_tree_ptr);
+			for (auto i = 0; i < N; ++i){
+				pure_sum.at(i) += pure_dark_sub.at(i);
+				dark_sub_sum.at(i) += dark_sub.at(i);
+			}
+		}
 	}
-
-      }
-    }
     
     const auto transparency_values = [=](){
 				       std::array<double, N> result{};
@@ -102,7 +101,9 @@ std::map<std::string, std::pair<double, double>> MatthewTransparency::CreateSamp
 							  {"green", 500},
 							  {"blue", 450}};
 
-  for (const auto& [name, wav] : names_to_samples){
+  for(const std::pair<const std::string, double>& asample : names_to_samples){
+    const std::string name = asample.first;
+    const double wav = asample.second;
     result.emplace(std::make_pair(name, std::make_pair(wav, GetValAtWavelength(t, wav))));
   }
 

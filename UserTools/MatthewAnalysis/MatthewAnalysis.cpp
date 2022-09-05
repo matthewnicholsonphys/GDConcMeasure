@@ -381,9 +381,9 @@ std::pair<TTree*, TTree*> MatthewAnalysis::FindDarkAndLEDTrees(){
   }
   
   // loop over TTrees (traces) in DataModel
-  for (const auto [name, tree] : m_data->m_trees){
-    if (name == led_name){result.second = tree;}                  // signal trace
-    else if (boost::iequals(name, "dark")){result.first = tree;}  // dark trace
+  for (std::pair<const std::string, TTree*>& atree : m_data->m_trees){
+    if (atree.first == led_name){result.second = atree.second;}                  // signal trace
+    else if (boost::iequals(atree.first, "dark")){result.first = atree.second;}  // dark trace
   }
   
   return result;
