@@ -175,9 +175,9 @@ auto MatthewTransparency::DarkSubtract(TTree* led, TTree* dark) const -> std::ar
 auto MatthewTransparency::RetrievePureValues(const int pureref_ver, const std::string led) const -> std::array<double, N> {
   // Retrieve dark subtracted pure values from database for a given LED
   const std::string query_string{"SELECT values->'yvals' FROM data WHERE name='pure_curve'"
-				 " AND values->'yvals' IS NOT NULL AND values->'led' IS NOT NULL"
+				 " AND values->'yvals' IS NOT NULL AND ledname IS NOT NULL"
+				 " AND ledname="+m_data->postgres.pqxx_quote(led)+
 				 " AND values->'version' IS NOT NULL"
-				 " AND values->>'led'="+m_data->postgres.pqxx_quote(led)+
 				 " AND values->'version'="+ m_data->postgres.pqxx_quote(pureref_ver)};
   std::string pureref_json{""};
 
