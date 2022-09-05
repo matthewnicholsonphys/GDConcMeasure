@@ -29,5 +29,5 @@ Interactive 0 ## set to 1 if you want to run the code interactively
 Remote 0  ## set to 1 if you want to run the code remotely
 
 ##### Run Config #####
-RunConfig 0
+RunConfig 1
 

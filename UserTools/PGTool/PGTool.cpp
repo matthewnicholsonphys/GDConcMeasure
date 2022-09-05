@@ -38,7 +38,7 @@ bool PGTool::Initialise(std::string configfile, DataModel &data){
 	std::cout<<m_unique_name<<": Getting config"<<std::endl;
 	m_data->postgres.SetVerbosity(10);
 	std::string json_data;
-	get_ok = m_data->postgres_helper.GetToolConfig(m_class_name, json_data);
+	get_ok = m_data->postgres_helper.GetToolConfig(m_unique_name, json_data);
 	
 	std::cout<<"JSON version of Tool config was: "<<json_data<<std::endl;
 	if(json_data==""){

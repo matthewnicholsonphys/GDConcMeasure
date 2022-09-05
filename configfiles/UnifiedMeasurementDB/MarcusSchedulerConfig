@@ -1,4 +1,4 @@
-verbosity 10
+verbosity 1
 #command_file configfiles/UnifiedMeasurementDB/measurement_commands_dbtest
 #command_file configfiles/UnifiedMeasurementDB/measurement_commands_stability
 #command_file configfiles/UnifiedMeasurementDB/measurement_commands_led_tests
@@ -6,4 +6,5 @@ verbosity 10
 #command_file configfiles/UnifiedMeasurementDB/01JunCalib
 #command_file configfiles/UnifiedMeasurementDB/02JunStability
 #command_file configfiles/UnifiedMeasurementDB/06JunCalib
-command_file configfiles/UnifiedMeasurementDB/08JunCalib
+#command_file configfiles/UnifiedMeasurementDB/08JunCalib
+# now taken from database

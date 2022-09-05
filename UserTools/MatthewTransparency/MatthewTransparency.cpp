@@ -21,9 +21,27 @@ MatthewTransparency::MatthewTransparency():Tool(){}
 
 bool MatthewTransparency::Initialise(std::string configfile, DataModel &data){
 
+  m_data= &data;
+  
+	// Retrieve configuration options from the postgres database
+	int RunConfig=-1;
+	m_data->vars.Get("RunConfig",RunConfig);
+	Log(m_unique_name+" getting RunConfig from ToolChain",v_debug,verbosity);
+	if(RunConfig>=0){
+		std::string configtext;
+		Log(m_unique_name+" getting tool configuration from database for runconfig "
+		    +std::to_string(RunConfig),v_debug,verbosity);
+		bool get_ok = m_data->postgres_helper.GetToolConfig(m_unique_name, configtext);
+		if(!get_ok){
+			Log(m_unique_name+" Failed to get Tool config from database!",v_error,verbosity);
+			return false;
+		}
+		// parse the configuration to populate the m_variables Store.
+		if(configtext!="") m_variables.Initialise(std::stringstream(configtext));
+	}
+  
   if(configfile!="")  m_variables.Initialise(configfile);
   //m_variables.Print();
-  m_data= &data;
 
   return true;
 }
@@ -111,7 +129,7 @@ std::map<std::string, std::pair<double, double>> MatthewTransparency::CreateSamp
 }
 
 bool MatthewTransparency::Finalise(){
-  std::cout << "you did it Jimmy! YOU DID IT!" << std::endl;
+  //std::cout << "you did it Jimmy! YOU DID IT!" << std::endl;
   return true;
 }
 

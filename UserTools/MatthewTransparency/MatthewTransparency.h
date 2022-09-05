@@ -46,6 +46,14 @@ class MatthewTransparency: public Tool {
   void MakeHeatMap(const std::vector< std::array<double,N> >&, const std::array<double, N>&, const std::string&) const;
   bool HandleErrors();
   std::map<std::string, std::pair<double, double>> CreateSamplesMap(const Transparency&) const;
+  
+  bool get_ok;
+  int verbosity=1;
+  int v_error=0;
+  int v_warning=1;
+  int v_message=2;
+  int v_debug=3;
+ 
 };
 
 

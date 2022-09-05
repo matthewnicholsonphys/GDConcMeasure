@@ -9,13 +9,15 @@ power up
 #valve inlet close
 #valve outlet close
 #wait 5
+setFile trashme
 measure Dark
 measure 275_A
 analyse 275_A
+#measure 275_B
+#measure R G B
+#measure White 385
 #measure Dark
-#measure 260
-#analyse 260
-save dbtestout
+save
 #pump off
 #wait 2
 power down

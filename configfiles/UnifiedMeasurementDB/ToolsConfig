@@ -7,7 +7,8 @@ myValveOutlet       Valve                   configfiles/UnifiedMeasurementDB/Val
 BenLED              BenLED                  configfiles/UnifiedMeasurementDB/LEDConfig
 BenSpectrometer     BenSpectrometer         configfiles/UnifiedMeasurementDB/SpectrometerConfig
 TraceAverage        TraceAverage            configfiles/UnifiedMeasurementDB/TraceAverageConfig
-myMatthewAnalysis   MatthewAnalysis         configfiles/UnifiedMeasurementDB/MatthewAnalysisConfig
-myLivePlotter       LivePlotter             configfiles/UnifiedMeasurementDB/LivePlotterConfig
+MarcusAnalysisLEDA  MarcusAnalysis          configfiles/UnifiedMeasurementDB/MarcusAnalysisConfigLEDA
+MarcusAnalysisLEDB  MarcusAnalysis          configfiles/UnifiedMeasurementDB/MarcusAnalysisConfigLEDB
+MatthewTransparency MatthewTransparency     configfiles/UnifiedMeasurementDB/MatthewTransparencyConfig
 SaveTraces          SaveTraces              configfiles/UnifiedMeasurementDB/SaveTracesConfig
 mySaveToDB          SaveToDB                configfiles/UnifiedMeasurementDB/SaveToDBConfig

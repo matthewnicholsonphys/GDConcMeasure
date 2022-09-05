@@ -18,7 +18,7 @@ int main(int argc, const char** argv){
 		return 2;
 	}
 	std::string ledname = argv[2];
-	std::string version  = (argc >3) ? argv[4] : "0";
+	std::string version  = (argc >3) ? argv[3] : "0";
 	std::string psqlstring = "psql -c \"INSERT INTO data (timestamp, tool, ledname, name, values) VALUES ( 'now()', 'MarcusAnalysis', '"
 	                        +ledname+"', 'pure_curve', '{\\\"version\\\":" + version + ", \\\"xvals\\\":[";
 	for(int i=0; i<g->GetN(); ++i){
