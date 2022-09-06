@@ -1850,11 +1850,11 @@ bool SaveToDB::MatthewTransparency(){
 			// turn into json string
 			std::string samplesjson = "";
 			for(auto&& asample : samples){
-				samplesjson += ",{\""+asample.first+"\": {\"wavelength\":"+std::to_string(asample.second.first)
-						   +", \"value\":" +std::to_string(asample.second.second)+"}";
+				samplesjson += ",\""+asample.first+"\": {\"wavelength\":"+std::to_string(asample.second.first)
+						    +  ", \"value\":" +std::to_string(asample.second.second)+"}";
 			}
-			samplesjson.front()='[';
-			samplesjson.push_back(']');
+			samplesjson.front()='{';
+			samplesjson.push_back('}');
 			
 			// store to db. Save the samples persistently
 			Log("SaveToDB::MatthewTransparency saving transparency samples: ",v_debug,verbosity);

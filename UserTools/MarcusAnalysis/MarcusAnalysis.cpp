@@ -917,7 +917,7 @@ bool MarcusAnalysis::FitFourGaussians(std::pair<double,double>& peak_heights, st
 	logmessage << m_unique_name<<" complex peaks at: "<<peak_posns.first<<", "<<peak_posns.second
 	           <<" are "<<peak_heights.first<<" and "<<peak_heights.second
 	           <<" with diff "<<peak_heights.first-peak_heights.second
-	           <<" and ratio "<<peak_heights.first/peak_heights.second<<std::endl;
+	           <<" and ratio "<<peak_heights.first/peak_heights.second;
 	Log(logmessage.str(),v_debug,verbosity);
 	
 	peak_errs = CalculateError(peak_posns.first, peak_posns.second);
