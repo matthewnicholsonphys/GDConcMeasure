@@ -128,11 +128,15 @@ bool MarcusAnalysis::Execute(){
 		
 		// Inform downstream tools that a new measurement is available
 		// maybe we could use the value to indicate if the data is good?
-		m_data->CStore.Set("NewMarcusAnalyse",true);
+		m_data->CStore.Set("NewMarcusAnalyse",ledToAnalyse);
 		
 	} else {
 		// else no data to Analyse
-		m_data->CStore.Remove("NewMarcusAnalyse");
+		// see if there's an old flag from this instance and remove it if so
+		std::string lastAnalyse="";
+		if(m_data->CStore.Get("NewMarcusAnalyse",lastAnalyse) && lastAnalyse==ledToAnalyse){
+			m_data->CStore.Remove("NewMarcusAnalyse");
+		}
 	}
 	
 	Log(m_unique_name+" done",v_debug,verbosity);
@@ -910,7 +914,7 @@ bool MarcusAnalysis::FitFourGaussians(std::pair<double,double>& peak_heights, st
 	
 	logmessage.str("");
 	logmessage.clear();
-	logmessage << m_unique_name<<"complex peaks at: "<<peak_posns.first<<", "<<peak_posns.second
+	logmessage << m_unique_name<<" complex peaks at: "<<peak_posns.first<<", "<<peak_posns.second
 	           <<" are "<<peak_heights.first<<" and "<<peak_heights.second
 	           <<" with diff "<<peak_heights.first-peak_heights.second
 	           <<" and ratio "<<peak_heights.first/peak_heights.second<<std::endl;
@@ -1054,8 +1058,20 @@ bool MarcusAnalysis::GetDarkSubTrace(){
 	}
 	
 	Log(m_unique_name+" getting TTree entries",v_debug,verbosity);
-	ledTree->GetEntry(ledTree->GetEntries()-1);
-	darkTree->GetEntry(darkTree->GetEntries()-1);
+	get_ok = ledTree->GetEntry(ledTree->GetEntries()-1);
+	if(get_ok<=0){
+		Log(m_unique_name+" failed to GetEntry of ledTree!",v_error,verbosity);
+		return false;
+	}
+	get_ok = darkTree->GetEntry(darkTree->GetEntries()-1);
+	if(get_ok<=0){
+		Log(m_unique_name+" failed to GetEntry of darkTree!",v_error,verbosity);
+		return false;
+	}
+	// after getting entries we should reset the branch addresses
+	// as we just pointed them at local variables that will soon be out of scope
+	ledTree->ResetBranchAddresses();
+	darkTree->ResetBranchAddresses();
 	
 	// sanity check that we got the number of datapoints we expected
 	const int number_of_points = 2068;  // expected trace size TODO maybe don't hard-code this...

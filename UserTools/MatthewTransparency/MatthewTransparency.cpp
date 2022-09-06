@@ -108,6 +108,9 @@ bool MatthewTransparency::Execute(){
     // MakeQuickPlot(dark_sub_sum, wavelengths, "trans_darksub.root");
     //  MakeQuickPlot(pure_sum, wavelengths, "trans_pure.root");
     //    MakeDoublePlot(pure_sum, dark_sub_sum, wavelengths, "trans_double.root");
+  } else {
+  	// remove any previous flags, no new data
+  	m_data->CStore.Remove("NewMatthewTransparency");
   }
       
   return true;

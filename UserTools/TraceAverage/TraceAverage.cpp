@@ -57,6 +57,7 @@ bool TraceAverage::Execute(){
     short min=mytm.tm_min;
     short sec=mytm.tm_sec;
     std::string date=to_simple_string(m_data->measurment_time);
+    Log("TraceAverage timestamp for this measurement is " + date,v_debug,verbosity);
     
     // get trace name - we'll use this for the TTree name
     std::string name="";
@@ -118,6 +119,11 @@ bool TraceAverage::Execute(){
       Log("TraceAverage::Execute error calling TTree::Fill, returned "+std::to_string(nbytes),0,0);
       // don't return, is it better that we at least make a graph for the website...?
     }
+    // we should reset the branch addresses as they are currently pointed at local
+    // variables that will soon go out of scope.
+    // if later tools call 'm_data->trees[this_tree]->GetEntry()'
+    // without setting the branch addresses, it can segfault if we don't.
+    tree->ResetBranchAddresses();
     
     // make a TGraph for the website
     TCanvas c1("c1","A Simple Graph with error bars",200,10,700,500);

@@ -173,8 +173,8 @@ bool SaveToDB::Execute(){
 	// the following tools store information persistently into the database 'data' table
 	try{
 		get_ok = MarcusAnalysis();
-	} catch(...){ std::cerr<<"failed to save mattana"<<std::endl; all_ok = false; }
-	if(!get_ok) { std::cerr<<"failed to save mattana"<<std::endl; all_ok = false; }
+	} catch(...){ std::cerr<<"failed to save marcusana"<<std::endl; all_ok = false; }
+	if(!get_ok) { std::cerr<<"failed to save marcusana"<<std::endl; all_ok = false; }
 	try{
 		get_ok = MatthewTransparency();
 	} catch(...){ std::cerr<<"failed to save matthewtransp"<<std::endl; all_ok = false; }
@@ -728,14 +728,15 @@ bool SaveToDB::MarcusAnalysis(){
 	bool all_ok = true;
 	
 	// see if we have new data to add to DB
-	bool new_measurement;
-	get_ok = m_data->CStore.Get("NewMarcusAnalyse",new_measurement);
+	std::string ledname="";
+	get_ok = m_data->CStore.Get("NewMarcusAnalyse",ledname);
 	
 	// do we have a new measurement?
-	if(get_ok && new_measurement){
+	if(get_ok && ledname!=""){
 		
 		Log("SaveToDB::MarcusAnalysis recording new measurement",v_debug,verbosity);
-		
+
+		/*
 		// get which LED was being measured
 		std::string ledname="";
 		get_ok  = m_data->CStore.Get("ledToAnalyse",ledname);
@@ -744,6 +745,7 @@ bool SaveToDB::MarcusAnalysis(){
 			// we could bail, but again we may be able to deduce which LED was on from the spectrum later.
 			all_ok = false;
 		}
+		*/
 		
 		// by default we'll use the current run as the run number for insertions/updates,
 		// but allow the user to override with a custom run number for processing old data
@@ -808,6 +810,9 @@ bool SaveToDB::MarcusAnalysis(){
 			ledTree->SetBranchAddress("sec",&sc);
 			Log("SaveToDB::MarcusAnalysis getting last entry timestamp",v_debug,verbosity);
 			ledTree->GetEntry(ledTree->GetEntries()-1);
+			// reset the addresses now that we have the data, since theese variables
+			// will soon go out of scope
+			ledTree->ResetBranchAddresses();
 			struct tm ledtime;
 			ledtime.tm_year = yr - 1900;
 			ledtime.tm_mon = mon - 1;
@@ -1646,6 +1651,9 @@ bool SaveToDB::TraceAverage(){
 		get_ok |= (tree->SetBranchAddress("error", &b) < 0);
 		get_ok |= (tree->SetBranchAddress("wavelength", &c) < 0);
 		get_ok |= ((tree->GetEntry(tree->GetEntries()-1)) <= 0);
+		// reset the branch addresses now that we have the data,
+		// as the corresponding variables will soon be out of scope
+		tree->ResetBranchAddresses();
 		if(get_ok){
 			std::stringstream ss;
 			ss << "SaveToDB::TraceAverage failed to get data for latest trace from TTree "
@@ -1801,7 +1809,7 @@ bool SaveToDB::MatthewTransparency(){
 		
 		
 		// get last filename to be written to with SaveTraces tool
-		std::string key = "purerefID_transparency";
+		std::string key = "pure_refID_transparency";
 		std::string pureID;
 		get_ok = m_data->CStore.Get(key, pureID);
 		std::string pureref_json = "{\"ID\":\""+pureID+"\"}";
@@ -1876,7 +1884,7 @@ bool SaveToDB::MatthewTransparency(){
 		std::vector<double> transparencytrace;
 		std::vector<double> transparencywls;
 		get_ok = m_data->CStore.Get("TransparencyTrace",transparencytrace);
-		get_ok &= m_data->CStore.Get("transparencyWls",transparencywls);
+		get_ok &= m_data->CStore.Get("TransparencyWls",transparencywls);
 		if(!get_ok){
 			Log("SaveToDB::MatthewTransparency failed to get transparency trace from CStore!",v_error,verbosity);
 			all_ok = false;
