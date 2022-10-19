@@ -1105,6 +1105,9 @@ bool MarcusAnalysis::GetDarkSubTrace(){
 	sample_273=0;
 	sample_276=0;
 	for(int j=0; j<number_of_points; ++j){
+		if(TMath::IsNaN(led_values.at(j))){
+			Log("Nan value in data trace point "+std::to_string(j),v_error,verbosity);
+		}
 		if(wavelengths.at(j)>270 && wavelengths.at(j)<280){
 			// in band
 			inband_values.push_back(led_values.at(j));
@@ -1206,6 +1209,9 @@ bool MarcusAnalysis::FitPure(){
 			next_wl = next_sideband_wl;
 			++ j;
 		}
+		if(TMath::IsNaN(pure_fct->Eval(next_wl))){
+			Log("Pure fit function eval to NaN",v_error,verbosity);
+		}
 		g_purefit.SetPoint(k, next_wl, pure_fct->Eval(next_wl));
 		double fiterr = 0.00; // TODO FIXME how do we calculate this
 		g_purefit.SetPointError(k, wlerr, fiterr);
@@ -1234,7 +1240,15 @@ bool MarcusAnalysis::CalculateAbsorbance(){
 		double wlval, dataval;
 		g_inband.GetPoint(i, wlval, dataval);
 		double fitval = pure_fct->Eval(wlval);
-		g_absorb.SetPoint(i, wlval, log10(fitval/dataval));
+		double absval = log10(fitval/dataval);
+		if(TMath::IsNaN(absval)){
+			logmessage.str("");
+			logmessage << "absorbance calculation NaN value: fitval: "<<fitval<<", dataval: "<<dataval
+			           <<" at wavelength "<<wlval<<std::endl;
+			Log(logmessage.str(),v_error,verbosity);
+			absval=0;
+		}
+		g_absorb.SetPoint(i, wlval, absval);
 		
 		// error on ratio is sqrt((Δa/a)²+(Δb/b)²)
 		// https://www.statisticshowto.com/error-propagation/
@@ -1287,6 +1301,13 @@ bool MarcusAnalysis::CalculatePeakHeights(std::string method){
 	if(method=="raw" || method=="complex"){
 		g_absorb.GetPoint(sample_273, peak_posns.first, peak_heights.first);
 		g_absorb.GetPoint(sample_276, peak_posns.second, peak_heights.second);
+		if(TMath::IsNaN(peak_heights.first) || TMath::IsNaN(peak_heights.second)){
+			logmessage <<"raw peak heights are NaN! samples: "<<sample_273<<", "<<sample_276
+			           <<" with x: "<<peak_posns.first<<", "<<peak_posns.second<<" had values"
+			           <<peak_heights.first<<" and "<<peak_heights.second<<std::endl
+			           <<"absorption graph had "<<g_absorb.GetN()<<" points"<<std::endl;
+			Log(logmessage.str(),v_error,verbosity);
+		}
 		
 		// if peaks are negative, coerce to 0
 		//peak_heights.first=std::max(0.,peak_heights.first);

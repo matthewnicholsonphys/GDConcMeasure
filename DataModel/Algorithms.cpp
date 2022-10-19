@@ -1,6 +1,7 @@
 #include "Algorithms.h"
 #include <stdio.h>
 #include <sys/wait.h>
+#include <locale>
 
 int SystemCall(std::string cmd, std::string& retstring){
   // execute command, capture return status and any output
@@ -27,7 +28,7 @@ int SystemCall(std::string cmd, std::string& retstring){
       if (fgets(buffer, bufsize, stream) != NULL) retstring.append(buffer);
     }
     // pop off trailing newline
-    retstring.pop_back();
+    if(std::isspace(retstring.back())) retstring.pop_back();
     // close the pipe, and capture command return value
     int stat = pclose(stream);
     retstatus = (WIFEXITED(stat)) ? WEXITSTATUS(stat) : WTERMSIG(stat);

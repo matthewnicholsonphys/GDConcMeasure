@@ -7,7 +7,6 @@ if [ -z "${SAFETYNETWEBHOOK}" ]; then
 	echo "Webhook safety net not defined!"
 	exit 1;
 fi
-set -x
 if ! grep -wq "OFF\|ON" /home/pi/safety_net/safety_net_active.txt; then
     curl -X POST -H 'Content-type: application/json' --data '{"text":" :warning: :warning: :warning: GAD SAFETY NET ACTIVE FLAG IS NEITHER ON OR OFF - CHECK `/home/pi/GDConcMeasure/safety_net/safety_net_active.txt` FILE :warning: :warning: :warning:"}' ${SAFETYNETWEBHOOK}
 

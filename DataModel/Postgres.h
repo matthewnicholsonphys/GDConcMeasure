@@ -319,7 +319,7 @@ class Postgres {
 	bool Update(std::string tablename, std::vector<std::string> &fields, std::vector<std::string> &criterions, std::vector<char> &comparators, std::string* err, Rest... args){
 		// sanity check; each condition ('RunNumber > 2000') requires a field (RunNumber),
 		// a comparator ('>') and a value (10).
-		if(comparators.size()!=comparators.size()){
+		if(criterions.size()!=comparators.size()){
 			std::string errmsg = "Postgres::Update called with criterions.size() != comparators.size()";
 			if(err) *err = errmsg;
 			std::cerr<<errmsg<<std::endl;
