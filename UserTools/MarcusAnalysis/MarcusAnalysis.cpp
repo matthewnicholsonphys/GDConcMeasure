@@ -658,8 +658,8 @@ bool MarcusAnalysis::GetPureScaledPlusExtras(){
 			// par [5] = shoulder gaussian scaling
 			// par [6] = shoulder gaussian centre, restricted to > 282nm (RH shoulder)
 			// par [7] = shoulder gaussian spread
-			double purepart = (par[0] * dark_subtracted_purep->Eval((par[1]*x[0])+par[2]));
-			double linpart = (par[4] * x[0]) + par[3];
+			double purepart = (par[0] * dark_subtracted_purep->Eval((par[1]*(x[0]-276))+276+par[2]));
+			double linpart = (par[4] * (x[0]-276)) + par[3];
 			double shoulderpart = par[5]*exp(-0.5*TMath::Sq((x[0]-282.-abs(par[6]))/par[7]));
 			double retval = purepart + linpart + shoulderpart;
 			
@@ -670,6 +670,15 @@ bool MarcusAnalysis::GetPureScaledPlusExtras(){
 	
 	// set default parameters
 	pure_fct->SetParameters(1.,1.,0.,0.,0.,0.,0.,10.);
+	// set parameter limits
+	pure_fct->SetParLimits(0,0,3);      // stretch y
+	pure_fct->SetParLimits(1,0.8,1.2);  // stretch x
+	pure_fct->SetParLimits(2,-20,20);   // x offset
+	pure_fct->SetParLimits(3,-10,10);   // y offset
+	pure_fct->SetParLimits(4,-10,10);   // linear baseline gradient
+	pure_fct->SetParLimits(5,-500,500); // shoulder gaussian amplitude XXX reduce
+	pure_fct->SetParLimits(6,0,60);     // shoulder gaussian position - 282
+	pure_fct->SetParLimits(7,0,50);     // shoulder gaussian width
 	
 	if(!pure_fct->IsValid()){
 		Log(m_unique_name+" GetPureScaledPlusExtras failed to construct TF1 from pure reference data",
