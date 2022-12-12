@@ -731,7 +731,7 @@ void MarcusScheduler::SetFile(std::string the_command){
 	}
 	
 	// set it in the datamodel
-	m_data->CStore.Set("Filename",filename);
+	m_data->CStore.Set("Filename",output_file);
 	
 	// advance to the next command
 	++current_command;

@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <sys/wait.h>
 #include <locale>
+#include <errno.h>
+#include <string.h>
 
 int SystemCall(std::string cmd, std::string& retstring){
   // execute command, capture return status and any output
@@ -33,7 +35,8 @@ int SystemCall(std::string cmd, std::string& retstring){
     int stat = pclose(stream);
     retstatus = (WIFEXITED(stat)) ? WEXITSTATUS(stat) : WTERMSIG(stat);
   } else {
-    retstring = "SystemCall popen returned nullptr for command "+cmd;
+    retstring = "SystemCall popen returned nullptr for command '"+cmd
+               +"'', error is: "+strerror(errno);
     return -1;
   }
   if(retstatus!=0){
