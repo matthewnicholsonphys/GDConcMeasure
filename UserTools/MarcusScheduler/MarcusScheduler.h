@@ -30,6 +30,7 @@ class MarcusScheduler: public Tool {
 	int command_step=0;
 	std::string command_file;
 	std::string measurement_name;
+	std::string outputbasename;         // base name for output file
 	int overwrite_saves=0;
 	bool looping=false;
 	int file_num=0;                     // incremented each time 'Save' is called to make a new file

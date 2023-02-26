@@ -52,6 +52,13 @@ bool MarcusScheduler::Initialise(std::string configfile, DataModel &data){
 	// put set of commands into DataModel for display on website by later tool
 	m_data->CStore.Set("MarcusSchedulerCommands",commands);
 	
+	// initial basename of output file
+	get_ok = m_variables.Get("outfilebase", outputbasename);
+	if(!get_ok){
+		Log("MarcusScheduler::Initialise no outfilebase given! Using default 'GAD_output'",v_warning,verbosity);
+		outputbasename="GAD_output";
+	}
+	
 	// if looping, do we want to overwrite each iteration's output file,
 	// or append the iteration number to create a unique filename for each iteration?
 	// TODO this need enabling in SaveTraces
@@ -138,7 +145,7 @@ bool MarcusScheduler::Execute(){
 		// print warning
 		std::string logmessage = std::string("MarcusScheduler::Execute - caught exception ")
 		    +e.what()+" during command "+std::to_string(current_command)+" of "
-		    +std::to_string(commands.size())+" at step "+std::to_string(command_step);
+		    +std::to_string(commands.size())+" at step "+std::to_string(command_step)+"\n";
 		if(current_command<commands.size()){
 			logmessage += "Corresponding command is: "+commands.at(current_command);
 		}
@@ -470,6 +477,8 @@ void MarcusScheduler::ProcessCommand(std::string& the_command){
 		EndLoop(the_command);
 		
 	} else if(the_command.substr(0,7)=="setFile"){
+		// change the default basename of the output file
+		// if no argument given, continue to use current basename
 		SetFile(the_command);
 		
 	} else if(the_command.substr(0,5)=="dummy"){
@@ -677,18 +686,37 @@ void MarcusScheduler::DoTransparency(std::string the_command){
 
 void MarcusScheduler::SetFile(std::string the_command){
 	// set the file the next `save` command will save to
+	// if no argument given, this propagates the old file basename
+	// which can be set in the local override of the MarcusScheduler config
+	// otherwise if desired a new basename can be given
 	
-	// strip off the preceding 'setFile' to get the file name base
-	std::string filename = the_command.substr(8,std::string::npos);
+	// strip off the preceding 'setFile' to check for a new basename
+	std::string newoutputbasename = the_command.substr(7,std::string::npos);
 	
-	// trim comments & trailing whitespace
-	filename = filename.substr(0,filename.find('#'));
-	filename = filename.substr(0,filename.find(' '));
+	// trim comments
+	newoutputbasename = newoutputbasename.substr(0,newoutputbasename.find('#'));
+	
+	// we may have a new filename, or just whitespace, or an empty string at this point
+	// trim preceding whitespace (separator between 'setFile' and new name)
+	if(newoutputbasename.find_first_not_of(' ')!=std::string::npos){
+		// this is the only one we need to check validity of since starting index may be invalid if not found
+		newoutputbasename = newoutputbasename.substr(newoutputbasename.find_first_not_of(' '),std::string::npos);
+	}
+	// trim trailing whitespace (we don't allow spaces in names)
+	newoutputbasename = newoutputbasename.substr(0,newoutputbasename.find(' '));
+	
+	// ok, should be down to just the new basename, or empty
+	if(!newoutputbasename.empty()){
+		std::string logmessage = "MarcusScheduler::setFile updating output file basename from '"
+		                        +outputbasename+"' to '"+newoutputbasename+"'";
+		outputbasename = newoutputbasename;
+	}
 	
 	// if we're looping and not overwriting save files, add the loop index to the output filename
-	std::string output_file = filename;
+	std::string output_file = outputbasename;
 	if(looping && !overwrite_saves){
-		std::string filenamesub = filename.substr(0,filename.find_last_of('.'));
+		// check if an extension was supplied and strip it off if so
+		std::string filenamesub = outputbasename.substr(0,outputbasename.find(".root"));
 		std::string file_num_padded;
 		char file_num_buf[6];
 		int written = snprintf(file_num_buf,6,"%05d",file_num);

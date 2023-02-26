@@ -8,3 +8,4 @@ verbosity 1
 #command_file configfiles/UnifiedMeasurementDB/06JunCalib
 #command_file configfiles/UnifiedMeasurementDB/08JunCalib
 # now taken from database
+outfilebase 26FebEGADS
