@@ -39,7 +39,7 @@ private:
   
   int intTime;
   int nTraces;
-  std::string power;
+  bool connected;
   int wakedelay;
   
   int verbosity=1;

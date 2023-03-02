@@ -39,6 +39,7 @@ public:
   bool GetLEDmapping(std::string& mapping_contents);
   void ParseMapping(std::istream*);
   bool SetPWMfreq(double freq);
+  bool SetMode(bool pushpull);
   
   bool TurnOffAndSleep();
   bool IsSleeping();
@@ -62,6 +63,7 @@ private:
   unsigned int resolution;
   double fVin, fDelay, frequencyPWM;
   unsigned long lastTime;
+  bool pushpullmode; // true = push/pull, false=open drain
   
   //counting and flags
   int file_descript;

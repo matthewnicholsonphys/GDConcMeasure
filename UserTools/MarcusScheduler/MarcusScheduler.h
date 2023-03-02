@@ -56,6 +56,7 @@ class MarcusScheduler: public Tool {
 	void DoAnalyse(std::string the_command);
 	void DoTransparency(std::string the_command);
 	void DoPower(std::string the_command);
+	void DoConnect(std::string the_command);
 	void DoPump(std::string the_command);
 	void DoValves(std::string the_command);
 	void DoMeasure(std::string the_command);

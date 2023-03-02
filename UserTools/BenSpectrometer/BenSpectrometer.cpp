@@ -37,8 +37,8 @@ bool BenSpectrometer::Initialise(std::string configfile, DataModel &data){
   m_variables.Get("SpectrometerPort",SpectrometerPort);
   m_variables.Get("wakedelay",wakedelay);
   
-  // default state power off
-  power="OFF";
+  // default state not connected
+  connected=false;
   return true;
 }
 
@@ -47,15 +47,13 @@ bool BenSpectrometer::Execute(){
   
   Log("BenSpectrometer Executing...",v_debug,verbosity);
   
-  // check if we've just changing power state
-  std::string Power="";
-  if(m_data->CStore.Get("Power",Power) && Power!=power){
-    
-    // update our internal variable so that we know to re-connect when its turned back on
-    power=Power;
-    
-    if(Power=="ON"){
-      // if we've just powered up, establish a connection
+  // check if we're being asked to connect
+  std::string connect="";
+  if(m_data->CStore.Get("Connect",connect)){
+    if(connected){
+      Log("spectrometer already connected",v_message,verbosity);
+    } else {
+      
       Log("spectrometer on",v_message,verbosity);
       
       Log("BenSpectrometer sleeping for "+std::to_string(wakedelay)+"s after power-up "
@@ -84,13 +82,19 @@ bool BenSpectrometer::Execute(){
         Log("BenSpectrometer::Execute successfully connected to spectrometer",v_message,verbosity);
       }
       
+      // update our internal connection status
+      connected=true;
+      
       // update connection status in DataModel for display on website
       m_data->CStore.Set("SpectrometerConnected",true);
-    } else {
-      // we'll need to reconnect on power-up
-      m_data->CStore.Set("SpectrometerConnected",false);
     }
+  }
   
+  // we'll also be disconnected if power went down
+  std::string Power="";
+  if(m_data->CStore.Get("Power",Power) && Power==false){
+      connected=false;
+      m_data->CStore.Set("SpectrometerConnected",false);
   }
   
   // check if we have a flag in the DataModel to start a measurement
@@ -389,7 +393,7 @@ bool BenSpectrometer::GetData(){
   sbapi_spectrometer_set_integration_time_micros(device_ids[0], spectrometer_ids[0],&error, intTime);
   if(error){
     Log("BenSpectrometer::GetData sbapi_spectrometer_set_integration_time_micros returned error "
-       +std::to_string(error),v_error,verbosity);
+       +std::to_string(error)+std::string(": ")+sbapi_get_error_string(error),v_error,verbosity);
     return 0;
   }
   

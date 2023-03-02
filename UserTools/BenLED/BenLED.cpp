@@ -37,11 +37,15 @@ bool BenLED::Initialise(std::string configfile, DataModel &data){
   resolution = static_cast<unsigned int>(pow(2, resolution)) - 1;
   
   m_variables.Get("voltage_supply", fVin);
+  std::cout<<"Got voltage supply "<<fVin<<std::endl;
   m_variables.Get("delay", fDelay);
   
   // read LED pin mapping from the appropriate source
   // (i.e. let local file override database)
   MapLED(m_variables.Has("map_wiring"));
+  
+  pushpullmode = true; // true = push/pull, false = open drain
+  m_variables.Get("PushPull", pushpullmode);
   
   //lastTime = newTime;
   power="OFF";
@@ -71,6 +75,10 @@ bool BenLED::Execute(){
       
       // note in CStore that we've established comms to the PWM board for indication on website
       m_data->CStore.Set("PWMBoardHandle",file_descript);
+      
+      // set drive mode; push/pull or open drain
+      ok = SetMode(pushpullmode);
+      if(not ok) return false;
       
       // initialise all LEDs to off
       ok = TurnOffAll();
@@ -124,32 +132,44 @@ bool BenLED::Execute(){
       short UV275_A=(UV275_A_str=="1");
       short UV275_B=(UV275_B_str=="1");
       
-      if( R || G || B ){
-        ok &= TurnLEDon("LEDRGBAnnode");
-        ok &= TurnLEDon("LEDR");
-        ok &= TurnLEDon("LEDG");
-        ok &= TurnLEDon("LEDB");
+      if(pushpullmode){
+        // in push-pull mode we turn on the common anode when any colour is on
+        // and then turn OFF the colours that are actually supposed to be ON!
+        if( R || G || B ){
+          ok &= TurnLEDon("LEDRGBAnnode");
+          ok &= TurnLEDon("LEDR");
+          ok &= TurnLEDon("LEDG");
+          ok &= TurnLEDon("LEDB");
+        } else{
+          ok &= TurnLEDoff("LEDRGBAnnode");
+          ok &= TurnLEDoff("LEDR");
+          ok &= TurnLEDoff("LEDG");
+          ok &= TurnLEDoff("LEDB");
+        }
+        if(R)  ok &= TurnLEDoff("LEDR");
+        if(G)  ok &= TurnLEDoff("LEDG");
+        if(B)  ok &= TurnLEDoff("LEDB");
+        
+      } else {
+        // open drain mode, normal control
+        if(R)  ok &= TurnLEDon("LEDR");
+        else ok &= TurnLEDoff("LEDR");
+        if(G)  ok &= TurnLEDon("LEDG");
+        else ok &= TurnLEDoff("LEDG");
+        if(B)  ok &= TurnLEDon("LEDB");
+        else ok &= TurnLEDoff("LEDB");
+        
       }
-      else{
-        ok &= TurnLEDoff("LEDRGBAnnode");
-        ok &= TurnLEDoff("LEDR");
-        ok &= TurnLEDoff("LEDG");
-        ok &= TurnLEDoff("LEDB");
-      }
       
-      if(R)  ok &= TurnLEDoff("LEDR");
-      if(G)  ok &= TurnLEDoff("LEDG");
-      if(B)  ok &= TurnLEDoff("LEDB");
-      
-      
-      if(White) ok &= TurnLEDon("LEDW");
-      else ok &= TurnLEDoff("LEDW");
-      if(B385) ok &= TurnLEDon("LED385L");
-      else ok &= TurnLEDoff("LED385L");
+      // in push-pull mode we drive the PWM 5->12V booster directly
       if(UV275_A) ok &= TurnLEDon("LED275J_A");
       else ok &= TurnLEDoff("LED275J_A");
       if(UV275_B) ok &= TurnLEDon("LED275J_B");
       else ok &= TurnLEDoff("LED275J_B");
+      if(White) ok &= TurnLEDon("LEDW");
+      else ok &= TurnLEDoff("LEDW");
+      if(B385) ok &= TurnLEDon("LED385L");
+      else ok &= TurnLEDoff("LED385L");
       //delete entries after maybe??
     }
     m_data->CStore.Remove("LED");
@@ -167,7 +187,8 @@ bool BenLED::TurnOnAll(){
     return false;
   }
   
-  bool ok = TurnLEDon("LEDRGBAnnode");
+  bool ok;
+  ok = TurnLEDon("LEDRGBAnnode");
   
   // try to turn on all other LEDs
   for (std::map<std::string, unsigned int>::iterator it =  mLED_name.begin(); it != mLED_name.end(); ++it){
@@ -179,6 +200,7 @@ bool BenLED::TurnOnAll(){
 
 bool BenLED::TurnOffAll(){
   // turn all LEDs off
+  Log("BenLED turning off all LEDs",v_message,verbosity);
   bool all_ok = true;
   
   // lazy &&, check if sleeping and wake up driver if so
@@ -191,10 +213,10 @@ bool BenLED::TurnOffAll(){
   // loop over LEDS and turn them off
   for (std::map<std::string, unsigned int>::iterator it =  mLED_name.begin(); it != mLED_name.end(); ++it){
     // special case; skip RGB LED - we don't turn the cathodes off, just the collective anode.
-    if(it->first != "LEDRGBAnnode") all_ok &= TurnLEDoff(it->first);
+    if(pushpullmode && it->first != "LEDRGBAnnode") all_ok &= TurnLEDoff(it->first);
   }
   // turn off RGB LED
-  all_ok &= TurnLEDoff("LEDRGBAnnode");
+  if(pushpullmode) all_ok &= TurnLEDoff("LEDRGBAnnode");
   
   return all_ok;
 }
@@ -293,6 +315,7 @@ void BenLED::ParseMapping(std::istream* inConfig){
       // quick sanity check that the requested voltage is not greater than the supply voltage
       if (volt > fVin)        Log("BenLED: WARNING\tvoltage of " + key + " set higher than Vin", 1, verbosity);
       else mLED_duty[key] = volt / fVin;
+      std::cout<<"LED "<<key<<" on pin "<<pin<<" set to voltage "<<volt<<", fraction of fVin "<<fVin<<" gives duty cycle "<<mLED_duty[key]<<std::endl;
       // 3) map this LED to the next free bit in a bitmap. Allows all LED states to be specified by one int
       mLED_name[key] = static_cast<unsigned int>(pow(2, mLED_name.size()-1));
     
@@ -426,6 +449,39 @@ bool BenLED::SetPWMfreq(double freq){
   return Write(0xfe, prescale);
 }
 
+bool BenLED::SetMode(bool pushpullmode){
+  std::string mode = pushpullmode ? "push-pull" : "open drain";
+  Log("BenLED setting push-pull mode to "+mode,v_message,verbosity);
+  
+  if (IsSleeping() && !WakeUpDriver()){
+    Log("BenLED::SetMode failed to wake up driver!",0,0);
+    return false;
+  }
+  
+  //read currentt MODE2 register
+  int oldmode=0;
+  bool ret = Read(0x01, oldmode);
+  if (!ret){
+    Log("BenLED::SetMode failed to read MODE2 register!",0,0);
+    if(oldmode==0) return false;
+  }
+  uint8_t pushpull = 0x04;  // 3rd bit = 0 for open drain, 1 for push-pull
+  uint8_t invert = 0x10;    // 5th bit = 1 for invert, so that writing 'on' still enables the led
+  
+  uint8_t newmode;
+  if(pushpullmode){
+    newmode = oldmode | pushpull;     // ensure 3rd bit is high for push-pull
+    newmode = newmode & ~invert;      // ensure 5th bit is low for normal output
+  } else {
+    newmode = oldmode & ~pushpull;   // set 3rd bit low for open drain mode
+    newmode = newmode | invert;      // set 5th bit high for inverted output
+  }
+  ret = Write(0x01, newmode); // write totem pole configuration
+  if(!ret) Log("BenLED::SetMode failed to write updated MODE2 register!",0,0);
+
+  return ret;
+}
+
 bool BenLED::TurnOffAndSleep(){
   
   bool ok = true;
@@ -530,8 +586,7 @@ bool BenLED::TurnLEDon(std::string ledName){
     return false;
   }
   
-  Log("Turning on "+ledName,v_message,verbosity);
-  //std::cout << "turning on " << ledName << std::endl;
+  Log("Turning on "+ledName+", pin "+std::to_string(mLED_chan[ledName]),v_message,verbosity);
   //there are 4 registers to control LEDs
   //and they are [6+4*channel : 9+4*channel]
   //

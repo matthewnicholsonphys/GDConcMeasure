@@ -429,6 +429,10 @@ void MarcusScheduler::ProcessCommand(std::string& the_command){
 		// power up or down PSU
 		DoPower(the_command);
 		
+	} else if(the_command.substr(0,7)=="connect"){
+		// connect to the spectrometer
+		DoConnect(the_command);
+		 
 	} else if(the_command.substr(0,4)=="wait"){
 		// wait for a specified time
 		DoWait(the_command);
@@ -511,6 +515,20 @@ void MarcusScheduler::DoPower(std::string the_command){
 	} else {
 		Log("MarcusScheduler::DoPower - Unknown power state: '"+on_or_off+"'",v_error,verbosity);
 	}
+	
+	// queue up the action
+	m_data->CStore.JsonParser(json_string);
+	
+	// advance to the next command
+	++current_command;
+}
+
+// ««-------------- ≪ °◇◆◇° ≫ --------------»»
+
+void MarcusScheduler::DoConnect(std::string the_command){
+	// connect to the spectrometer
+	
+	std::string json_string="{\"Connect\":\"Connect\"}";
 	
 	// queue up the action
 	m_data->CStore.JsonParser(json_string);

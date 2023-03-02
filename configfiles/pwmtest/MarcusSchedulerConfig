@@ -1,0 +1,2 @@
+verbosity 10
+command_file configfiles/pwmtest/measurement_commands

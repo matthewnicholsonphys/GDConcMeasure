@@ -1,0 +1,11 @@
+#LED list wired up to the raspPI
+#name		channel	voltage
+# duty cycles are calculated from ratio of voltage here to vsupply in LEDConfig
+LED275J_A       0       2.3
+LED275J_B       10      2.3
+LED385L         11      3.5
+LEDW            8       3.2
+LEDRGBAnnode	12	3.0   # not connected to PWM for open drain
+LEDR		13	3.0
+LEDB		14	3.0
+LEDG		15	3.0
