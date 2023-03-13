@@ -1,1 +1,3 @@
 verbosity 5
+
+#map_wiring /home/pi/GDConcMeasure/adjust_led_voltages.txt
