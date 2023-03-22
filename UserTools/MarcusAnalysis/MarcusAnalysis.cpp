@@ -669,7 +669,12 @@ bool MarcusAnalysis::GetPureScaledPlusExtras(){
 	
 	
 	// set default parameters
-	pure_fct->SetParameters(1.,1.,0.,0.,0.,0.,0.,10.);
+	//pure_fct->SetParameters(1.,1.,0.,0.,0.,0.,0.,10.);   // default
+	// following from some random entry on 12th march, let's see if it restabilises
+	std::vector<double> LED_a_inits{0.749393, 1.002087, 0.269252, -10.000000, -1.254840, -195.183650, 0.000000, 9.714654};
+	std::vector<double> LED_b_inits{2.245291, 1.041264, 0.599252, -9.999999, -0.864187, 85.906849, 0.000000, 3.079667};
+	std::vector<double>* init_params = (ledToAnalyse=="275_A") ? &LED_a_inits : &LED_b_inits;
+	pure_fct->SetParameters(init_params->data());
 	// set parameter limits
 	pure_fct->SetParLimits(0,0,3);      // stretch y
 	pure_fct->SetParLimits(1,0.8,1.2);  // stretch x

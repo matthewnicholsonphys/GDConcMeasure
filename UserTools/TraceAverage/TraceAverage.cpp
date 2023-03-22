@@ -1,10 +1,13 @@
 #include "TraceAverage.h"
+#include "TApplication.h"
+#include "TSystem.h"
+#include "TH1.h"
 
 TraceAverage::TraceAverage():Tool(){}
 
 
 bool TraceAverage::Initialise(std::string configfile, DataModel &data){
-
+  
   m_data= &data;
   
   /* - new method, Retrieve configuration options from the postgres database - */
@@ -28,8 +31,25 @@ bool TraceAverage::Initialise(std::string configfile, DataModel &data){
   
   //m_variables.Print();
   
-  
   m_variables.Get("verbosity",verbosity);
+  
+  livedraw = false;
+  m_variables.Get("livedraw",livedraw);
+  if(livedraw){
+      // make a TApplication for live viewing the spectrum
+	  int tapp_users=1;
+	  if(m_data->CStore.Get("tapp_users",tapp_users)){
+	  	++tapp_users;
+	  	m_data->CStore.Set("tapp_users",tapp_users);
+	  } else {
+	    TApplication* tapp = new TApplication("TApp",0,0,0);
+	    intptr_t tapp_p = reinterpret_cast<intptr_t>(tapp);
+	    m_data->CStore.Set("tapp",tapp_p);
+	    m_data->CStore.Set("tapp_users",tapp_users);
+	  }
+	  // make canvas to draw it on
+	  cspec = new TCanvas("cspec","cspec",1200,700);
+  }
   
   return true;
 }
@@ -126,13 +146,32 @@ bool TraceAverage::Execute(){
     tree->ResetBranchAddresses();
     
     // make a TGraph for the website
-    TCanvas c1("c1","A Simple Graph with error bars",200,10,700,500);
     TGraphErrors gr(value.size(),&wavelength[0],&value[0],0,&error[0]);
     gr.SetTitle("TGraphErrors Example");
     //gr.SetMarkerColor(4);
     //gr.SetMarkerStyle(21);
-    gr.Draw("AP");
-    c1.SaveAs("/home/pi/WebServer/html/images/last.png");
+    
+    // for live viewing
+    if(livedraw){
+	    if(ge) delete ge;
+	    ge = new TGraphErrors(value.size(), wavelength.data(), value.data(), nullptr, error.data());
+	    cspec->cd();
+	    if(linecol==kRed) linecol=kBlue;
+	    else linecol=kRed;
+	    ge->SetLineColor(linecol);
+	    if(*std::max_element(value.begin(), value.end())>maxvalue){
+	    	maxvalue=*std::max_element(value.begin(), value.end());
+	    }
+	    ge->GetHistogram()->GetYaxis()->SetRangeUser(-50,maxvalue*1.1);
+	    ge->Draw("AL");
+	    cspec->Modified();
+	    cspec->Update();
+	    gSystem->ProcessEvents();
+    }
+    
+    //TCanvas c1("c1","A Simple Graph with error bars",200,10,700,500);
+    //gr.Draw("AP");
+    //c1.SaveAs("/home/pi/WebServer/html/images/last.png");
     //gr.Write(tmp.str().c_str(),TObject::kOverwrite);
     
     m_data->CStore.Remove("Measure");
@@ -148,6 +187,26 @@ bool TraceAverage::Execute(){
 
 
 bool TraceAverage::Finalise(){
+  
+  if(livedraw){
+	  if(cspec) delete cspec;
+	  cspec=nullptr;
+	  
+	  // TODO move this to a DataModel Method ('AddTAppUser / RemoveTAppUser')
+	  int tapp_users=1;
+	  m_data->CStore.Get("tapp_users",tapp_users);
+	  --tapp_users;
+	  m_data->CStore.Set("tapp_users",tapp_users);
+	  if(tapp_users==0){
+	    intptr_t tapp_p;
+	    m_data->CStore.Get("tapp",tapp_p);
+	    TApplication* tapp = reinterpret_cast<TApplication*>(tapp_p);
+	    delete tapp;
+	    tapp = nullptr;
+	    tapp_p = 0;
+	    m_data->CStore.Set("tapp",tapp_p);
+	  }
+  }
   
   return true;
 }

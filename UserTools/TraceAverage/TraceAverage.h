@@ -9,6 +9,7 @@
 #include "TTree.h"
 #include "TCanvas.h"
 #include "TGraphErrors.h"
+#include "TColor.h"
 #include <math.h>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/date_time/posix_time/posix_time_io.hpp>
@@ -27,6 +28,12 @@ class TraceAverage: public Tool {
  private:
 
   bool InitTTree(TTree* tree);
+  
+  bool livedraw=false;
+  TCanvas* cspec=nullptr;
+  TGraphErrors* ge=nullptr;
+  double maxvalue=0;
+  Color_t linecol = kRed;
 
   int verbosity=1;
   int v_error=0;

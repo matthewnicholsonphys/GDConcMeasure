@@ -11,6 +11,15 @@ if [ -z "${SAFETYNETWEBHOOK}" ]; then
         exit 1;
 fi
 
+OUTPINS=(4 15 17 18)
+for PIN in "${OUTPINS[@]}"; do
+	if [ ! -e "/sys/class/gpio/gpio${PIN}" ]; then
+		sudo echo "${PIN}" > /sys/class/gpio/export
+	fi
+	if [ "$(cat /sys/class/gpio/gpio${PIN}/direction)" != "out" ]; then
+		sudo echo "out" > /sys/class/gpio/gpio${PIN}/direction
+	fi
+done
 
 # to monitor whether the GAD toolchain is actually turning the valves on and off,
 # intermittently check the valve states, and retain the last 500 readings in the database
@@ -20,6 +29,7 @@ OUTVALVESTATUS="$(cat /sys/class/gpio/gpio15/value 2> /dev/null)"
 PUMPSTATUS="$(cat /sys/class/gpio/gpio17/value 2> /dev/null)"
 POWERSTATUS="$(cat /sys/class/gpio/gpio4/value 2>/dev/null)"
 JSON="{ \"invalve\":${INVALVESTATUS}, \"outvalve\":${OUTVALVESTATUS}, \"pump\":${PUMPSTATUS}, \"power\":${POWERSTATUS} }"
+#echo "JSON is '${JSON}'"
 psql -U postgres -d rundb -c "INSERT INTO webpage ( name, timestamp, values ) VALUES ( 'gpio_status', 'NOW()', '${JSON}' )"
 
 # the valves currently stay open for long enough to perform 5 dark measurements - about 4 minutes

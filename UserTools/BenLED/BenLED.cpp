@@ -519,6 +519,7 @@ bool BenLED::IsSleeping(){
 
 bool BenLED::WakeUpDriver(){
   
+  Log("BenLED::WakeUpDriver waking up LED board...",1,0);
   // to wake up device from sleep, write MODE1 register
   // first, read MODE1 register
   // if sleep == 1 then set sleep to 0. Sleep bit is 0x10
@@ -528,21 +529,40 @@ bool BenLED::WakeUpDriver(){
   // if Driver was put to sleep without turning off outputs,
   // the RESTART bit (7bit of MODE1) must be cleared by writing 1
   
-  //read MODE1 first
-  int mode1;
-  bool ret = Read(0x00, mode1);
-  if (!ret)  return false;
-  
-  bool restart = mode1 & 0x80;        //check if restart must be cleared
-  mode1 = mode1 & 0xf;                //xxxx
-  
-  //clear SLEEP bit and enable AI        : 0010xxxx         <--- NO AUTO INCREMENT
-  ret = Write(0x00, (0x0 << 4) | mode1);
-  usleep(500);        //wait at lest 500 us to use driver
-  
-  //if restart is 1, write 1 to clear it
-  //write 1 to AI bit to enable auto-increment        <--- NO AUTO INCREMENT
-  if (ret && restart)  ret = Write(0x00, (0x80 << 4) | mode1);
+  bool ret;
+  for(int tries=0; tries<3; ++tries){
+    if(tries>0){
+      Log("Trying again...",0,0);
+      usleep(500);
+    }
+    
+    //read MODE1 first
+    int mode1;
+    ret = Read(0x00, mode1);
+    if (!ret){
+      Log("BenLED::WakeUpDriver failed to read mode1!!!",0,0);
+      continue;
+    }
+    
+    bool restart = mode1 & 0x80;        //check if restart must be cleared
+    mode1 = mode1 & 0xf;                //xxxx
+    
+    //clear SLEEP bit and enable AI        : 0010xxxx         <--- NO AUTO INCREMENT
+    ret = Write(0x00, (0x0 << 4) | mode1);
+    usleep(500);        //wait at lest 500 us to use driver
+    if(!ret){
+      Log("BenLED::WakeUpDriver failed to clear SLEEP bit and enable AI!!!",0,0);
+      continue;
+    }
+    
+    //if restart is 1, write 1 to clear it
+    //write 1 to AI bit to enable auto-increment        <--- NO AUTO INCREMENT
+    if (ret && restart)  ret = Write(0x00, (0x80 << 4) | mode1);
+    if(!ret){
+      Log("BenLED::WakeUpDriver failed to clear restart!!!",0,0);
+      continue;
+    }
+  }
   
   return ret;
 }
@@ -618,17 +638,31 @@ bool BenLED::TurnLEDon(std::string ledName){
   //v_data.push_back(time2off & 0xff);             //LEDn_OFF_L
   //v_data.push_back(time2off >> 8);               //LEDn_OFF_H
   
-  bool akg = Write(reg_LED, time2on  & 0xff);      //LEDn_ON_L
-  akg &= Write(reg_LED + 1, time2on  >> 8);        //LEDn_ON_H
-  akg &= Write(reg_LED + 2, time2off & 0xff);      //LEDn_OFF_L
-  akg &= Write(reg_LED + 3, time2off >> 8);        //LEDn_OFF_H
+  bool akg;
+  for(int tries=0; tries<3; ++tries){
+    
+    if(tries>0){
+      Log("Trying again... ",0,0);
+      usleep(500);
+    }
+    
+    akg = Write(reg_LED, time2on  & 0xff);           //LEDn_ON_L
+    akg &= Write(reg_LED + 1, time2on  >> 8);        //LEDn_ON_H
+    akg &= Write(reg_LED + 2, time2off & 0xff);      //LEDn_OFF_L
+    akg &= Write(reg_LED + 3, time2off >> 8);        //LEDn_OFF_H
+    
+    int data;
+    Read(reg_LED, data);
+    Read(reg_LED+1, data);
+    Read(reg_LED+2, data);
+    Read(reg_LED+3, data);
   
-  
-  int data;
-  Read(reg_LED, data);
-  Read(reg_LED+1, data);
-  Read(reg_LED+2, data);
-  Read(reg_LED+3, data);
+    if(!akg){
+      Log("BenLED::TurnLEDon failed to turn on LED "+ledName,0,0);
+    } else {
+      break;
+    }
+  }
   
   // note current status of this LED in the CStore for display on the website
   std::map<std::string,bool> ledStatuses;
@@ -636,9 +670,6 @@ bool BenLED::TurnLEDon(std::string ledName){
   ledStatuses[ledName] = true;
   m_data->CStore.Set("ledStatuses",ledStatuses);
   
-  if(!akg){
-    Log("BenLED::TurnLEDon failed to turn on LED "+ledName,0,0);
-  }
   return akg;
   //use wiringPI function to write to correct register
   //and at the same time check for errors
@@ -656,10 +687,31 @@ bool BenLED::TurnLEDoff(std::string ledName){
   //can be achieved by writing 0x10 to register ??
   int reg_LED = 4 * mLED_chan[ledName] + 6;
   
-  bool akg = Write(reg_LED, 0x00);        //LEDn_ON_L
-  akg &= Write(reg_LED + 1, 0x00);        //LEDn_ON_H
-  akg &= Write(reg_LED + 2, 0x00);        //LEDn_OFF_L
-  akg &= Write(reg_LED + 3, 0x00);        //LEDn_OFF_H
+  bool akg;
+  for(int tries=0; tries<3; ++tries){
+    
+    if(tries>0){
+      Log("Trying again...",0,0);
+      usleep(500);
+    }
+    
+    akg = Write(reg_LED, 0x00);             //LEDn_ON_L
+    akg &= Write(reg_LED + 1, 0x00);        //LEDn_ON_H
+    akg &= Write(reg_LED + 2, 0x00);        //LEDn_OFF_L
+    akg &= Write(reg_LED + 3, 0x00);        //LEDn_OFF_H
+    
+    int data;
+    Read(reg_LED, data);
+    Read(reg_LED+1, data);
+    Read(reg_LED+2, data);
+    Read(reg_LED+3, data);
+    
+    if(!akg){
+      Log("BenLED::TurnLEDoff failed to turn off LED "+ledName,0,0);
+    } else {
+      break;
+    }
+  }
   
   // note current status of this LED in the CStore for display on the website
   std::map<std::string,bool> ledStatuses;
@@ -667,10 +719,8 @@ bool BenLED::TurnLEDoff(std::string ledName){
   ledStatuses[ledName]=false;
   m_data->CStore.Set("ledStatuses",ledStatuses);
   
-  if(!akg){
-    Log("BenLED::TurnLEDoff failed to turn off LED "+ledName,0,0);
-  }
   return akg;
+  
   //return Write(reg_LED, 0x00);
 }
 
