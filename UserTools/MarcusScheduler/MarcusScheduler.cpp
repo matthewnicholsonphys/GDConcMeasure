@@ -452,7 +452,11 @@ void MarcusScheduler::ProcessCommand(std::string& the_command){
 		// calculate gd concentration from a given LED trace
 		DoAnalyse(the_command);
 		
-	} else if(the_command.substr(0,12) == "transparency"){
+	} else if(the_command.substr(0,3) == "pwm"){
+		// update the PWM duty cycle of LEDs
+		DoPWM(the_command);
+	 	
+   	} else if(the_command.substr(0,12) == "transparency"){
 		// calculate transparency from all LED traces
 		DoTransparency(the_command);
 		
@@ -640,6 +644,39 @@ void MarcusScheduler::WaitForDuration(std::string wait_string){
 
 // ««-------------- ≪ °◇◆◇° ≫ --------------»»
 
+void MarcusScheduler::DoPWM(std::string the_command){
+	Log("MarcusScheduler: changing pwm", v_debug, verbosity);
+	
+	// trim trailing comments
+	the_command = the_command.substr(0, the_command.find('#'));
+	the_command = the_command.substr(0, the_command.find_last_not_of(' ')+1);
+	
+	// trim preceding 'pwm '
+	std::string led_val_str = the_command.substr(4, std::string::npos);
+	// extract led name up to next space
+	std::string led_str = led_val_str.substr(0, led_val_str.find(' '));
+	
+	// check the LED name is valid
+	if(LED_states.count(led_str)==0){
+		Log("MarcusScheduler::DoPWM - unknown LED name " + led_str + " given to pwm command",v_error,verbosity);
+		current_command++;
+		return;
+	}
+	
+	// extract the new LED voltage
+	std::string val_str = led_val_str.substr(led_val_str.find(' ')+1, std::string::npos);
+	Log("MarcusScheduler::DoPWM will update LED '"+led_str+"' to use new average voltage '"+val_str+"'",v_debug,verbosity);
+ 	
+	std::string json_string = "{\"pwm\":\"pwm\",\"pwm_led\":\"" + led_str + "\",\"pwm_val\":\"" + val_str + "\"}";
+	Log(std::string("Queuing action: ")+json_string,v_debug,verbosity);
+	m_data->CStore.JsonParser(json_string);
+	
+	// advance to the next command
+	current_command++;
+}
+
+// ««-------------- ≪ °◇◆◇° ≫ --------------»»
+
 void MarcusScheduler::DoAnalyse(std::string the_command){
 	Log("Analysing measurements",v_debug,verbosity);
 	
@@ -657,7 +694,7 @@ void MarcusScheduler::DoAnalyse(std::string the_command){
 		Log("MarcusScheduler::DoAnalyse - unknown LED name "+ledToAnalyse+" given to Analyse command",v_error,verbosity);
 	}
 	
-	// otherwise qeueue up the analyse action
+	// otherwise queue up the analyse action
 	else {
 		std::string json_string = "{\"Analyse\":\"Analyse\",\"ledToAnalyse\":\"" + ledToAnalyse + "\"}";
 		Log(std::string("Queuing action: ")+json_string,v_debug,verbosity);

@@ -1,0 +1,266 @@
+start
+power on
+connect
+#wait 900
+
+# # 1
+# setFile duty_cycle_1
+# pwm 275_A 0.5
+# pwm 275_B 0.5
+# pwm R 0.5
+# pwm G 0.5
+# pwm B 0.5
+# pwm White 0.5
+# pwm 385 0.5
+# #measure Dark
+# #measure Dark
+# #measure Dark
+# #measure Dark
+# measure Dark
+# measure 275_B
+# analyse 275_B
+# measure Dark
+# measure 275_A
+# analyse 275_A
+# measure Dark
+# measure R G B
+# measure Dark
+# measure White 385
+# transparency
+# save
+
+# 2
+setFile duty_cycle_2
+pwm 275_A 1.0
+pwm 275_B 1.0
+pwm R 1.0
+pwm G 1.0
+pwm B 1.0
+pwm White 1.0
+pwm 385 1.0
+#measure Dark
+#measure Dark
+#measure Dark
+#measure Dark
+measure Dark
+measure 275_B
+analyse 275_B
+measure Dark
+measure 275_A
+analyse 275_A
+measure Dark
+measure R G B
+measure Dark
+measure White 385
+transparency
+save
+
+# # 3
+# setFile duty_cycle_3
+# pwm 275_A 1.5
+# pwm 275_B 1.5
+# pwm R 1.5
+# pwm G 1.5
+# pwm B 1.5
+# pwm White 1.5
+# pwm 385 1.5
+# #measure Dark
+# #measure Dark
+# #measure Dark
+# #measure Dark
+# measure Dark
+# measure 275_B
+# analyse 275_B
+# measure Dark
+# measure 275_A
+# analyse 275_A
+# measure Dark
+# measure R G B
+# measure Dark
+# measure White 385
+# transparency
+# save
+
+# 4
+setFile duty_cycle_4
+pwm 275_A 2.0
+pwm 275_B 2.0
+pwm R 2.0
+pwm G 2.0
+pwm B 2.0
+pwm White 2.0
+pwm 385 2.0
+#measure Dark
+#measure Dark
+#measure Dark
+#measure Dark
+measure Dark
+measure 275_B
+analyse 275_B
+measure Dark
+measure 275_A
+analyse 275_A
+measure Dark
+measure R G B
+measure Dark
+measure White 385
+transparency
+save
+
+# # 5
+# setFile duty_cycle_5
+# pwm 275_A 2.5
+# pwm 275_B 2.5
+# pwm R 2.5
+# pwm G 2.5
+# pwm B 2.5
+# pwm White 2.5
+# pwm 385 2.5
+# #measure Dark
+# #measure Dark
+# #measure Dark
+# #measure Dark
+# measure Dark
+# measure 275_B
+# analyse 275_B
+# measure Dark
+# measure 275_A
+# analyse 275_A
+# measure Dark
+# measure R G B
+# measure Dark
+# measure White 385
+# transparency
+# save
+
+# 6
+setFile duty_cycle_6
+pwm 275_A 3.0
+pwm 275_B 3.0
+pwm R 3.0
+pwm G 3.0
+pwm B 3.0
+pwm White 3.0
+pwm 385 3.0
+#measure Dark
+#measure Dark
+#measure Dark
+#measure Dark
+measure Dark
+measure 275_B
+analyse 275_B
+measure Dark
+measure 275_A
+analyse 275_A
+measure Dark
+measure R G B
+measure Dark
+measure White 385
+transparency
+save
+
+# # 7
+# setFile duty_cycle_7
+# pwm 275_A 3.5
+# pwm 275_B 3.5
+# pwm R 3.5
+# pwm G 3.5
+# pwm B 3.5
+# pwm White 3.5
+# pwm 385 3.5
+# #measure Dark
+# #measure Dark
+# #measure Dark
+# #measure Dark
+# measure Dark
+# measure 275_B
+# analyse 275_B
+# measure Dark
+# measure 275_A
+# analyse 275_A
+# measure Dark
+# measure R G B
+# measure Dark
+# measure White 385
+# transparency
+# save
+
+# 8
+setFile duty_cycle_8
+pwm 275_A 4.0
+pwm 275_B 4.0
+pwm R 4.0
+pwm G 4.0
+pwm B 4.0
+pwm White 4.0
+pwm 385 4.0
+#measure Dark
+#measure Dark
+#measure Dark
+#measure Dark
+measure Dark
+measure 275_B
+analyse 275_B
+measure Dark
+measure 275_A
+analyse 275_A
+measure Dark
+measure R G B
+measure Dark
+measure White 385
+transparency
+save
+
+# # 9
+# setFile duty_cycle_9
+# pwm 275_A 4.5
+# pwm 275_B 4.5
+# pwm R 4.5
+# pwm G 4.5
+# pwm B 4.5
+# pwm White 4.5
+# pwm 385 4.5
+# #measure Dark
+# #measure Dark
+# #measure Dark
+# #measure Dark
+# measure Dark
+# measure 275_B
+# analyse 275_B
+# measure Dark
+# measure 275_A
+# analyse 275_A
+# measure Dark
+# measure R G B
+# measure Dark
+# measure White 385
+# transparency
+# save
+
+# 10
+setFile duty_cycle_10
+pwm 275_A 5.0
+pwm 275_B 5.0
+pwm R 5.0
+pwm G 5.0
+pwm B 5.0
+pwm White 5.0
+pwm 385 5.0
+#measure Dark
+#measure Dark
+#measure Dark
+#measure Dark
+measure Dark
+measure 275_B
+analyse 275_B
+measure Dark
+measure 275_A
+analyse 275_A
+measure Dark
+measure R G B
+measure Dark
+measure White 385
+transparency
+save
+
+quit

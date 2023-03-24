@@ -55,6 +55,7 @@ class MarcusScheduler: public Tool {
 	// individual handlers for automation commands
 	void DoSave(std::string the_command);
 	void DoAnalyse(std::string the_command);
+	void DoPWM(std::string the_command);
 	void DoTransparency(std::string the_command);
 	void DoPower(std::string the_command);
 	void DoConnect(std::string the_command);
@@ -67,7 +68,7 @@ class MarcusScheduler: public Tool {
 	void StartLoop(std::string the_command);
 	void EndLoop(std::string the_command);
 	void SetFile(std::string the_command);
-	
+  
 	// helper functions
 	bool check_break_loop(std::string& the_command);
 	int check_for_break_file();

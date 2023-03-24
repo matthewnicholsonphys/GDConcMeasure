@@ -3,6 +3,14 @@
 
 BenLED::BenLED():Tool(){}
 
+// FIXME wiring map and MarcusScheduler disagree on names and both are hard-coded
+const std::map<std::string, std::string> ledNameConvert{{"275_A","LED275J_A"},
+                                                        {"275_B","LED275J_B"},
+                                                        {"R","LEDR"},
+                                                        {"G","LEDG"},
+                                                        {"B","LEDB"},
+                                                        {"White","LEDW"},
+                                                        {"385","LED385L"}};
 
 bool BenLED::Initialise(std::string configfile, DataModel &data){
   
@@ -37,7 +45,6 @@ bool BenLED::Initialise(std::string configfile, DataModel &data){
   resolution = static_cast<unsigned int>(pow(2, resolution)) - 1;
   
   m_variables.Get("voltage_supply", fVin);
-  std::cout<<"Got voltage supply "<<fVin<<std::endl;
   m_variables.Get("delay", fDelay);
   
   // read LED pin mapping from the appropriate source
@@ -89,7 +96,14 @@ bool BenLED::Execute(){
     }
     
   }
+  Log("BenLED::Execute checking for changes to PWM duty cycles...",v_debug,verbosity);
+  ok = UpdatePWM();
+  if(!ok){
+    Log("BenLED::Failed to update PWM duty cycles!",v_error,verbosity);
+    return false;
+  }
   
+  Log("BenLED::Execute updating LED states",v_debug,verbosity);
   std::string LED;
   if(m_data->CStore.Get("LED",LED)){
     if(!file_descript){
@@ -178,6 +192,50 @@ bool BenLED::Execute(){
   
   
   return ok;
+}
+
+bool BenLED::UpdatePWM(){
+  std::string pwm_str = "";
+  std::string pwm_val_str = "";
+  double pwm_val = 0;
+  std::string key = "";
+  if (m_data->CStore.Get("pwm", pwm_str) && pwm_str == "pwm"){
+    m_data->CStore.Remove("pwm");
+    if ( !(m_data->CStore.Get("pwm_val", pwm_val_str) && m_data->CStore.Get("pwm_led", key))){
+      Log("BenLED::UpdatePWM: failed to retrieve pwm_val or pwm_led", v_error, verbosity);
+      return false;
+    }
+    // need to convert LED name into what's expected by the duty cycle map
+    // FIXME this should be consistent across all tools! FIXME
+    if(ledNameConvert.count(key)) key = ledNameConvert.at(key);
+    if(mLED_duty.count(key)==0){
+      Log("BenLED::UpdatePWM unrecognised LED '"+key+"'",v_error,verbosity);
+      return false;
+    }
+    try {
+      pwm_val = std::stod(pwm_val_str);
+    } catch(std::exception& e){
+      std::string logmessage = std::string("BenLED::UpdatePWM caught exception ") +e.what()
+                               + " converting new average voltage '"
+                               + pwm_val_str + "' to double for led "+key;
+      Log(logmessage,v_error,verbosity);
+      return false;
+    }
+    if ((pwm_val / fVin) > 2.){
+      Log("BenLED::UpdatePWM: Error! Requested voltage " + pwm_val_str + " for LED " + key
+          + " is over 2x Vsupply! Ignoring request", v_error, verbosity);
+      return false;
+    } else if ((pwm_val / fVin) > 1.){
+      Log("BenLED::UpdatePWM: Warning! Requested voltage " + pwm_val_str + " for LED " + key
+        + " exceeds Vsupply; coercing to maximum of " + fVin, v_warning, verbosity);
+      mLED_duty[key] = 1.;
+    } else {
+    Log("BenLED::UpdatePWM changing LED " + key + " duty cycle to " + std::to_string((pwm_val/fVin)*100) + "%",
+        v_message, verbosity);
+      mLED_duty[key] = pwm_val / fVin;
+    }
+  }
+  return true;
 }
 
 bool BenLED::TurnOnAll(){

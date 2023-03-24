@@ -1,0 +1,37 @@
+start
+power up
+connect
+setFile trash
+#valve outlet open
+#valve inlet open
+measure Dark
+start_loop 10
+measure R G B
+loop
+start_loop 10
+measure White 385
+loop
+start_loop 10
+measure 275_A
+loop
+start_loop 10
+measure 275_B
+loop
+
+start_loop 10
+measure 275_A
+loop
+start_loop 10
+measure 275_B
+loop
+
+start_loop 10
+measure 275_A
+loop
+start_loop 10
+measure 275_B
+loop
+
+#save
+power down
+quit

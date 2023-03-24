@@ -54,7 +54,7 @@ public:
   bool Write(int reg, int data);
   bool ReadAI(int reg, int num_reg, std::vector<int> &block);
   bool WriteAI(int reg, const std::vector<int> &block);
-  
+  bool UpdatePWM();
   
 private:
   std::string m_configfile;

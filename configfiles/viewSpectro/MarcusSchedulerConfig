@@ -1,0 +1,2 @@
+verbosity 10
+command_file configfiles/viewSpectro/measurement_commands

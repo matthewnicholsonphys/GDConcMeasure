@@ -1,0 +1,5 @@
+myMarcusScheduler     MarcusScheduler         configfiles/viewSpectro/MarcusSchedulerConfig
+myBenPower            BenPower                configfiles/viewSpectro/PowerConfig
+myBenLED              BenLED                  configfiles/viewSpectro/LEDConfig
+myBenSpectrometer     BenSpectrometer         configfiles/viewSpectro/SpectrometerConfig
+myTraceAverage        TraceAverage            configfiles/viewSpectro/TraceAverageConfig
