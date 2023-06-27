@@ -1,12 +1,12 @@
 ToolDAQPath=ToolDAQ
 
-CPPFLAGS= -Wno-psabi -std=c++14
+CPPFLAGS= -Wno-psabi -std=c++17
 
 ZMQLib= -L $(ToolDAQPath)/zeromq-4.0.7/lib -lzmq
 ZMQInclude= -I $(ToolDAQPath)/zeromq-4.0.7/include/
 
-RootLib = `root-config --libs`
-RootInclude = `root-config --cflags`
+RootLib = `root-config --libs | sed 's/-I/-isystem/g' ` #-std=c++17
+RootInclude = `root-config --cflags | sed 's/-I/-isystem/g'` #-std=c++17
 
 BoostLib= -L $(ToolDAQPath)/boost_1_66_0/install/lib -lboost_date_time -lboost_serialization -lboost_iostreams
 BoostInclude= -I $(ToolDAQPath)/boost_1_66_0/install/include
@@ -65,7 +65,7 @@ lib/libMyTools.so: UserTools/*/* UserTools/* | include/Tool.h lib/libDataModel.s
 	@echo -e "\n*************** Making " $@ "****************"
 	cp UserTools/*/*.h include/
 	cp UserTools/Factory/*.h include/
-	g++ -g $(CPPFLAGS) -fPIC -shared  UserTools/Factory/Factory.cpp -I include -L lib -lStore -lDataModel -lLogging -o lib/libMyTools.so $(MyToolsInclude) $(MyToolsLib) $(DataModelInclude) $(DataModelib) $(ZMQLib) $(ZMQInclude) $(BoostLib) $(BoostInclude)
+	g++ -g $(CPPFLAGS) -fPIC -shared  UserTools/Factory/Factory.cpp -I include -L lib -lStore -lDataModel -lLogging -o lib/libMyTools.so $(MyToolsInclude) $(MyToolsLib) $(DataModelInclude) $(DataModelib) $(ZMQLib) $(ZMQInclude) $(BoostLib) $(BoostInclude) -std=c++14
 
 RemoteControl:
 	cd $(ToolDAQPath)/ToolDAQFramework/ && make RemoteControl

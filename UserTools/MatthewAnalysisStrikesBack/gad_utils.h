@@ -119,6 +119,7 @@ private:
 public:
 
   FunctionalFit(Func*, const std::string&);
+  FunctionalFit() = default;
   void SetFitParameters(const std::vector<double>&);
   void SetFitParameterRanges(const std::vector<std::pair<double, double>>&);
   void PerformFitOnData(TGraph, bool i = false);

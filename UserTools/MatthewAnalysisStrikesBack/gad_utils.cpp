@@ -98,21 +98,21 @@ void FunctionalFit::SetFitParameterRanges(const std::vector<std::pair<double, do
 
 void FunctionalFit::PerformFitOnData(TGraph data, bool interactive){
   fit_funct.SetNpx(10000);
-  if (interactive){
-    TApplication app = TApplication("app", 0, 0);
-    TCanvas c1 = TCanvas("fiddle_canv", "fiddle", 1280, 1024);
-    data.Draw("A*L");
-    TFitResultPtr res = data.Fit(&fit_funct, "RSQ"); // keep this one
-    while(gROOT->FindObject("fiddle_canv") != 0){
-      c1.Modified();
-      c1.Update();
-      gSystem->ProcessEvents();
-      std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    }
-  }
-  else {
-    TFitResultPtr res = data.Fit(&fit_funct, "NRS"); // keep this one
-  }  
+  // if (interactive){
+  //   TApplication app = TApplication("app", 0, 0);
+  //   TCanvas c1 = TCanvas("fiddle_canv", "fiddle", 1280, 1024);
+  //   data.Draw("A*L");
+  //   TFitResultPtr res = data.Fit(&fit_funct, "RSQ"); // keep this one
+  //   while(gROOT->FindObject("fiddle_canv") != 0){
+  //     c1.Modified();
+  //     c1.Update();
+  //     gSystem->ProcessEvents();
+  //     std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  //   }
+  // }
+  // else {
+  TFitResultPtr res = data.Fit(&fit_funct, "NRS"); // keep this one
+    //  }  
   // if (res->IsEmpty() || !res->IsValid() || res->Status() != 0){
   //   throw std::runtime_error("FunctionalFit::PerformFitOnData: FIT NOT SUCCESSFUL!!!\n");
   //   }
@@ -151,7 +151,9 @@ TGraph FunctionalFit::GetGraph() const {
   TF1 local_ff = fit_funct;
   TGraph result(number_of_points);
   for (int i = 0; i < example.GetN(); ++i){
-    result.SetPoint(i, example.GetPointX(i), local_ff.Eval(example.GetPointX(i)));
+    double x = 0, y = 0;
+    example.GetPoint(i, x, y);
+    result.SetPoint(i, x, local_ff.Eval(y));
   }
   return result;
 }
@@ -176,7 +178,9 @@ TGraph FunctionalFit::GetGraphOfJust(const std::vector<int>& p) const {
   }
   TGraph result(number_of_points);
   for (int i = 0; i < example.GetN(); ++i){
-    result.SetPoint(i, example.GetPointX(i), local_ff.Eval(example.GetPointX(i)));
+    double x = 0, y = 0;
+    example.GetPoint(i, x, y);
+    result.SetPoint(i, x, local_ff.Eval(y));
   }
   return result;
 }
@@ -201,7 +205,9 @@ TGraph FunctionalFit::GetGraphExcluding(const std::vector<int>& p) const {
   }
   TGraph result(number_of_points);
   for (int i = 0; i < example.GetN(); ++i){
-    result.SetPoint(i, example.GetPointX(i), local_ff.Eval(example.GetPointX(i)));
+    double x = 0, y = 0;
+    example.GetPoint(i, x, y);
+    result.SetPoint(i, x, local_ff.Eval(y));
   }
   return result;
 }
@@ -255,14 +261,20 @@ TGraph RemoveRegion(const TGraph& g, const double& low, const double& high){
   if (g.GetN() != number_of_points){
     throw std::invalid_argument("RemoveRegion: INPUT TGraph HAS INCORRECT NUMBER OF POINTS!!!\n");
   }
-  if (g.GetPointX(0) > low || g.GetPointX(g.GetN()-1) < high){
+  double x = 0, y = 0;
+  g.GetPoint(0, x, y);
+  double x_zero = x;
+  g.GetPoint(g.GetN()-1, x, y);
+  double x_max = x;
+  if (x_zero > low || x_max < high){
     throw std::invalid_argument("RemoveRegion: INVALID REGION BOUNDS!!!\n");
   }
   TGraph result =  TGraph(number_of_points);
   for (int i = number_of_points-1; i > -1; --i){
-    const double x_temp = g.GetPointX(i);
-    if (x_temp < low || x_temp > high){
-      result.SetPoint(i, x_temp, g.GetPointY(i));
+    double x = 0, y = 0;
+    g.GetPoint(i, x, y);
+    if (x < low || x > high){
+      result.SetPoint(i, x, y);
     }
     else {
       result.RemovePoint(i);
@@ -279,7 +291,12 @@ TGraph BinaryOperation(const TGraph& a, const TGraph& b, const std::string& name
   const int N = a.GetN();
   TGraph result(N);
   for (int i = 0; i < N; ++i){
-    result.SetPoint(i, 0.5 * (a.GetPointX(i) + b.GetPointX(i)), op(a,b,i));
+    double x = 0, y = 0; 
+    a.GetPoint(i, x, y);
+    double xa = x;
+    b.GetPoint(i, x, y);
+    double xb = x;
+    result.SetPoint(i, 0.5 * (xa + xb), op(a,b,i));
   }
   return result;
 }
@@ -287,33 +304,56 @@ TGraph BinaryOperation(const TGraph& a, const TGraph& b, const std::string& name
 TGraph PWRatio(const TGraph& n, const TGraph& d){
   return BinaryOperation(n, d, "PWRatio",
 			 [](const TGraph& _n, const TGraph& _d, int _i){
-			   return _n.GetPointY(_i) / _d.GetPointY(_i);});
+			   double x = 0, y = 0;
+			   _n.GetPoint(_i, x, y);
+			   double ny = y;
+			   _d.GetPoint(_i, x, y);
+			   double dy = y;
+			   return ny / dy;});
 }
 
 TGraph PWMultiply(const TGraph& n, const TGraph& d){
   return BinaryOperation(n, d, "PWMultiply",
 			 [](const TGraph& _n, const TGraph& _d, int _i){
-			   return _n.GetPointY(_i) * _d.GetPointY(_i);});
+			   double x = 0, y = 0;
+			   _n.GetPoint(_i, x, y);
+			   double ny = y;
+			   _d.GetPoint(_i, x, y);
+			   double dy = y;
+			   return ny * dy;});
 }
 
 
 TGraph PWPercentageDiff(const TGraph& n, const TGraph& d){
   return BinaryOperation(n, d, "PWDifference",
 			 [](const TGraph& _n, const TGraph& _d, int _i){
-			   return _n.GetPointY(_i) / _d.GetPointY(_i) - 1;});  
+			   double x = 0, y = 0;
+			   _n.GetPoint(_i, x, y);
+			   double ny = y;
+			   _d.GetPoint(_i, x, y);
+			   double dy = y;
+			   return (ny / dy) - 1;});
+
 }
 
 TGraph PWDifference(const TGraph& n, const TGraph& d){
   return BinaryOperation(n, d, "PWDifference",
 			 [](const TGraph& _n, const TGraph& _d, int _i){
-			   return _n.GetPointY(_i) - _d.GetPointY(_i);});  
+			   double x = 0, y = 0;
+			   _n.GetPoint(_i, x, y);
+			   double ny = y;
+			   _d.GetPoint(_i, x, y);
+			   double dy = y;
+			   return ny - dy;});
 }
 
 double SuccessMetric(const TGraph& res){
   TGraph abs_w_cut(res.GetN());
   for (int i = 0; i < res.GetN(); ++i){
-      if (res.GetPointX(i) > wave_min && res.GetPointX(i) < wave_max){
-        abs_w_cut.SetPoint(i, res.GetPointX(i), abs(res.GetPointY(i)));
+    double x = 0, y = 0;
+    res.GetPoint(i, x, y);
+      if (x > wave_min && x < wave_max){
+        abs_w_cut.SetPoint(i, x, abs(y));
       }
     }
     return abs_w_cut.Integral();
@@ -330,12 +370,13 @@ double GetPeakRatio(const TGraph& abs){
 TGraph TrimGraph(const TGraph& g, double l, double h){
   TGraph result =  TGraph(number_of_points);
   for (int i = number_of_points-1; i > -1; --i){
-    const double x_temp = g.GetPointX(i);
-    if (x_temp > h || x_temp < l){
+    double x = 0, y = 0;
+    g.GetPoint(i, x, y);
+    if (x > h || x < l){
       result.RemovePoint(i);
     }
     else {
-      result.SetPoint(i, x_temp, g.GetPointY(i));
+      result.SetPoint(i, x, y);
     }
   }
   return result;
@@ -346,37 +387,52 @@ TGraph CalculateGdAbs(const TGraph& a, const TGraph& b){
   std::vector<double> vals;
   TGraph result = TGraph(number_of_points);
   for (int i = 0; i < a.GetN(); ++i){
-    if (a.GetPointX(i) > abs_region_high || a.GetPointX(i) < abs_region_low){
-      result.SetPoint(i, a.GetPointX(i), 0);
+    double xa = 0, ya = 0;
+    a.GetPoint(i, xa, ya);
+    if (xa > abs_region_high || xa < abs_region_low){
+      result.SetPoint(i, xa, 0);
     }
     else {
-      vals.push_back(1 - (b.GetPointY(i) / a.GetPointY(i)));
-      result.SetPoint(i, a.GetPointX(i), 1 - (b.GetPointY(i) / a.GetPointY(i)));
+      double xb = 0, yb = 0;
+      b.GetPoint(i, xb, yb);
+      vals.push_back(1 - (yb / ya));
+      result.SetPoint(i, xa, 1 - (yb / ya));
     }
   }
   std::vector<double>::iterator scale_it = std::max_element(vals.begin(), vals.end());
   for (int i = 0; i < a.GetN(); ++i){
-    result.SetPointY(i, result.GetPointY(i) / *scale_it);
+    double x = 0, y = 0;
+    result.GetPoint(i, x, y);
+    result.SetPoint(i, x, y / *scale_it);
   }
   return result;
 }
 
-TGraph Normalise(TGraph a){
-  if (a.GetN() != number_of_points){
-    std::invalid_argument("Normalise: INPUT TGraphs HAS WRONG NUMBER OF POINTS!!!\n");
-  }
-  double max = 0;
-  for (int i = 0; i < number_of_points; ++i){
-    if (a.GetPointY(i) > max){max = a.GetPointY(i);}
-  }
-  a.Scale(1/max);
-  return a;
-}
+/*
+  I don't think this gets used at any point, basically this version of ROOT doesn't have a TGraph::Scale() method and after already 
+  changing all my GetPointXs to GetPoints I think implementing my own Scale would force me to end my own life - so go lump it.
+ */
+// TGraph Normalise(TGraph a){
+//   if (a.GetN() != number_of_points){
+//     std::invalid_argument("Normalise: INPUT TGraphs HAS WRONG NUMBER OF POINTS!!!\n");
+//   }
+//   double max = 0;
+//   for (int i = 0; i < number_of_points; ++i){
+//     double x = 0, y = 0;
+//     a.GetPoint(i, x, y);
+//     if (y > max){max = y;}
+//   }
+//   a.Scale(1/max);
+//   return a;
+// }
 
 TGraph ZeroNegative(TGraph a){
   TGraph result(number_of_points);
   for (int i = 0; i < number_of_points; ++i){
-    result.SetPoint(i, a.GetPointX(i), abs(a.GetPointY(i)) + 0.01);
+    double x = 0, y = 0;
+    a.GetPoint(i, x, y);
+    result.SetPoint(i, x, abs(y) + 0.01);
   }
   return result;
 }
+
