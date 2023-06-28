@@ -59,6 +59,7 @@ class MarcusAnalysis: public Tool {
 	TGraphErrors g_inband;
 	TGraphErrors g_sideband;
 	TGraphErrors g_other;
+	TGraph g_sideband_noerrs;
 	
 	// pure reference used as part of fit, and saved to database
 	TGraph dark_subtracted_pure;       // g_pureref_ledname
@@ -71,6 +72,7 @@ class MarcusAnalysis: public Tool {
 	
 	// function built from pure reference, fit to data in sidebands
 	TF1* pure_fct = nullptr;           // f_purefit_ledname
+	std::vector<double> pure_init_params;
 	
 	// TGraph of fit result in over sideband+absorbance region,
 	// only for convenience to store into database for webpage

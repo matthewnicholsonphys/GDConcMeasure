@@ -671,17 +671,23 @@ bool MarcusAnalysis::GetPureScaledPlusExtras(){
 	// set default parameters
 	//pure_fct->SetParameters(1.,1.,0.,0.,0.,0.,0.,10.);   // default
 	// following from some random entry on 12th march, let's see if it restabilises
-	std::vector<double> LED_a_inits{0.749393, 1.002087, 0.269252, -10.000000, -1.254840, -195.183650, 0.000000, 9.714654};
-	std::vector<double> LED_b_inits{2.245291, 1.041264, 0.599252, -9.999999, -0.864187, 85.906849, 0.000000, 3.079667};
-	std::vector<double>* init_params = (ledToAnalyse=="275_A") ? &LED_a_inits : &LED_b_inits;
-	pure_fct->SetParameters(init_params->data());
+	// disabled after april2023 refurb
+	//std::vector<double> LED_a_inits{0.749393, 1.002087, 0.269252, -10.00000, -1.254840, -195.183650, 0.00, 9.714654};
+	//std::vector<double> LED_b_inits{2.245291, 1.041264, 0.599252, -9.999999, -0.864187, 85.906849, 0.00, 3.079667};
+	std::vector<double> LED_a_inits{17.,0.9,3.4,1000.,-50.,-2000.,5.,20.};
+	std::vector<double> LED_b_inits = LED_a_inits;
+	//std::vector<double> LED_a_inits{18.24,0.79,1.08,-1725.,-189.6,-21385.,0.014,8.8};
+	//std::vector<double> LED_b_inits{18.32,0.87,1.91,147.24,-78.59,-5837.,0.,8.88};
+	
+	pure_init_params = (ledToAnalyse=="275_A") ? LED_a_inits : LED_b_inits;
+	pure_fct->SetParameters(pure_init_params.data());
 	// set parameter limits
-	pure_fct->SetParLimits(0,0,3);      // stretch y
-	pure_fct->SetParLimits(1,0.8,1.2);  // stretch x
+	pure_fct->SetParLimits(0,0,20);     // stretch y
+	pure_fct->SetParLimits(1,0.5,1.2);  // stretch x
 	pure_fct->SetParLimits(2,-20,20);   // x offset
-	pure_fct->SetParLimits(3,-10,10);   // y offset
-	pure_fct->SetParLimits(4,-10,10);   // linear baseline gradient
-	pure_fct->SetParLimits(5,-500,500); // shoulder gaussian amplitude XXX reduce
+	pure_fct->SetParLimits(3,-3000,3000);   // y offset
+	pure_fct->SetParLimits(4,-500,10);   // linear baseline gradient
+	pure_fct->SetParLimits(5,-30000,500); // shoulder gaussian amplitude XXX reduce
 	pure_fct->SetParLimits(6,0,60);     // shoulder gaussian position - 282
 	pure_fct->SetParLimits(7,0,50);     // shoulder gaussian width
 	
@@ -1160,6 +1166,8 @@ bool MarcusAnalysis::GetDarkSubTrace(){
 	g_inband = TGraphErrors(inband_wls.size(), inband_wls.data(), inband_values.data(), inband_wl_errors.data(), inband_errors.data());
 	g_sideband = TGraphErrors(sideband_wls.size(), sideband_wls.data(), sideband_values.data(), sideband_wl_errors.data(), sideband_errors.data());
 	g_other = TGraphErrors(other_wls.size(), other_wls.data(), other_values.data(), other_wl_errors.data(), other_errors.data());
+	// actually we seem to get better pure fits if we use no errors!
+	g_sideband_noerrs = TGraph(sideband_wls.size(), sideband_wls.data(), sideband_values.data());
 	
 	std::string intitle = "g_inband_"+ledToAnalyse;
 	std::string sidetitle = "g_sideband_"+ledToAnalyse;
@@ -1197,7 +1205,9 @@ bool MarcusAnalysis::GetDarkSubTrace(){
 bool MarcusAnalysis::FitPure(){
 	
 	// fit sideband with pure function to account for led power fluctuations and remove background
-	purefitresptr = g_sideband.Fit(pure_fct,"RNQS");
+	pure_fct->SetParameters(pure_init_params.data());
+	//purefitresptr = g_sideband.Fit(pure_fct,"RNMQS");
+	purefitresptr = g_sideband_noerrs.Fit(pure_fct,"RNMQS");
 	bool fit_ok = true;
 	if(purefitresptr->IsEmpty() || !purefitresptr->IsValid() || purefitresptr->Status()!=0){
 		std::string fitstat;
