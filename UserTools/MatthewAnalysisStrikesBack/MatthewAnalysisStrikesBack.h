@@ -2,6 +2,7 @@
 #define MatthewAnalysisStrikesBack_H
 
 #include "TGraph.h"
+#include "TTree.h"
 
 #include <map>
 #include <string>
@@ -20,10 +21,12 @@ struct LEDInfo {
   //TGraph high_conc_ds;
   //std::vector<double> initial_combined_fit_param_values;
   //std::vector<std::pair<double, double>> fit_param_ranges;#
-  
+
+  std::shared_ptr<CombinedGdPureFunc_DATA> combined_func;
+  std::shared_ptr<AbsFunc> abs_func;
   FunctionalFit combined_fit;
   FunctionalFit absorbtion_fit;
-  TF1 calibration_curve;
+  TF1* calibration_curve_ptr;
   
 };
 
@@ -36,14 +39,21 @@ class MatthewAnalysisStrikesBack: public Tool {
   bool Execute();
   bool Finalise();
 
- private:
+  private:
 
   std::map<std::string, LEDInfo> led_info_map;
+  std::string current_led = "";
+  TTree* led_tree_ptr = nullptr;
+  TTree* dark_tree_ptr = nullptr;
   
   TGraph GetPure(const std::string& name);
   TGraph GetPureFromDB(const int&, const std::string&) const;
   TGraph GetHighConc(const std::string& name);
   TGraph GetHighConcFromDB(const int&, const std::string&) const;
+  TF1* GetCalibrationCurve(const std::string&);
+  void GetCurrentLED();
+  void GetDarkAndLEDTrees();
+  bool ReadyToAnalyse() const;
 };
 
 

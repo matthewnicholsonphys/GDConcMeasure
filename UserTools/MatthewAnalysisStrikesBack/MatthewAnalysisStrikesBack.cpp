@@ -13,14 +13,15 @@ bool MatthewAnalysisStrikesBack::Initialise(std::string configfile, DataModel &d
   m_data = &data;
 
   try {
-    const std::vector<std::string> list_of_leds = {"275_A", "275_B"};
-    for (const auto& led_name : list_of_leds){
+    for (const auto& led_name : {"275_A", "275_B"}){
       LEDInfo led_info;
 
       const TGraph pure_ds = GetPure(led_name);
       const TGraph high_conc_ds = GetHighConc(led_name);
+
+      led_info.calibration_curve_ptr = GetCalibrationCurve(led_name);
       
-      std::unique_ptr<SimplePureFunc> simple_pure_func = std::make_unique<SimplePureFunc>(pure_ds);
+      std::shared_ptr<SimplePureFunc> simple_pure_func = std::make_shared<SimplePureFunc>(pure_ds);
       FunctionalFit simple_fit = FunctionalFit(simple_pure_func.get(), "simple"); 
       simple_fit.SetExampleGraph(pure_ds);
 
@@ -29,13 +30,13 @@ bool MatthewAnalysisStrikesBack::Initialise(std::string configfile, DataModel &d
       const TGraph gd_abs_attenuation = CalculateGdAbs(simple_fit_result, high_conc_ds);
       const TGraph ratio_absorbance = PWRatio(simple_fit_result, high_conc_ds);
 
-      std::unique_ptr<AbsFunc> abs_func = std::make_unique<AbsFunc>(ratio_absorbance);
-      led_info.absorbtion_fit = FunctionalFit(abs_func.get(), "abs");
+      led_info.abs_func = std::make_shared<AbsFunc>(ratio_absorbance);
+      led_info.absorbtion_fit = FunctionalFit(led_info.abs_func.get(), "abs");
       led_info.absorbtion_fit.SetExampleGraph(pure_ds);
 
-      // std::unique_ptr<CombinedGdPureFunc_DATA> combined_func = std::make_unique<CombinedGdPureFunc_DATA>(pure_ds, gd_abs_attenuation);      
-      // led_info.combined_fit = FunctionalFit(combined_func.get(), "combined");
-      // led_info.combined_fit.SetExampleGraph(pure_ds);
+      led_info.combined_func = std::make_unique<CombinedGdPureFunc_DATA>(pure_ds, gd_abs_attenuation);
+      led_info.combined_fit = FunctionalFit(led_info.combined_func.get(), "combined");
+      led_info.combined_fit.SetExampleGraph(pure_ds);
       
       led_info_map[led_name] = led_info;
     }
@@ -50,18 +51,35 @@ bool MatthewAnalysisStrikesBack::Initialise(std::string configfile, DataModel &d
 
 bool MatthewAnalysisStrikesBack::Execute(){
 
-  /*
+  try {
+    
+    if (!ReadyToAnalyse()){
+      return true;
+    }
 
-    1. Get Current Data 
-    2. Use Combined Fit on data
-    3. Get Ratio absorption and trim
-    3. Use abs fit on ratio abs 
-    4. Get metric from fit
-    5. Calculate the Gd prediction
+    GetCurrentLED();
+    GetDarkAndLEDTrees();
 
-   */
-  
-  
+    const TGraph current_dark_sub = DarkSubtractFromTreePtrs(led_tree_ptr, dark_tree_ptr);
+
+    LEDInfo current_led_info = led_info_map.at(current_led);
+    FunctionalFit curr_comb_fit = current_led_info.combined_fit;
+    
+    curr_comb_fit.PerformFitOnData(current_dark_sub);
+    const TGraph current_ratio_absorbtion = TrimGraph(PWRatio(curr_comb_fit.GetGraphExcluding({current_led_info.combined_func->ABS_SCALING}), current_dark_sub));
+
+    FunctionalFit curr_abs_fit = current_led_info.absorbtion_fit;
+    curr_abs_fit.PerformFitOnData(current_ratio_absorbtion);
+
+    double metric = curr_abs_fit.GetParameterValue(current_led_info.abs_func->ABS_SCALING);
+    double conc_prediction = current_led_info.calibration_curve_ptr->GetX(metric);
+    // where should I put this?
+    
+  }
+  catch (const std::exception& e){
+    std::cout << e.what() << "\n";
+    return false;
+  }
   return true;
 }
 
@@ -262,4 +280,69 @@ TGraph MatthewAnalysisStrikesBack::GetHighConcFromDB(const int& highconcref_ver,
   dark_subtracted_highconc.SetName(highconcname.c_str());
   dark_subtracted_highconc.SetTitle(highconcname.c_str());
   return dark_subtracted_highconc;
+}
+
+bool MatthewAnalysisStrikesBack::ReadyToAnalyse() const {
+  bool ready = false;
+  std::string analyse="";
+  m_data->CStore.Get("analyse_new", analyse);
+  if (analyse == "analyse_new"){
+    m_data->CStore.Remove("analyse_new");
+    ready = true;
+  }
+  return ready;
+}
+
+void MatthewAnalysisStrikesBack::GetCurrentLED(){
+    bool ok = m_variables.Get("led", current_led);
+    if (!ok || current_led.empty()){
+      throw std::invalid_argument("MatthewAnalysisStrikesBack::Execute - LED to analyse is blank!");
+    }
+    if ( led_info_map.count(current_led) != 1){
+      throw std::invalid_argument("MatthewAnalysisStrikesBack::Execute - Cannot Analyse LED: "+current_led+" !");
+    }
+    return;
+}
+
+void MatthewAnalysisStrikesBack::GetDarkAndLEDTrees(){
+  for (const auto& [name, tree_ptr] : m_data->m_trees){
+    if (name == current_led){led_tree_ptr = tree_ptr;}
+    else if (boost::iequals(name, "dark")){dark_tree_ptr = tree_ptr;}
+  }	
+  if(led_tree_ptr == nullptr){
+    throw std::runtime_error("MatthewAnalysisStrikesBack::GetDarkAndLEDTrees: Failed to find led trace!");
+  }
+  if(dark_tree_ptr == nullptr){
+    throw std::runtime_error("MatthewAnalysisStrikesBack::GetDarkAndLEDTrees: Failed to find dark trace!");
+  }
+  return;
+}
+
+TF1* MatthewAnalysisStrikesBack::GetCalibrationCurve(const std::string& led_name){
+  TF1* result = nullptr;
+  const std::string calib_f_str = "calib_curve_";
+  std::string calib_fname = "";
+  const std::string calib_v_str = "cal_tf1_name_";
+  std::string calib_vname = "";
+  bool ok = m_variables.Get(calib_f_str+led_name, calib_fname) &&
+    m_variables.Get(calib_v_str+led_name, calib_vname);
+
+  if (ok && !calib_fname.empty() && !calib_vname.empty()){
+    TFile* f = TFile::Open(calib_fname.c_str());
+    if (f->IsZombie()){
+      throw std::runtime_error("MatthewAnalysisStrikesBack::GetCalibrationCurve: Couldn't open calibration curve file!");
+    }		     
+    result = static_cast<TF1*>(f->Get(calib_vname.c_str()));
+    if (result == nullptr){
+      throw std::runtime_error("MatthewAnalysisStrikesBack::GetCalibrationCurve: Couldn't retrieve calibration curve!");
+    }
+    else {
+      // get from db?
+    }
+  }
+
+
+
+    
+  return result;
 }
