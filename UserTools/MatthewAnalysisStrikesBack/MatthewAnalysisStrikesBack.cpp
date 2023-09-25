@@ -14,6 +14,8 @@ bool MatthewAnalysisStrikesBack::Initialise(std::string configfile, DataModel &d
 
   try {
     for (const auto& led_name : {"275_A", "275_B"}){
+      Log(std::to_string("MatthewAnalysisStrikesBack:Initialise - Getting info for LED: ")+led_name, 0,0);
+      
       LEDInfo led_info;
 
       const TGraph pure_ds = GetPure(led_name);
