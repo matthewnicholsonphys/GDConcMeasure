@@ -32,6 +32,7 @@
 static std::string dark_name = "Dark";
 
 class Func {
+  // class with Evaluate method - replaces lambda based method from before
 public:
   int n_fit = 0;
   double fit_min = 0;

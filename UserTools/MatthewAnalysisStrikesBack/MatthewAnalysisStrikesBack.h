@@ -26,8 +26,7 @@ struct LEDInfo {
   std::shared_ptr<AbsFunc> abs_func;
   FunctionalFit combined_fit;
   FunctionalFit absorbtion_fit;
-  TF1* calibration_curve_ptr;
-  
+  TF1* calibration_curve_ptr;  
 };
 
 class MatthewAnalysisStrikesBack: public Tool {
